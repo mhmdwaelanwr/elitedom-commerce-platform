@@ -10,7 +10,8 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.config import get_settings
 from app.database import Base
-from app.models import *  # noqa: F401,F403 — Import all models for autogenerate
+from app.models import *  # noqa: F401,F403 — Import all core models for autogenerate
+from app.modules.auth.models import *  # noqa: F401,F403 — Import auth persistence models
 
 # Alembic Config object
 config = context.config
