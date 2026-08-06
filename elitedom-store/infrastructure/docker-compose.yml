@@ -149,6 +149,8 @@ services:
       args:
         NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}"
         NEXT_PUBLIC_DEMO_CATALOG_FALLBACK: "${NEXT_PUBLIC_DEMO_CATALOG_FALLBACK:-false}"
+        NEXT_PUBLIC_GOOGLE_CLIENT_ID: "${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}"
+        NEXT_PUBLIC_APPLE_CLIENT_ID: "${NEXT_PUBLIC_APPLE_CLIENT_ID:-}"
     container_name: elitedom-storefront
     restart: unless-stopped
     depends_on:
