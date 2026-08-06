@@ -32,16 +32,19 @@ async def test_phone_otp_creates_account_and_tracked_session(
     assert "refresh_token" not in payload
     assert "httponly" in verification.headers["set-cookie"].lower()
 
-    sessions = await client.get(
-        "/api/v1/auth/sessions",
-        headers={"Authorization": f"Bearer {payload['access_token']}"},
-    )
+    headers = {"Authorization": f"Bearer {payload['access_token']}"}
+    sessions = await client.get("/api/v1/auth/sessions", headers=headers)
     assert sessions.status_code == 200
     session_items = sessions.json()["sessions"]
     assert len(session_items) == 1
     assert session_items[0]["id"] == payload["session_id"]
     assert session_items[0]["auth_method"] == "phone_otp"
     assert session_items[0]["current"] is True
+
+    profile = await client.get("/api/v1/customers/me", headers=headers)
+    assert profile.status_code == 200
+    assert profile.json()["phone"] == "+201012345678"
+    assert profile.json()["email"] == "phone.201012345678@phone.elitedom.local"
 
 
 @pytest.mark.asyncio
