@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, type ReactNode, useEffect, useMemo, useState } from "react";
 import { StoreProductCard } from "@/components/store/StoreProductCard";
 import { Drawer } from "@/components/ui/Overlay";
 import { fetchCatalog } from "@/lib/api";
@@ -56,25 +56,28 @@ function ShopContent() {
 
   useEffect(() => {
     let live = true;
-    setQuery(requestedQuery);
-    setIsLoading(true);
-    setError(null);
+    const timer = window.setTimeout(() => {
+      setQuery(requestedQuery);
+      setIsLoading(true);
+      setError(null);
 
-    void fetchCatalog(requestedQuery)
-      .then((nextProducts) => {
-        if (live) setProducts(nextProducts);
-      })
-      .catch((requestError: unknown) => {
-        if (!live) return;
-        setProducts([]);
-        setError(requestError instanceof Error ? requestError.message : t("storefront", "catalogueLoadError"));
-      })
-      .finally(() => {
-        if (live) setIsLoading(false);
-      });
+      void fetchCatalog(requestedQuery)
+        .then((nextProducts) => {
+          if (live) setProducts(nextProducts);
+        })
+        .catch((requestError: unknown) => {
+          if (!live) return;
+          setProducts([]);
+          setError(requestError instanceof Error ? requestError.message : t("storefront", "catalogueLoadError"));
+        })
+        .finally(() => {
+          if (live) setIsLoading(false);
+        });
+    }, 0);
 
     return () => {
       live = false;
+      window.clearTimeout(timer);
     };
   }, [reloadToken, requestedQuery, t]);
 
@@ -410,7 +413,7 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
   );
 }
 
-function FilterTag({ children }: { children: React.ReactNode }) {
+function FilterTag({ children }: { children: ReactNode }) {
   return <span className="rounded-full bg-elevated px-2.5 py-1 text-xs font-bold text-muted">{children}</span>;
 }
 
@@ -555,7 +558,7 @@ function CatalogFilterControls({
   );
 }
 
-function FilterGroup({ children, title }: { children: React.ReactNode; title: string }) {
+function FilterGroup({ children, title }: { children: ReactNode; title: string }) {
   return (
     <fieldset className="mt-5 border-t border-border pt-5">
       <legend className="mb-3 text-sm font-black text-foreground">{title}</legend>
