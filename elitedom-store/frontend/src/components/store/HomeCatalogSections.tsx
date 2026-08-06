@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { StoreProductCard } from "@/components/store/StoreProductCard";
 import { fetchCatalog } from "@/lib/api";
+import { usePreferences } from "@/providers/AppPreferencesProvider";
 import type { Product } from "@/types/store";
 
 export function HomeCatalogSections() {
+  const { direction, t } = usePreferences();
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -18,7 +20,9 @@ export function HomeCatalogSections() {
         if (active) setProducts(result);
       })
       .catch((reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : "Catalogue unavailable.");
+        if (active) {
+          setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -26,28 +30,48 @@ export function HomeCatalogSections() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [t]);
 
   if (loading) {
-    return <section className="site-container py-16"><div className="h-80 animate-pulse rounded-3xl border border-slate-800 bg-slate-900/60" /></section>;
-  }
-  if (error) {
     return (
-      <section className="site-container py-16">
-        <div className="rounded-3xl border border-amber-400/25 bg-amber-950/20 p-8 text-center">
-          <p className="text-sm font-black uppercase tracking-[.18em] text-amber-300">Live catalogue unavailable</p>
-          <h2 className="mt-3 text-2xl font-black text-white">We are reconnecting to inventory.</h2>
-          <p className="mx-auto mt-3 max-w-xl text-slate-400">{error}</p>
-          <Link className="button-primary mt-6 inline-flex" href="/shop">Try the catalogue again</Link>
+      <section aria-busy="true" aria-label={t("storefront", "checkingAvailability")} className="site-container py-14 sm:py-16">
+        <div className="mb-8 h-8 w-64 animate-pulse rounded-lg bg-elevated" />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <div className="overflow-hidden rounded-2xl border border-border bg-surface" key={index}>
+              <div className="aspect-square animate-pulse bg-elevated" />
+              <div className="space-y-3 p-5">
+                <div className="h-3 w-20 animate-pulse rounded bg-elevated" />
+                <div className="h-5 w-full animate-pulse rounded bg-elevated" />
+                <div className="h-5 w-2/3 animate-pulse rounded bg-elevated" />
+                <div className="h-11 w-full animate-pulse rounded-xl bg-elevated" />
+              </div>
+            </div>
+          ))}
         </div>
       </section>
     );
   }
+
+  if (error) {
+    return (
+      <section className="site-container py-14 sm:py-16">
+        <div className="rounded-3xl border border-warning bg-surface p-8 text-center shadow-lg">
+          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-elevated text-warning" aria-hidden="true">!</span>
+          <p className="section-kicker mt-4">{t("storefront", "liveCatalogueUnavailable")}</p>
+          <h2 className="mt-3 text-2xl font-black text-foreground">{t("storefront", "reconnectingInventory")}</h2>
+          <p className="mx-auto mt-3 max-w-xl text-muted">{error}</p>
+          <Link className="button-primary mt-6" href="/shop">{t("storefront", "retryCatalogue")}</Link>
+        </div>
+      </section>
+    );
+  }
+
   if (products.length === 0) {
     return (
-      <section className="site-container py-16">
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/50 p-10 text-center text-slate-300">
-          No published products yet. Publish products from Odoo or the staff catalogue.
+      <section className="site-container py-14 sm:py-16">
+        <div className="rounded-3xl border border-border bg-surface p-10 text-center text-muted shadow-sm">
+          {t("storefront", "noPublishedProducts")}
         </div>
       </section>
     );
@@ -57,18 +81,23 @@ export function HomeCatalogSections() {
   const available = products
     .filter((product) => product.stockQty > 0 || product.dropshipEnabled)
     .slice(0, 4);
+  const arrow = direction === "rtl" ? "←" : "→";
 
   return (
     <>
       <ProductSection
-        eyebrow="Just landed"
-        title="New arrivals from the live catalogue"
+        arrow={arrow}
+        eyebrow={t("storefront", "justLanded")}
+        title={t("storefront", "newArrivals")}
         products={arrivals}
+        viewAll={t("storefront", "viewAllProducts")}
       />
       <ProductSection
-        eyebrow="Ready to order"
-        title="Available now"
+        arrow={arrow}
+        eyebrow={t("storefront", "readyToOrder")}
+        title={t("storefront", "availableNow")}
         products={available.length > 0 ? available : arrivals}
+        viewAll={t("storefront", "viewAllProducts")}
         muted
       />
     </>
@@ -76,25 +105,31 @@ export function HomeCatalogSections() {
 }
 
 function ProductSection({
+  arrow,
   eyebrow,
   title,
   products,
+  viewAll,
   muted = false,
 }: {
+  arrow: string;
   eyebrow: string;
   title: string;
   products: Product[];
+  viewAll: string;
   muted?: boolean;
 }) {
   return (
-    <section className={muted ? "border-y border-slate-800 bg-slate-900/35 py-16" : "site-container py-16"}>
+    <section className={muted ? "border-y border-border bg-elevated/60 py-14 sm:py-16" : "site-container py-14 sm:py-16"}>
       <div className={muted ? "site-container" : ""}>
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="section-kicker">{eyebrow}</p>
-            <h2 className="mt-2 text-2xl font-black text-white sm:text-3xl">{title}</h2>
+            <h2 className="mt-2 text-2xl font-black text-foreground sm:text-3xl">{title}</h2>
           </div>
-          <Link className="text-sm font-black text-sky-300 hover:text-white" href="/shop">View all products →</Link>
+          <Link className="focus-ring rounded-lg text-sm font-black text-primary hover:brightness-110" href="/shop">
+            {viewAll} <span aria-hidden="true">{arrow}</span>
+          </Link>
         </div>
         <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {products.map((product) => <StoreProductCard key={product.id} product={product} />)}
