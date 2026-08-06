@@ -13,8 +13,12 @@ import bcrypt
 from fastapi import Depends
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.database import get_db
+from app.modules.auth.models import AuthSession
 from app.shared.exceptions import (
     InsufficientPermissionsError,
     InvalidCredentialsError,
@@ -81,8 +85,8 @@ def decode_token(token: str) -> dict:
             algorithms=[settings.jwt_algorithm],
         )
         return payload
-    except JWTError as e:
-        if "expired" in str(e).lower():
+    except JWTError as error:
+        if "expired" in str(error).lower():
             raise TokenExpiredError() from None
         raise InvalidCredentialsError() from None
 
@@ -92,13 +96,13 @@ def decode_token(token: str) -> dict:
 
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Dependency: Extract and validate the current user from the JWT token."""
+    """Validate an access token and its tracked device session."""
     if credentials is None:
         raise InvalidCredentialsError()
 
     payload = decode_token(credentials.credentials)
-
     if payload.get("type") != "access":
         raise InvalidCredentialsError()
 
@@ -106,26 +110,38 @@ async def get_current_user(
     if user_id is None:
         raise InvalidCredentialsError()
 
+    session_id = payload.get("sid")
+    if session_id:
+        active_session = await db.scalar(
+            select(AuthSession.id).where(
+                AuthSession.id == str(session_id),
+                AuthSession.partner_id == int(user_id),
+                AuthSession.revoked_at.is_(None),
+                AuthSession.expires_at > func.now(),
+            )
+        )
+        if active_session is None:
+            raise InvalidCredentialsError()
+
+    # Tokens created before stateful sessions were introduced remain accepted
+    # until their short access-token expiry. Every new login/refresh includes a
+    # sid and therefore receives immediate revocation checks.
     return {
         "user_id": int(user_id),
         "email": payload.get("email"),
         "role": payload.get("role"),
+        "session_id": str(session_id) if session_id else None,
     }
 
 
 def require_role(*allowed_roles: UserRole):
-    """
-    Dependency factory: Restrict endpoint access to specific RBAC roles.
-
-    Usage:
-        @router.get("/admin", dependencies=[Depends(require_role(UserRole.SYSTEM_ADMIN))])
-    """
+    """Dependency factory restricting an endpoint to selected RBAC roles."""
 
     async def role_checker(
         current_user: dict = Depends(get_current_user),
     ) -> dict:
         user_role = current_user.get("role")
-        if user_role not in [r.value for r in allowed_roles]:
+        if user_role not in [role.value for role in allowed_roles]:
             raise InsufficientPermissionsError()
         return current_user
 
@@ -140,11 +156,7 @@ def verify_hmac_signature(
     signature: str,
     secret: str,
 ) -> bool:
-    """
-    Verify HMAC-SHA256 signature for webhook payloads.
-    Used by both Odoo and internal webhook endpoints.
-    Per API_SECURITY.md: X-Elitedom-Signature header.
-    """
+    """Verify an HMAC-SHA256 webhook signature."""
     expected = hmac.new(
         secret.encode("utf-8"),
         payload,
