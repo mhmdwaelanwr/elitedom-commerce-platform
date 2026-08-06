@@ -1,6 +1,8 @@
 """
-Elitedom Store — Hedera Blockchain Audit Integration
-Hashes payment records onto the Hedera Consensus Service per HEDERA.md.
+Elitedom Store — Hedera blockchain audit integration.
+
+The repository does not currently ship a Hedera SDK client. The task therefore
+fails closed when explicitly enabled and never fabricates transaction IDs.
 """
 
 import hashlib
@@ -15,8 +17,12 @@ logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
+class HederaIntegrationUnavailable(RuntimeError):
+    """Raised when Hedera is enabled without a real HCS submission client."""
+
+
 def compute_payment_hash(payment_data: dict) -> str:
-    """Compute SHA-256 hash of payment transaction data."""
+    """Compute a deterministic SHA-256 hash of payment transaction data."""
     payload = json.dumps(payment_data, sort_keys=True, default=str)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
@@ -28,11 +34,8 @@ def hash_payment_to_hedera(
     currency: str,
     payment_method: str,
     customer_id: int,
-):
-    """
-    Hash a completed payment transaction onto the Hedera network.
-    Per HEDERA.md and DATABASE_ERD.md Section 3.11.
-    """
+) -> dict[str, str]:
+    """Hash payment data and submit it only when a real Hedera client exists."""
     payment_data = {
         "order_number": order_number,
         "amount": amount,
@@ -41,26 +44,22 @@ def hash_payment_to_hedera(
         "customer_id": customer_id,
         "timestamp": datetime.now(UTC).isoformat(),
     }
-
     payload_hash = compute_payment_hash(payment_data)
-    logger.info(f"Payment hash computed for {order_number}: {payload_hash[:16]}...")
+    logger.info("Payment hash computed for order %s", order_number)
 
-    # TODO: Submit to Hedera Consensus Service
-    # from hedera import Client, TopicMessageSubmitTransaction
-    # client = Client.for_testnet()
-    # client.set_operator(settings.hedera_operator_id, settings.hedera_operator_key)
-    # tx = TopicMessageSubmitTransaction()
-    #     .set_topic_id(settings.hedera_topic_id)
-    #     .set_message(payload_hash)
-    # receipt = tx.execute(client).get_receipt(client)
-    # hedera_tx_id = str(receipt.transaction_id)
+    if not settings.hedera_enabled:
+        logger.warning(
+            "Hedera audit skipped because HEDERA_ENABLED=false: order=%s",
+            order_number,
+        )
+        return {
+            "status": "skipped",
+            "provider": "hedera",
+            "reason": "disabled",
+            "payload_hash": payload_hash,
+        }
 
-    hedera_tx_id = f"0.0.{settings.hedera_operator_id}@{int(datetime.now(UTC).timestamp())}"
-
-    # TODO: Store in elitedom_hedera_audit table
-    logger.info(f"Hedera audit hash submitted: {hedera_tx_id}")
-
-    return {
-        "payload_hash": payload_hash,
-        "hedera_tx_id": hedera_tx_id,
-    }
+    raise HederaIntegrationUnavailable(
+        "Hedera was enabled, but real HCS submission is not implemented. "
+        "No transaction ID has been created."
+    )
