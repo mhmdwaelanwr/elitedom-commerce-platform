@@ -1,6 +1,7 @@
 name: Continuous Integration
 
 on:
+  workflow_dispatch:
   push:
     paths:
       - "elitedom-store/**"
@@ -14,13 +15,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
   backend:
     name: Backend (Python 3.11)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: elitedom-store/backend
@@ -61,6 +63,7 @@ jobs:
   migrations:
     name: PostgreSQL migration smoke test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: elitedom-store/backend
@@ -77,7 +80,8 @@ jobs:
           --health-cmd "pg_isready -U elitedom -d elitedom_store"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-start-period 10s
+          --health-retries 20
     env:
       ENVIRONMENT: development
       DEBUG: "false"
@@ -85,11 +89,11 @@ jobs:
       JWT_SECRET_KEY: ci-jwt-secret-key-with-at-least-32-characters
       POSTGRES_USER: elitedom
       POSTGRES_PASSWORD: ci-postgres-password
-      POSTGRES_DB: elitedom_db
+      POSTGRES_DB: elitedom_store
       APP_POSTGRES_DB: elitedom_store
       POSTGRES_HOST: 127.0.0.1
       POSTGRES_PORT: "5432"
-      ODOO_DB: elitedom_db
+      ODOO_DB: elitedom_odoo_ci
       ODOO_SYNC_ENABLED: "false"
       ODOO_WEBHOOKS_ENABLED: "false"
       ODOO_WEBHOOK_SECRET: ci-odoo-webhook-secret-with-at-least-32-characters
@@ -112,20 +116,53 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-dev.txt
 
-      - name: Upgrade a fresh PostgreSQL database
-        run: python -m alembic upgrade head
-
-      - name: Verify the recorded head
-        run: python -m alembic current
-
-      - name: Exercise downgrade and replay
+      - name: Confirm PostgreSQL connection
         run: |
+          set -euxo pipefail
+          python - <<'PY'
+          from sqlalchemy import create_engine, text
+          from app.config import get_settings
+
+          settings = get_settings()
+          engine = create_engine(settings.database_url_sync)
+          with engine.connect() as connection:
+              database, username = connection.execute(
+                  text("select current_database(), current_user")
+              ).one()
+              print(f"Connected to database={database} as user={username}")
+          engine.dispose()
+          PY
+
+      - name: Print migration graph
+        run: |
+          set -euxo pipefail
+          python -m alembic heads --verbose
+          python -m alembic history --verbose
+
+      - name: Upgrade a fresh PostgreSQL database
+        run: |
+          set -euxo pipefail
+          python -m alembic upgrade head
+          python -m alembic current --verbose
+
+      - name: Exercise latest downgrade and replay
+        run: |
+          set -euxo pipefail
+          python -m alembic downgrade -1
+          python -m alembic upgrade head
+          python -m alembic current --verbose
+
+      - name: Exercise full downgrade and replay
+        run: |
+          set -euxo pipefail
           python -m alembic downgrade base
           python -m alembic upgrade head
+          python -m alembic current --verbose
 
   odoo-addon:
     name: Odoo 17 addon install and tests
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:15
@@ -139,7 +176,8 @@ jobs:
           --health-cmd "pg_isready -U odoo"
           --health-interval 5s
           --health-timeout 5s
-          --health-retries 10
+          --health-start-period 10s
+          --health-retries 20
 
     steps:
       - name: Check out source
@@ -179,6 +217,7 @@ jobs:
   frontend:
     name: Frontend (Node 22)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: elitedom-store/frontend
@@ -212,6 +251,7 @@ jobs:
   compose:
     name: Validate Docker Compose
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: elitedom-store/infrastructure
