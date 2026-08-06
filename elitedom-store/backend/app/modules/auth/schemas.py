@@ -1,11 +1,21 @@
-"""
-Elitedom Store — Auth Module Schemas
-Pydantic request/response models for authentication endpoints.
-"""
+"""Pydantic request and response models for authentication endpoints."""
 
 import re
+from datetime import datetime
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
+
+
+def normalize_egyptian_mobile(value: str) -> str:
+    """Return an Egyptian mobile in canonical E.164 form."""
+    cleaned = re.sub(r"[\s\-()]", "", value)
+    if re.fullmatch(r"01[0125]\d{8}", cleaned):
+        return "+20" + cleaned[1:]
+    if re.fullmatch(r"\+201[0125]\d{8}", cleaned):
+        return cleaned
+    raise ValueError(
+        "Invalid Egyptian mobile number. Expected format: +201XXXXXXXXX or 01XXXXXXXXX"
+    )
 
 
 class RegisterRequest(BaseModel):
@@ -16,27 +26,21 @@ class RegisterRequest(BaseModel):
 
     @field_validator("mobile")
     @classmethod
-    def validate_egyptian_mobile(cls, v: str) -> str:
-        """Validate Egyptian mobile number format."""
-        cleaned = re.sub(r"[\s\-]", "", v)
-        if not re.match(r"^(\+20|0)1[0125]\d{8}$", cleaned):
-            raise ValueError(
-                "Invalid Egyptian mobile number. Expected format: +201XXXXXXXXX or 01XXXXXXXXX"
-            )
-        return cleaned
+    def validate_egyptian_mobile(cls, value: str) -> str:
+        return normalize_egyptian_mobile(value)
 
     @field_validator("password")
     @classmethod
-    def validate_password_strength(cls, v: str) -> str:
-        if not re.search(r"[A-Z]", v):
+    def validate_password_strength(cls, value: str) -> str:
+        if not re.search(r"[A-Z]", value):
             raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[a-z]", v):
+        if not re.search(r"[a-z]", value):
             raise ValueError("Password must contain at least one lowercase letter")
-        if not re.search(r"\d", v):
+        if not re.search(r"\d", value):
             raise ValueError("Password must contain at least one digit")
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", v):
+        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
             raise ValueError("Password must contain at least one special character")
-        return v
+        return value
 
 
 class RegisterResponse(BaseModel):
@@ -52,15 +56,65 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
-    # Router code reads this to issue an HttpOnly cookie, while Pydantic keeps
-    # it out of JSON responses and browser-readable storage.
+    # The router reads this value to issue an HttpOnly cookie. It is excluded
+    # from JSON so browser JavaScript never receives the refresh credential.
     refresh_token: str = Field(exclude=True)
     expires_in: int = 3600
     token_type: str = "bearer"
     role: str
     user_id: int
+    session_id: str
+    email: str
+    name: str
 
 
 class OAuthRequest(BaseModel):
     provider: str = Field(..., pattern="^(google|apple)$")
-    id_token: str
+    id_token: str = Field(..., min_length=20, max_length=8192)
+
+
+class OtpRequest(BaseModel):
+    mobile: str = Field(..., min_length=10, max_length=20)
+    name: str | None = Field(default=None, min_length=2, max_length=128)
+
+    @field_validator("mobile")
+    @classmethod
+    def validate_mobile(cls, value: str) -> str:
+        return normalize_egyptian_mobile(value)
+
+
+class OtpChallengeResponse(BaseModel):
+    challenge_id: str
+    expires_in: int
+    resend_after: int
+    delivery: str
+    debug_code: str | None = None
+
+
+class OtpVerifyRequest(BaseModel):
+    challenge_id: str = Field(..., min_length=36, max_length=36)
+    mobile: str = Field(..., min_length=10, max_length=20)
+    code: str = Field(..., pattern=r"^\d{6}$")
+
+    @field_validator("mobile")
+    @classmethod
+    def validate_mobile(cls, value: str) -> str:
+        return normalize_egyptian_mobile(value)
+
+
+class SessionResponse(BaseModel):
+    id: str
+    auth_method: str
+    user_agent: str | None
+    ip_address: str | None
+    created_at: datetime
+    last_used_at: datetime | None
+    current: bool = False
+
+
+class SessionListResponse(BaseModel):
+    sessions: list[SessionResponse]
+
+
+class LogoutAllResponse(BaseModel):
+    revoked_sessions: int
