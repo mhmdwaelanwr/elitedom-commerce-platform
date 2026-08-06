@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "check:design-system": "node scripts/check-design-system.mjs",
+    "build": "npm run check:design-system && next build",
     "start": "next start",
     "lint": "eslint"
   },

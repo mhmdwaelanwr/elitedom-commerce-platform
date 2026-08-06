@@ -1,0 +1,16 @@
+export const admin = {
+  operations: "Operations",
+  overview: "Overview",
+  orders: "Orders",
+  catalogStock: "Catalog & stock",
+  customers: "Customers",
+  warrantyDesk: "Warranty desk",
+  b2bRfqs: "B2B RFQs",
+  fulfilment: "Fulfilment",
+  restrictedArea: "Restricted area",
+  staffRequired: "Staff access required",
+  restrictedDescription: "The operations console is available only to authorized Elitedom staff.",
+  returnToStore: "Return to store",
+  checkingSession: "Checking secure staff session…",
+  sessionEnded: "Staff session ended.",
+} as const;

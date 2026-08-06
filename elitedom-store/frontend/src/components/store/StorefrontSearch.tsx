@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FormEvent, useId, useMemo, useState } from "react";
+import { type FormEvent, useId, useMemo, useState } from "react";
 import { CATALOG, CATEGORIES } from "@/lib/catalog";
+import { usePreferences } from "@/providers/AppPreferencesProvider";
 
 type StorefrontSearchProps = {
   inputId: string;
@@ -11,21 +12,18 @@ type StorefrontSearchProps = {
   placeholder?: string;
 };
 
-/**
- * A light-weight discovery layer for the global search. Submitting always
- * delegates to the catalogue route, which in turn asks the FastAPI search API.
- * Local suggestions keep the header responsive while the user is typing.
- */
 export function StorefrontSearch({
   inputId,
   onNavigate,
-  placeholder = "Search products, brands, or SKU…",
+  placeholder,
 }: StorefrontSearchProps) {
   const router = useRouter();
   const generatedId = useId();
+  const { direction, t } = usePreferences();
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
+  const resolvedPlaceholder = placeholder ?? t("storefront", "searchPlaceholder");
 
   const { categoryMatches, productMatches } = useMemo(() => {
     if (!normalizedQuery) {
@@ -40,13 +38,7 @@ export function StorefrontSearch({
         [category.name, category.description].join(" ").toLowerCase().includes(normalizedQuery),
       ).slice(0, 3),
       productMatches: CATALOG.filter((product) =>
-        [
-          product.name,
-          product.brand,
-          product.sku,
-          product.categoryName,
-          ...product.specs.flatMap((specification) => [specification.label, specification.value]),
-        ]
+        [product.name, product.brand, product.sku, product.categoryName, ...product.specs.flatMap((specification) => [specification.label, specification.value])]
           .join(" ")
           .toLowerCase()
           .includes(normalizedQuery),
@@ -71,27 +63,25 @@ export function StorefrontSearch({
 
   return (
     <form className="relative" onSubmit={handleSubmit} role="search">
-      <label className="sr-only" htmlFor={inputId}>
-        Search products
-      </label>
+      <label className="sr-only" htmlFor={inputId}>{t("storefront", "searchProducts")}</label>
       <div className="relative">
         <input
           aria-autocomplete="list"
           aria-controls={listboxId}
           aria-expanded={isOpen}
           aria-haspopup="listbox"
-          className="h-11 w-full rounded-xl border border-slate-700 bg-slate-900/80 px-4 pr-12 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+          className="focus-ring h-11 w-full rounded-xl border border-border bg-surface px-4 pe-12 text-sm text-foreground outline-none placeholder:text-muted"
           id={inputId}
           onBlur={() => window.setTimeout(() => setIsOpen(false), 140)}
           onChange={(event) => setQuery(event.target.value)}
           onFocus={() => setIsOpen(true)}
-          placeholder={placeholder}
+          placeholder={resolvedPlaceholder}
           role="combobox"
           value={query}
         />
         <button
-          aria-label="Search catalogue"
-          className="absolute inset-y-0 right-0 grid w-11 place-items-center rounded-r-xl text-sky-300 hover:text-white focus-ring"
+          aria-label={t("storefront", "searchCatalogue")}
+          className="focus-ring absolute inset-y-0 end-0 grid w-11 place-items-center rounded-e-xl text-primary hover:brightness-110"
           type="submit"
         >
           <SearchIcon />
@@ -99,30 +89,17 @@ export function StorefrontSearch({
       </div>
 
       {isOpen && (
-        <div
-          className="absolute left-0 right-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-slate-700 bg-slate-950/98 p-2 shadow-2xl shadow-slate-950/70 backdrop-blur-xl"
-          id={listboxId}
-          role="listbox"
-        >
+        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-border bg-surface p-2 text-foreground shadow-2xl backdrop-blur-xl" id={listboxId} role="listbox">
           {hasSuggestions ? (
             <>
               {categoryMatches.length > 0 && (
                 <div className="px-2 pb-2 pt-1">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    {normalizedQuery ? "Departments" : "Browse departments"}
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
+                    {normalizedQuery ? t("storefront", "departments") : t("storefront", "browseDepartments")}
                   </p>
                   <div className="mt-1 grid gap-1 sm:grid-cols-2">
                     {categoryMatches.map((category) => (
-                      <Link
-                        className="rounded-lg px-2.5 py-2 text-sm font-medium text-slate-300 transition hover:bg-slate-800 hover:text-white focus-ring"
-                        href={`/shop?category=${category.slug}`}
-                        key={category.slug}
-                        onClick={() => {
-                          setIsOpen(false);
-                          onNavigate?.();
-                        }}
-                        role="option"
-                      >
+                      <Link className="focus-ring rounded-lg px-2.5 py-2 text-sm font-medium text-muted transition hover:bg-elevated hover:text-foreground" href={`/shop?category=${category.slug}`} key={category.slug} onClick={() => { setIsOpen(false); onNavigate?.(); }} role="option">
                         {category.name}
                       </Link>
                     ))}
@@ -130,24 +107,15 @@ export function StorefrontSearch({
                 </div>
               )}
               {productMatches.length > 0 && (
-                <div className="border-t border-slate-800 px-2 pb-1 pt-3">
-                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-slate-500">
-                    {normalizedQuery ? "Matching products" : "Popular picks"}
+                <div className="border-t border-border px-2 pb-1 pt-3">
+                  <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
+                    {normalizedQuery ? t("storefront", "matchingProducts") : t("storefront", "popularPicks")}
                   </p>
                   <div className="mt-1 grid gap-1">
                     {productMatches.map((product) => (
-                      <Link
-                        className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-sm transition hover:bg-slate-800 focus-ring"
-                        href={`/products/${product.id}`}
-                        key={product.id}
-                        onClick={() => {
-                          setIsOpen(false);
-                          onNavigate?.();
-                        }}
-                        role="option"
-                      >
-                        <span className="min-w-0 truncate font-medium text-slate-200">{product.name}</span>
-                        <span className="shrink-0 text-xs text-sky-300">{product.brand}</span>
+                      <Link className="focus-ring flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-sm transition hover:bg-elevated" href={`/products/${product.id}`} key={product.id} onClick={() => { setIsOpen(false); onNavigate?.(); }} role="option">
+                        <span className="min-w-0 truncate font-medium text-foreground">{product.name}</span>
+                        <span className="shrink-0 text-xs text-primary">{product.brand}</span>
                       </Link>
                     ))}
                   </div>
@@ -155,19 +123,12 @@ export function StorefrontSearch({
               )}
             </>
           ) : (
-            <p className="px-3 py-4 text-sm text-slate-400">
-              No quick match yet. Press Enter to search the full catalogue.
-            </p>
+            <p className="px-3 py-4 text-sm text-muted">{t("storefront", "noQuickMatch")}</p>
           )}
           {normalizedQuery && (
-            <button
-              className="mt-1 flex w-full items-center justify-between rounded-lg border-t border-slate-800 px-3 py-2.5 text-left text-sm font-bold text-sky-300 hover:bg-slate-900 hover:text-white focus-ring"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={navigateToSearch}
-              type="button"
-            >
-              <span>Search all results for “{query.trim()}”</span>
-              <span aria-hidden="true">→</span>
+            <button className="focus-ring mt-1 flex w-full items-center justify-between border-t border-border px-3 py-2.5 text-start text-sm font-bold text-primary hover:bg-elevated" onMouseDown={(event) => event.preventDefault()} onClick={navigateToSearch} type="button">
+              <span>{t("storefront", "searchAllResults")} “{query.trim()}”</span>
+              <span aria-hidden="true">{direction === "rtl" ? "←" : "→"}</span>
             </button>
           )}
         </div>
@@ -177,10 +138,5 @@ export function StorefrontSearch({
 }
 
 function SearchIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19">
-      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" />
-      <path d="m16 16 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-    </svg>
-  );
+  return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" /><path d="m16 16 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="2" /></svg>;
 }
