@@ -23,6 +23,10 @@ const EMPTY_FORM: ProfileForm = {
   streetAddress: "",
 };
 
+function publicEmail(email: string) {
+  return email.endsWith("@phone.elitedom.local") ? "" : email;
+}
+
 export default function ProfilePage() {
   const { t } = usePreferences();
   const { notify, session, setSession } = useStore();
@@ -39,7 +43,7 @@ export default function ProfilePage() {
         if (!active) return;
         setForm({
           name: profile.name,
-          email: profile.email,
+          email: publicEmail(profile.email),
           phone: profile.phone,
           governorate: profile.governorate ?? "",
           streetAddress: profile.street_address ?? "",
@@ -68,17 +72,24 @@ export default function ProfilePage() {
     setError(null);
     setSaving(true);
     try {
+      const normalizedEmail = form.email.trim();
       const updated = await updateCustomerProfile(
         {
           name: form.name,
-          email: form.email,
+          ...(normalizedEmail ? { email: normalizedEmail } : {}),
           phone: form.phone,
           ...(form.governorate.trim() ? { governorate: form.governorate.trim() } : {}),
           ...(form.streetAddress.trim() ? { street_address: form.streetAddress.trim() } : {}),
         },
         session,
       );
-      setSession({ ...session, email: updated.email, name: updated.name, role: updated.role });
+      setForm((current) => ({ ...current, email: publicEmail(updated.email) }));
+      setSession({
+        ...session,
+        email: publicEmail(updated.email) || undefined,
+        name: updated.name,
+        role: updated.role,
+      });
       notify(t("account", "profileUpdated"));
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("account", "profileUpdateError"));
@@ -116,7 +127,6 @@ export default function ProfilePage() {
               className="form-input"
               disabled={isLoading || isSaving}
               onChange={(event) => update("email", event.target.value)}
-              required
               type="email"
               value={form.email}
             />
