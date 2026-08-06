@@ -16,10 +16,19 @@ workspace.
 | Procurement and hybrid fulfillment | Supplier master data, PO lifecycle and receipts, supplier performance reports, verified product-supplier routing, and durable dropship hand-off after payment confirmation. |
 | Integration reliability | Transactional outbox with post-commit dispatch, leases, retries, exponential backoff, dead-letter status, and Odoo loop prevention. |
 | Reporting | Role-scoped dashboard, sales series, inventory valuation, supplier and RMA reporting, plus sales CSV and non-PII PDF exports. |
-| Infrastructure and deployment | Docker development compose, production frontend overlay, non-root standalone Next.js image, loopback-only storefront port, proxy/TLS topology, separated database bootstrap, and environment validation. |
+| Infrastructure and deployment | Separate development and production Compose behavior, non-root standalone Next.js image, loopback-only administrative ports, database bootstrap, health checks, and environment validation. |
 | Operations and DR | Dual-database compressed backup script, explicit-target restore confirmation, retention cleanup, health endpoint, and Makefile workflows. |
 | Observability and governance | JSON logs with PII masking, `X-Request-ID`, Prometheus RED metrics at `/metrics`, optional OTLP tracing, sanitized outbox payloads, and minimized report data. |
-| Testing | Unit and integration coverage for security, checkout, Stripe, Odoo webhooks, customer portal, catalog, suppliers, reporting, admin workflows, transactional outbox, and observability. |
+| Testing | Unit and integration coverage for security, checkout, Stripe, Odoo webhooks, customer portal, catalog, suppliers, reporting, admin workflows, transactional outbox, observability, and integration fail-closed behavior. |
+
+## Third-party integration readiness
+
+| Provider | Repository status |
+| --- | --- |
+| SendGrid | Order confirmations and secure PDF-invoice links are implemented. The provider is disabled by default and requires `SENDGRID_ENABLED=true` plus a real key and verified sender. |
+| ZeptoMail | Single transactional-email delivery uses the official HTTPS REST endpoint. It is disabled by default and requires an Agent send token. |
+| Hedera | SHA-256 payload generation exists, but real Consensus Service submission is not implemented. The feature is disabled and configuration rejects attempts to enable it, preventing fabricated transaction IDs. |
+| Odoo | Signed webhook ingestion and API-side synchronization exist. A deployable custom Odoo producer/add-on remains operator-provided. |
 
 ## Operator-provided prerequisites
 
@@ -29,14 +38,15 @@ provider consoles before the corresponding capability is enabled:
 
 - Stripe account, Checkout URLs, webhook endpoint/signing secret, and tax/legal review.
 - Odoo API user/key, custom modules/routing, supplier contracts, and white-label label templates.
-- Algolia, Twilio, SendGrid or ZeptoMail, Zoho, Hedera, carrier, object-storage, OAuth, and DNS/TLS credentials as applicable.
+- Algolia, Twilio, SendGrid or ZeptoMail, Zoho, carrier, object-storage, OAuth, and DNS/TLS credentials as applicable.
+- A real Hedera SDK/client and persistence design before `HEDERA_ENABLED` can be supported.
 - A private Prometheus scrape path plus an OTLP collector/Jaeger endpoint if tracing export is desired.
 - Off-site encrypted backup replication, restore drills, production monitoring/alert routes, and the compliance evidence required for the organization’s actual PCI/privacy scope.
 
 ## Local acceptance sequence
 
 ```bash
-cd /home/mohamed-anwar/Documents/elitedom-erp-architecture-main/elitedom-store
+cd elitedom-store
 make dev
 make migrate
 make seed

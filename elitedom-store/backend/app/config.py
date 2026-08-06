@@ -5,6 +5,7 @@ Centralized settings via pydantic-settings with .env file support.
 
 from functools import lru_cache
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -24,12 +25,7 @@ _PLACEHOLDER_SECRET_MARKERS = (
 
 
 def is_secure_secret(value: object, *, minimum_length: int = 32) -> bool:
-    """Return whether a deployment secret is non-empty and non-placeholder.
-
-    This is deliberately a fail-closed configuration check, not a substitute
-    for storing generated values in a managed secret store.  It prevents the
-    documented template values from accidentally authorizing a webhook.
-    """
+    """Return whether a deployment secret is non-empty and non-placeholder."""
     if not isinstance(value, str):
         return False
     normalized = value.strip()
@@ -37,6 +33,17 @@ def is_secure_secret(value: object, *, minimum_length: int = 32) -> bool:
         return False
     lowered = normalized.lower()
     return not any(marker in lowered for marker in _PLACEHOLDER_SECRET_MARKERS)
+
+
+def is_https_url(value: str) -> bool:
+    """Return whether a URL is HTTPS, absolute, and contains no credentials."""
+    parsed = urlsplit(value.strip())
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.netloc)
+        and parsed.username is None
+        and parsed.password is None
+    )
 
 
 class Settings(BaseSettings):
@@ -60,12 +67,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     metrics_enabled: bool = True
     otel_service_name: str = "elitedom-fastapi"
-    # Leave the endpoint empty locally to avoid exporting trace data until an
-    # approved OTLP collector (for example Jaeger) is provisioned.
     otel_exporter_otlp_endpoint: str = ""
     otel_trace_sample_ratio: float = Field(default=0.1, ge=0, le=1)
-    # Only explicitly trusted reverse proxies may supply X-Forwarded-For.
-    # Keep empty unless the deployment network has a stable proxy address.
     trusted_proxy_ips: str = ""
 
     @property
@@ -81,9 +84,6 @@ class Settings(BaseSettings):
     # ── PostgreSQL ───────────────────────────────────────────────────────
     postgres_user: str = "elitedom"
     postgres_password: str = Field(...)
-    # `POSTGRES_DB` is reserved for the Odoo database initialized by Docker.
-    # The store API owns a separate database to avoid colliding with Odoo's
-    # core table names (for example, `res_partner` and `product_template`).
     postgres_db: str = "elitedom_db"
     app_postgres_db: str = "elitedom_store"
     postgres_host: str = "postgres"
@@ -137,13 +137,88 @@ class Settings(BaseSettings):
     odoo_api_key: str = ""
     odoo_webhook_secret: str = ""
 
+    # ── Stripe ───────────────────────────────────────────────────────────
+    stripe_secret_key: str = ""
+    stripe_publishable_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_currency: str = "egp"
+    stripe_checkout_success_url: str = ""
+    stripe_checkout_cancel_url: str = ""
+
+    # ── Algolia ──────────────────────────────────────────────────────────
+    algolia_app_id: str = ""
+    algolia_api_key: str = ""
+    algolia_search_key: str = ""
+    algolia_index_name: str = "elitedom_products"
+
+    # ── Twilio ───────────────────────────────────────────────────────────
+    twilio_account_sid: str = ""
+    twilio_auth_token: str = ""
+    twilio_phone_number: str = ""
+    twilio_messaging_service_sid: str = ""
+
+    # ── SendGrid ─────────────────────────────────────────────────────────
+    sendgrid_enabled: bool = False
+    sendgrid_api_key: str = ""
+    sendgrid_from_email: str = "noreply@elitedom.store"
+    sendgrid_from_name: str = "Elitedom Store"
+
+    # ── ZeptoMail ────────────────────────────────────────────────────────
+    zeptomail_enabled: bool = False
+    zeptomail_api_key: str = ""
+    zeptomail_api_url: str = "https://api.zeptomail.com/v1.1/email"
+    zeptomail_from_email: str = "noreply@elitedom.store"
+    zeptomail_from_name: str = "Elitedom Store"
+    zeptomail_bounce_address: str = "bounce@elitedom.store"
+
+    # ── Zoho ─────────────────────────────────────────────────────────────
+    zoho_client_id: str = ""
+    zoho_client_secret: str = ""
+    zoho_refresh_token: str = ""
+    zoho_org_id: str = ""
+
+    # ── Hedera ───────────────────────────────────────────────────────────
+    hedera_enabled: bool = False
+    hedera_network: Literal["mainnet", "testnet"] = "testnet"
+    hedera_operator_id: str = ""
+    hedera_operator_key: str = ""
+    hedera_topic_id: str = ""
+
+    @field_validator("allowed_hosts")
+    @classmethod
+    def parse_allowed_hosts(cls, value: str) -> str:
+        return value
+
     @model_validator(mode="after")
     def validate_deployment_safety(self) -> "Settings":
-        """Reject unsafe production configuration before serving traffic."""
+        """Reject unsafe configuration before the application serves traffic."""
         if self.app_postgres_db == self.odoo_db:
             raise ValueError(
                 "APP_POSTGRES_DB must be different from ODOO_DB to prevent schema collisions."
             )
+
+        integration_errors: list[str] = []
+        if self.sendgrid_enabled and not is_secure_secret(
+            self.sendgrid_api_key, minimum_length=20
+        ):
+            integration_errors.append("SENDGRID_API_KEY")
+        if self.zeptomail_enabled and not is_secure_secret(
+            self.zeptomail_api_key, minimum_length=20
+        ):
+            integration_errors.append("ZEPTOMAIL_API_KEY")
+        if self.zeptomail_enabled and not is_https_url(self.zeptomail_api_url):
+            integration_errors.append("ZEPTOMAIL_API_URL")
+        if integration_errors:
+            raise ValueError(
+                "Enabled integrations require valid, non-placeholder configuration for: "
+                + ", ".join(integration_errors)
+            )
+
+        if self.hedera_enabled:
+            raise ValueError(
+                "HEDERA_ENABLED=true is unsupported until real HCS submission is implemented."
+            )
+
         if self.environment not in {"staging", "production"}:
             return self
 
@@ -161,65 +236,19 @@ class Settings(BaseSettings):
             "REDIS_PASSWORD": self.redis_password,
             "ODOO_WEBHOOK_SECRET": self.odoo_webhook_secret,
         }
-        invalid = [name for name, value in required_secrets.items() if not is_secure_secret(value)]
+        invalid = [
+            name for name, value in required_secrets.items() if not is_secure_secret(value)
+        ]
         if invalid:
             raise ValueError(
                 "Staging/production requires generated, non-placeholder secrets for: "
                 + ", ".join(invalid)
             )
         if self.secret_key == self.jwt_secret_key:
-            raise ValueError("SECRET_KEY and JWT_SECRET_KEY must be distinct outside development.")
+            raise ValueError(
+                "SECRET_KEY and JWT_SECRET_KEY must be distinct outside development."
+            )
         return self
-
-    # ── Stripe ───────────────────────────────────────────────────────────
-    stripe_secret_key: str = ""
-    stripe_publishable_key: str = ""
-    stripe_webhook_secret: str = ""
-    stripe_currency: str = "egp"
-    # Full, HTTPS return URLs owned by the storefront.  They are deliberately
-    # empty by default: enabling a Stripe secret without configuring a trusted
-    # return destination must not send customers to a guessed URL.
-    stripe_checkout_success_url: str = ""
-    stripe_checkout_cancel_url: str = ""
-
-    # ── Algolia ──────────────────────────────────────────────────────────
-    algolia_app_id: str = ""
-    algolia_api_key: str = ""
-    algolia_search_key: str = ""
-    algolia_index_name: str = "elitedom_products"
-
-    # ── Twilio ───────────────────────────────────────────────────────────
-    twilio_account_sid: str = ""
-    twilio_auth_token: str = ""
-    twilio_phone_number: str = ""
-    twilio_messaging_service_sid: str = ""
-
-    # ── SendGrid ─────────────────────────────────────────────────────────
-    sendgrid_api_key: str = ""
-    sendgrid_from_email: str = "noreply@elitedom.store"
-    sendgrid_from_name: str = "Elitedom Store"
-
-    # ── Zeptomail ────────────────────────────────────────────────────────
-    zeptomail_api_key: str = ""
-    zeptomail_from_email: str = "noreply@elitedom.store"
-    zeptomail_bounce_address: str = "bounce@elitedom.store"
-
-    # ── Zoho ─────────────────────────────────────────────────────────────
-    zoho_client_id: str = ""
-    zoho_client_secret: str = ""
-    zoho_refresh_token: str = ""
-    zoho_org_id: str = ""
-
-    # ── Hedera ───────────────────────────────────────────────────────────
-    hedera_network: Literal["mainnet", "testnet"] = "testnet"
-    hedera_operator_id: str = ""
-    hedera_operator_key: str = ""
-    hedera_topic_id: str = ""
-
-    @field_validator("allowed_hosts")
-    @classmethod
-    def parse_allowed_hosts(cls, v: str) -> str:
-        return v
 
 
 @lru_cache()
