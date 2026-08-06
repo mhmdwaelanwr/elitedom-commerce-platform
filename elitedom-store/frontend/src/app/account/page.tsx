@@ -56,6 +56,10 @@ export default function AccountPage() {
   const activeSession = session;
   const profileName = overview?.profile?.name ?? activeSession.name ?? t("account", "customerFallback");
   const recentOrders = overview?.orders ?? [];
+  const profileEmail = overview?.profile?.email ?? activeSession.email ?? "";
+  const accountIdentifier = profileEmail.endsWith("@phone.elitedom.local")
+    ? overview?.profile?.phone ?? ""
+    : profileEmail;
 
   async function handleLogout() {
     try {
@@ -77,7 +81,7 @@ export default function AccountPage() {
               {t("account", "hello")}, {profileName}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              {overview?.profile?.email ?? activeSession.email} · {activeSession.role.replaceAll("_", " ")}
+              {accountIdentifier} · {activeSession.role.replaceAll("_", " ")}
             </p>
           </div>
           <button className="button-secondary text-sm" onClick={handleLogout} type="button">
