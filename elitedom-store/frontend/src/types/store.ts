@@ -42,6 +42,8 @@ export type CustomerSession = {
   accessToken: string;
   userId: number;
   role: string;
+  sessionId: string;
+  expiresAt: number;
   email?: string;
   name?: string;
 };
