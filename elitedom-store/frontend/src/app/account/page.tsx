@@ -53,12 +53,13 @@ export default function AccountPage() {
     );
   }
 
-  const profileName = overview?.profile?.name ?? session.name ?? t("account", "customerFallback");
+  const activeSession = session;
+  const profileName = overview?.profile?.name ?? activeSession.name ?? t("account", "customerFallback");
   const recentOrders = overview?.orders ?? [];
 
   async function handleLogout() {
     try {
-      await logout(session);
+      await logout(activeSession);
     } catch {
       // Clear browser state even when the API is temporarily unavailable.
     }
@@ -76,7 +77,7 @@ export default function AccountPage() {
               {t("account", "hello")}, {profileName}
             </h1>
             <p className="mt-2 text-sm text-muted">
-              {overview?.profile?.email ?? session.email} · {session.role.replaceAll("_", " ")}
+              {overview?.profile?.email ?? activeSession.email} · {activeSession.role.replaceAll("_", " ")}
             </p>
           </div>
           <button className="button-secondary text-sm" onClick={handleLogout} type="button">
