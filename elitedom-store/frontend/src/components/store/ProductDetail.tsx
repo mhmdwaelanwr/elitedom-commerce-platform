@@ -24,45 +24,48 @@ export function ProductDetail({ productId }: { productId: string }) {
 
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
-    setError(null);
-    setProduct(null);
-    setRelatedProducts([]);
-    setActiveImage(0);
-    setQuantity(1);
+    const timer = window.setTimeout(() => {
+      setIsLoading(true);
+      setError(null);
+      setProduct(null);
+      setRelatedProducts([]);
+      setActiveImage(0);
+      setQuantity(1);
 
-    void fetchProduct(productId)
-      .then(async (nextProduct) => {
-        if (!active) return;
-        if (!nextProduct) {
-          setError(t("storefront", "productNoLongerAvailable"));
-          return;
-        }
-
-        setProduct(nextProduct);
-        try {
-          const catalogue = await fetchCatalog();
-          if (active) {
-            setRelatedProducts(
-              catalogue
-                .filter((item) => item.category === nextProduct.category && item.id !== nextProduct.id)
-                .slice(0, 3),
-            );
+      void fetchProduct(productId)
+        .then(async (nextProduct) => {
+          if (!active) return;
+          if (!nextProduct) {
+            setError(t("storefront", "productNoLongerAvailable"));
+            return;
           }
-        } catch {
-          // Related products are optional and must not block the page.
-        }
-      })
-      .catch((requestError: unknown) => {
-        if (!active) return;
-        setError(requestError instanceof Error ? requestError.message : t("storefront", "productLoadError"));
-      })
-      .finally(() => {
-        if (active) setIsLoading(false);
-      });
+
+          setProduct(nextProduct);
+          try {
+            const catalogue = await fetchCatalog();
+            if (active) {
+              setRelatedProducts(
+                catalogue
+                  .filter((item) => item.category === nextProduct.category && item.id !== nextProduct.id)
+                  .slice(0, 3),
+              );
+            }
+          } catch {
+            // Related products are optional and must not block the page.
+          }
+        })
+        .catch((requestError: unknown) => {
+          if (!active) return;
+          setError(requestError instanceof Error ? requestError.message : t("storefront", "productLoadError"));
+        })
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
+    }, 0);
 
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [productId, t]);
 
