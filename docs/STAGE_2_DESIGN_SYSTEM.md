@@ -47,13 +47,12 @@ Backend failures should expose stable error codes. Convert them with `getLocaliz
 Run from `elitedom-store/frontend`:
 
 ```bash
-npm run check:design-system
-npm run lint
-npx tsc --noEmit
+npm ci
+npm run verify
 npm run build
 ```
 
-`npm run build` invokes `check:design-system` before the Next.js production build.
+`npm run verify` runs the design-system contract, ESLint, and TypeScript checks. `npm run build` repeats the design-system contract before the Next.js production build so fixed-color or translation regressions cannot bypass production builds.
 
 ## Manual test matrix
 
