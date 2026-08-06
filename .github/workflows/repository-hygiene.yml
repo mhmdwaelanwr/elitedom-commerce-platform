@@ -1,0 +1,44 @@
+name: Repository Hygiene
+
+on:
+  push:
+    paths:
+      - ".gitignore"
+      - "README.md"
+      - ".github/workflows/repository-hygiene.yml"
+      - "nextjs-ecommerce-template-main/**"
+      - "elitedom-store/.gitignore"
+      - "elitedom-store/frontend/README.md"
+      - "elitedom-store/frontend/public/**"
+      - "elitedom-store/scripts/check_repository_hygiene.py"
+      - "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md"
+  pull_request:
+    paths:
+      - ".gitignore"
+      - "README.md"
+      - ".github/workflows/repository-hygiene.yml"
+      - "nextjs-ecommerce-template-main/**"
+      - "elitedom-store/.gitignore"
+      - "elitedom-store/frontend/README.md"
+      - "elitedom-store/frontend/public/**"
+      - "elitedom-store/scripts/check_repository_hygiene.py"
+      - "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hygiene-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-hygiene:
+    name: Validate tracked repository files
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Validate canonical source and generated-file policy
+        run: python3 elitedom-store/scripts/check_repository_hygiene.py

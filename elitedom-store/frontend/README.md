@@ -1,15 +1,15 @@
 # Elitedom Storefront
 
-The Next.js 16 storefront for Elitedom. It uses the project’s existing Tailwind 4 setup and FastAPI API rather than the static data and Redux layer supplied by the imported ecommerce template.
+This directory is the canonical Next.js 16 storefront and administration application for Elitedom. It uses React 19, TypeScript, Tailwind CSS 4, and the FastAPI service under `../backend`.
 
 ## Run locally
 
 ```bash
-npm install
+npm ci
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run dev
 ```
 
-If `NEXT_PUBLIC_API_URL` is omitted, the storefront uses `http://localhost:8000/api/v1` by default.
+If `NEXT_PUBLIC_API_URL` is omitted in development, the client defaults to `http://localhost:8000/api/v1`.
 
 ```bash
 npm run lint
@@ -19,20 +19,18 @@ npm run build
 
 ## Production container
 
-The storefront has a multi-stage `Dockerfile` that uses Next.js standalone output. The final image contains only the traced runtime, static files, and `public` assets, and it runs as an unprivileged `nextjs` user.
+The multi-stage `Dockerfile` uses Next.js standalone output. The final image contains the traced runtime, static files, and public assets, and runs as the unprivileged `nextjs` user.
 
-`NEXT_PUBLIC_API_URL` is intentionally a **build-time** value because it is used by browser code. It must point to the customer-visible HTTPS API address, for example `https://api.store.example.com/api/v1`; do not use Docker's `http://fastapi:8000` hostname. Rebuild the image after changing it.
+`NEXT_PUBLIC_API_URL` is a build-time public browser value. It must point to the customer-visible HTTPS API address, not the internal Docker hostname. Rebuild the frontend image after changing it.
 
 ```bash
 docker build \
   --build-arg NEXT_PUBLIC_API_URL=https://api.store.example.com/api/v1 \
   -t elitedom-storefront:local \
   .
-
-docker run --rm -p 127.0.0.1:3000:3000 elitedom-storefront:local
 ```
 
-To run the production storefront through the repository Compose files, set `NEXT_PUBLIC_API_URL` and `FRONTEND_PORT` in the root `.env`, then run:
+To run it through the repository Compose files:
 
 ```bash
 cd ../infrastructure
@@ -42,22 +40,29 @@ docker compose --env-file ../.env \
   up -d --build frontend
 ```
 
-The production overlay intentionally fails if `NEXT_PUBLIC_API_URL` is missing. The Compose service binds port 3000 to loopback only. Configure Nginx Proxy Manager to forward the public storefront domain to `frontend:3000` on the `elitedom-net` network and terminate TLS there.
+## Source organization
 
-## Implemented storefront flows
+```text
+src/
+├── app/          Next.js routes, layouts and route-level composition
+├── components/   Reusable storefront and administration components
+├── lib/          API adapter, domain helpers, catalogue and session utilities
+└── types/        Shared TypeScript domain and API types
+```
 
-- Responsive landing experience built from the imported template assets: department discovery, featured picks, curated collection promos, and B2B/warranty journeys.
-- Product catalogue with header search suggestions, keyword/specification matching, department, brand, price, availability and technical-specification filters, sort options, and grid/list views.
-- Product detail pages with image gallery, specifications, warranty/fulfilment information, wishlisting, add-to-cart, and direct buy-now checkout actions.
-- Guest and authenticated carts that synchronize with the FastAPI service, including safe guest-to-account cart merging.
-- Guest checkout with contact validation, registered checkout, saved-address selection, governorate-based VAT/shipping estimates, and Stripe-hosted redirect when card payment is configured.
-- Registration, sign-in, session-aware account summary, profile editing, multiple saved delivery addresses, recent orders, and loyalty balance.
-- B2B RFQ form plus warranty/RMA lookup, claim submission with required evidence, and recent-claim tracking.
+Route components should compose existing services and UI components rather than duplicate request, pricing, session, or mapping logic. New provider integrations belong in the backend and must be exposed through typed API adapters.
 
-The API adapter is in `src/lib/api.ts`. It deliberately maps the API DTOs to the UI model, so the UI remains usable with the fallback catalogue while a local API has no catalog records yet.
+## Current flows
 
-## Imported template assets
+- Responsive landing, catalogue, search, filtering and product detail pages.
+- Guest and authenticated carts with safe guest-to-account merging.
+- Checkout, account, saved addresses, orders, B2B RFQ, warranty and RMA journeys.
+- Staff catalogue, product media, inventory and administration screens.
 
-The visual assets from `../nextjs-ecommerce-template-main/public/images` are copied into `public/template/images`. They are used by the Elitedom-specific pages and components; no Tailwind 3 configuration, template Redux state, static orders, or static checkout behavior was copied.
+The main API adapter is `src/lib/api.ts`. Production pages must use live API data. The optional development catalogue fallback is controlled by `NEXT_PUBLIC_DEMO_CATALOG_FALLBACK` and stays disabled by default.
 
-Review the upstream template’s licence and asset rights before a production release.
+## Vendored visual assets
+
+Visual assets required by the current storefront are self-contained under `public/template/images`. The standalone reference application that originally accompanied those assets was removed during Stage 1 because it was not part of the build, tests, Docker topology, or runtime dependency graph.
+
+The retained assets are referenced by the active storefront and local development seed data. Their origin and production usage rights must be reviewed before public launch; removing the unused source application does not itself grant asset rights.
