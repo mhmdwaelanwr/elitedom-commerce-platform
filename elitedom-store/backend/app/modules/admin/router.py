@@ -34,9 +34,19 @@ from app.modules.products.schemas import (
     ProductUpdateRequest,
 )
 from app.modules.products.service import ProductService
-from app.modules.shipping.service import DispatchOrderRequest, DispatchOrderResponse, ShippingService
+from app.modules.shipping.service import (
+    DispatchOrderRequest,
+    DispatchOrderResponse,
+    ShippingService,
+)
 from app.modules.warranty.service import RMAReviewRequest
-from app.shared.schemas import OrderState, PaymentStatus, RFQStatus, RMAStatus, UserRole
+from app.shared.schemas import (
+    OrderState,
+    PaymentStatus,
+    RFQStatus,
+    RMAStatus,
+    UserRole,
+)
 from app.shared.security import require_role
 
 router = APIRouter()
