@@ -1,7 +1,6 @@
 # =============================================================================
 # Elitedom Store — Docker Compose base
-# Combine with docker-compose.dev.yml for local development or
-# docker-compose.prod.yml for production.
+# Combine with docker-compose.dev.yml for local development or production.
 # =============================================================================
 
 networks:
@@ -12,6 +11,7 @@ volumes:
   pg-data:
   odoo-data:
   redis-data:
+  media-data:
   nginx-data:
   nginx-letsencrypt:
   portainer-data:
@@ -28,8 +28,7 @@ services:
       APP_POSTGRES_DB: ${APP_POSTGRES_DB:-elitedom_store}
     volumes:
       - pg-data:/var/lib/postgresql/data
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elitedom}"]
       interval: 10s
@@ -58,8 +57,7 @@ services:
           createdb "$$APP_POSTGRES_DB"
           echo "Created application database $$APP_POSTGRES_DB."
         fi
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
 
   odoo:
     image: odoo:17.0
@@ -83,8 +81,7 @@ services:
     volumes:
       - odoo-data:/var/lib/odoo
       - ../odoo/addons:/mnt/extra-addons:ro
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
     healthcheck:
       test:
         - CMD
@@ -103,8 +100,7 @@ services:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis-data:/data
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}", "ping"]
       interval: 10s
@@ -124,10 +120,10 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    env_file:
-      - ../.env
-    networks:
-      - elitedom-net
+    env_file: [../.env]
+    volumes:
+      - media-data:/app/media
+    networks: [elitedom-net]
     command:
       - uvicorn
       - app.main:app
@@ -144,8 +140,7 @@ services:
       retries: 5
       start_period: 20s
     init: true
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
 
   frontend:
     build:
@@ -153,6 +148,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}"
+        NEXT_PUBLIC_DEMO_CATALOG_FALLBACK: "${NEXT_PUBLIC_DEMO_CATALOG_FALLBACK:-false}"
     container_name: elitedom-storefront
     restart: unless-stopped
     depends_on:
@@ -164,17 +160,14 @@ services:
       HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
     init: true
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
       - /app/.next/cache:rw,noexec,nosuid,size=64m
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
       interval: 30s
@@ -195,14 +188,11 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-    env_file:
-      - ../.env
-    networks:
-      - elitedom-net
+    env_file: [../.env]
+    networks: [elitedom-net]
     command: celery -A app.celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
     init: true
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
 
   celery-beat:
     build:
@@ -213,14 +203,11 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    env_file:
-      - ../.env
-    networks:
-      - elitedom-net
+    env_file: [../.env]
+    networks: [elitedom-net]
     command: celery -A app.celery_app beat --loglevel=info
     init: true
-    security_opt:
-      - no-new-privileges:true
+    security_opt: [no-new-privileges:true]
 
   nginx-proxy-manager:
     image: jc21/nginx-proxy-manager:latest
@@ -233,8 +220,7 @@ services:
     volumes:
       - nginx-data:/data
       - nginx-letsencrypt:/etc/letsencrypt
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]
 
   portainer:
     image: portainer/portainer-ce:latest
@@ -245,5 +231,4 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
-    networks:
-      - elitedom-net
+    networks: [elitedom-net]

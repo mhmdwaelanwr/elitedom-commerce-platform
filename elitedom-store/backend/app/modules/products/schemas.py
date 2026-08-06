@@ -1,104 +1,133 @@
-"""
-Elitedom Store — Products Module Schemas
-"""
+"""Typed product-catalog API contracts."""
+
+from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ProductCreateRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
     name: str = Field(..., min_length=2, max_length=255)
     sku: str = Field(..., min_length=2, max_length=64)
-    description: Optional[str] = None
+    description: str | None = None
     tracking: str = Field(default="serial", pattern="^(serial|barcode)$")
     base_cost_usd: Decimal = Field(..., ge=0)
     target_margin_percent: Decimal = Field(..., ge=0, le=100)
     list_price: Decimal = Field(..., ge=0)
-    category_id: Optional[int] = None
-    brand: Optional[str] = None
+    category_id: int | None = None
+    brand: str | None = Field(default=None, max_length=128)
     is_dropship_enabled: bool = False
-    # New catalogue records are drafts until a verified supplier mapping is
-    # configured. ProductService prevents publishing a record without one.
     is_active: bool = False
     stock_qty: int = Field(default=0, ge=0)
-    weight_kg: Optional[Decimal] = None
-    warranty_months: int = Field(default=12, ge=0)
-    # Compatibility matrix
-    socket_type: Optional[str] = None
-    ram_type: Optional[str] = None
-    form_factor: Optional[str] = None
+    weight_kg: Decimal | None = Field(default=None, ge=0)
+    warranty_months: int = Field(default=12, ge=0, le=120)
+    socket_type: str | None = Field(default=None, max_length=32)
+    ram_type: str | None = Field(default=None, max_length=32)
+    form_factor: str | None = Field(default=None, max_length=32)
     power_wattage_draw: int = Field(default=0, ge=0)
-    pcie_gen: Optional[str] = None
+    pcie_gen: str | None = Field(default=None, max_length=32)
+
+    @field_validator("sku")
+    @classmethod
+    def normalize_sku(cls, value: str) -> str:
+        return value.upper()
 
 
 class ProductUpdateRequest(BaseModel):
-    name: Optional[str] = Field(None, min_length=2, max_length=255)
-    description: Optional[str] = None
-    base_cost_usd: Optional[Decimal] = Field(None, ge=0)
-    target_margin_percent: Optional[Decimal] = Field(None, ge=0, le=100)
-    list_price: Optional[Decimal] = Field(None, ge=0)
-    category_id: Optional[int] = None
-    brand: Optional[str] = None
-    is_dropship_enabled: Optional[bool] = None
-    stock_qty: Optional[int] = Field(None, ge=0)
-    is_active: Optional[bool] = None
-    # Compatibility matrix
-    socket_type: Optional[str] = None
-    ram_type: Optional[str] = None
-    form_factor: Optional[str] = None
-    power_wattage_draw: Optional[int] = Field(None, ge=0)
-    pcie_gen: Optional[str] = None
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+
+    name: str | None = Field(default=None, min_length=2, max_length=255)
+    description: str | None = None
+    tracking: str | None = Field(default=None, pattern="^(serial|barcode)$")
+    base_cost_usd: Decimal | None = Field(default=None, ge=0)
+    target_margin_percent: Decimal | None = Field(default=None, ge=0, le=100)
+    list_price: Decimal | None = Field(default=None, ge=0)
+    category_id: int | None = None
+    brand: str | None = Field(default=None, max_length=128)
+    is_dropship_enabled: bool | None = None
+    stock_qty: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+    weight_kg: Decimal | None = Field(default=None, ge=0)
+    warranty_months: int | None = Field(default=None, ge=0, le=120)
+    socket_type: str | None = Field(default=None, max_length=32)
+    ram_type: str | None = Field(default=None, max_length=32)
+    form_factor: str | None = Field(default=None, max_length=32)
+    power_wattage_draw: int | None = Field(default=None, ge=0)
+    pcie_gen: str | None = Field(default=None, max_length=32)
+
+
+class ProductCategoryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    slug: str
+    description: str | None = None
 
 
 class ProductImageResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     url: str
-    alt_text: Optional[str] = None
+    alt_text: str | None = None
+    sort_order: int
     is_primary: bool
 
 
 class ProductDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     sku: str
-    description: Optional[str] = None
+    description: str | None = None
     tracking: str
     base_cost_usd: Decimal
     target_margin_percent: Decimal
     list_price: Decimal
-    category_id: Optional[int] = None
-    brand: Optional[str] = None
+    category_id: int | None = None
+    category: ProductCategoryResponse | None = None
+    brand: str | None = None
     is_dropship_enabled: bool
     is_active: bool
     stock_qty: int
-    weight_kg: Optional[Decimal] = None
+    weight_kg: Decimal | None = None
     warranty_months: int
-    socket_type: Optional[str] = None
-    ram_type: Optional[str] = None
-    form_factor: Optional[str] = None
+    socket_type: str | None = None
+    ram_type: str | None = None
+    form_factor: str | None = None
     power_wattage_draw: int
-    pcie_gen: Optional[str] = None
-    images: list[ProductImageResponse] = []
+    pcie_gen: str | None = None
+    images: list[ProductImageResponse] = Field(default_factory=list)
     created_at: datetime
-    updated_at: Optional[datetime] = None
+    updated_at: datetime | None = None
 
 
 class ProductSummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
     id: int
     name: str
     sku: str
+    description: str | None = None
     list_price: Decimal
     stock_qty: int
     is_dropship_enabled: bool
-    brand: Optional[str] = None
-    category_id: Optional[int] = None
-    images: list[ProductImageResponse] = []
+    brand: str | None = None
+    category_id: int | None = None
+    category: ProductCategoryResponse | None = None
+    warranty_months: int
+    images: list[ProductImageResponse] = Field(default_factory=list)
+    socket_type: str | None = None
+    ram_type: str | None = None
+    form_factor: str | None = None
+    power_wattage_draw: int
+    pcie_gen: str | None = None
 
 
 class ProductListResponse(BaseModel):
