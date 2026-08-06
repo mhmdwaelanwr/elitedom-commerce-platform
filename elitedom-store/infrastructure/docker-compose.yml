@@ -2,16 +2,7 @@
 # Elitedom Store — Docker Compose base
 # Infrastructure per: 08_INFRASTRUCTURE/INFRASTRUCTURE.md
 # Combine with docker-compose.dev.yml for local development or
-# docker-compose.prod.yml for the production-only storefront checks.
-# =============================================================================
-# Services:
-#   - odoo:17.0        → ERP Core (Store, Inventory, POS)
-#   - postgres:15      → Primary RDBMS
-#   - redis:7-alpine   → Celery broker & cache
-#   - nginx-proxy-mgr  → Reverse proxy + SSL (Let's Encrypt)
-#   - portainer        → Container management GUI
-#   - fastapi          → Elitedom backend API
-#   - frontend         → Next.js storefront (standalone runtime)
+# docker-compose.prod.yml for production.
 # =============================================================================
 
 networks:
@@ -28,9 +19,6 @@ volumes:
   portainer-data:
 
 services:
-  # ---------------------------------------------------------------------------
-  # PostgreSQL 15 — Primary Database
-  # ---------------------------------------------------------------------------
   postgres:
     image: postgres:15-alpine
     container_name: elitedom-postgres
@@ -40,8 +28,6 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       POSTGRES_DB: ${POSTGRES_DB:-elitedom_db}
       APP_POSTGRES_DB: ${APP_POSTGRES_DB:-elitedom_store}
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pg-data:/var/lib/postgresql/data
     networks:
@@ -52,9 +38,6 @@ services:
       timeout: 5s
       retries: 5
 
-  # ---------------------------------------------------------------------------
-  # Store API database bootstrap — isolated from Odoo's native schema
-  # ---------------------------------------------------------------------------
   app-db-init:
     image: postgres:15-alpine
     restart: "no"
@@ -80,9 +63,6 @@ services:
     networks:
       - elitedom-net
 
-  # ---------------------------------------------------------------------------
-  # Odoo 17 Community Edition — ERP Core
-  # ---------------------------------------------------------------------------
   odoo:
     image: odoo:17.0
     container_name: elitedom-odoo
@@ -95,38 +75,27 @@ services:
       PORT: 5432
       USER: ${POSTGRES_USER:-elitedom}
       PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-    ports:
-      - "${ODOO_PORT:-8069}:8069"
-      - "${ODOO_LONGPOLL_PORT:-8072}:8072"
     volumes:
       - odoo-data:/var/lib/odoo
       - odoo-addons:/mnt/extra-addons
     networks:
       - elitedom-net
 
-  # ---------------------------------------------------------------------------
-  # Redis 7 — Celery Broker & Cache
-  # ---------------------------------------------------------------------------
   redis:
     image: redis:7-alpine
     container_name: elitedom-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-elitedom_redis}
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
     volumes:
       - redis-data:/data
     networks:
       - elitedom-net
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-elitedom_redis}", "ping"]
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?REDIS_PASSWORD is required}", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ---------------------------------------------------------------------------
-  # FastAPI Backend — Elitedom API
-  # ---------------------------------------------------------------------------
   fastapi:
     build:
       context: ../backend
@@ -142,36 +111,42 @@ services:
         condition: service_healthy
     env_file:
       - ../.env
-    ports:
-      - "${FASTAPI_PORT:-8000}:8000"
-    volumes:
-      - ../backend:/app
     networks:
       - elitedom-net
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --workers
+      - "${FASTAPI_WORKERS:-2}"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    init: true
+    security_opt:
+      - no-new-privileges:true
 
-  # ---------------------------------------------------------------------------
-  # Next.js Storefront — production standalone server
-  # ---------------------------------------------------------------------------
   frontend:
     build:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        # This is compiled into browser JavaScript, so it must be a public URL
-        # that a customer browser can resolve; never use http://fastapi:8000.
         NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}"
     container_name: elitedom-storefront
     restart: unless-stopped
     depends_on:
       fastapi:
-        condition: service_started
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: "3000"
       HOSTNAME: 0.0.0.0
-    # Bind direct access to the host loopback only. Nginx Proxy Manager reaches
-    # this service at frontend:3000 over elitedom-net.
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     networks:
@@ -180,7 +155,6 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-      # Next's image optimizer cache needs a small writable runtime location.
       - /app/.next/cache:rw,noexec,nosuid,size=64m
     security_opt:
       - no-new-privileges:true
@@ -193,9 +167,6 @@ services:
       retries: 3
       start_period: 15s
 
-  # ---------------------------------------------------------------------------
-  # Celery Worker — Background Task Processing
-  # ---------------------------------------------------------------------------
   celery-worker:
     build:
       context: ../backend
@@ -211,15 +182,13 @@ services:
         condition: service_healthy
     env_file:
       - ../.env
-    volumes:
-      - ../backend:/app
     networks:
       - elitedom-net
-    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=${CELERY_WORKER_CONCURRENCY:-4}
+    init: true
+    security_opt:
+      - no-new-privileges:true
 
-  # ---------------------------------------------------------------------------
-  # Celery Beat — Scheduled Task Scheduler
-  # ---------------------------------------------------------------------------
   celery-beat:
     build:
       context: ../backend
@@ -231,15 +200,13 @@ services:
         condition: service_healthy
     env_file:
       - ../.env
-    volumes:
-      - ../backend:/app
     networks:
       - elitedom-net
     command: celery -A app.celery_app beat --loglevel=info
+    init: true
+    security_opt:
+      - no-new-privileges:true
 
-  # ---------------------------------------------------------------------------
-  # Nginx Proxy Manager — Reverse Proxy & SSL
-  # ---------------------------------------------------------------------------
   nginx-proxy-manager:
     image: jc21/nginx-proxy-manager:latest
     container_name: elitedom-nginx
@@ -247,22 +214,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      - "81:81"    # Admin UI
+      - "${ADMIN_BIND_IP:-127.0.0.1}:81:81"
     volumes:
       - nginx-data:/data
       - nginx-letsencrypt:/etc/letsencrypt
     networks:
       - elitedom-net
 
-  # ---------------------------------------------------------------------------
-  # Portainer — Container Management GUI
-  # ---------------------------------------------------------------------------
   portainer:
     image: portainer/portainer-ce:latest
     container_name: elitedom-portainer
     restart: unless-stopped
     ports:
-      - "${PORTAINER_PORT:-9443}:9443"
+      - "${ADMIN_BIND_IP:-127.0.0.1}:${PORTAINER_PORT:-9443}:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer-data:/data
