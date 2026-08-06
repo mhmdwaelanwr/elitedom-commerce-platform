@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { type FormEvent, useId, useMemo, useState } from "react";
-import { CATALOG, CATEGORIES } from "@/lib/catalog";
+import { type FormEvent, useEffect, useId, useMemo, useState } from "react";
+import { fetchCatalog } from "@/lib/api";
+import { CATEGORIES } from "@/lib/catalog";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
+import type { Product } from "@/types/store";
 
 type StorefrontSearchProps = {
   inputId: string;
@@ -22,31 +24,52 @@ export function StorefrontSearch({
   const { direction, t } = usePreferences();
   const [query, setQuery] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const resolvedPlaceholder = placeholder ?? t("storefront", "searchPlaceholder");
+  const categoryNames: Record<string, string> = {
+    gaming: t("storefront", "categoryGaming"),
+    computers: t("storefront", "categoryComputers"),
+    peripherals: t("storefront", "categoryPeripherals"),
+    audio: t("storefront", "categoryAudio"),
+    networking: t("storefront", "categoryNetworking"),
+    mobile: t("storefront", "categoryMobile"),
+  };
 
-  const { categoryMatches, productMatches } = useMemo(() => {
-    if (!normalizedQuery) {
-      return {
-        categoryMatches: CATEGORIES.slice(0, 4),
-        productMatches: CATALOG.filter((product) => product.featured).slice(0, 4),
-      };
-    }
+  useEffect(() => {
+    let active = true;
+    const timer = window.setTimeout(() => {
+      setIsLoading(true);
+      void fetchCatalog(query)
+        .then((result) => {
+          if (active) setProducts(result.slice(0, normalizedQuery ? 5 : 4));
+        })
+        .catch(() => {
+          if (active) setProducts([]);
+        })
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
+    }, normalizedQuery ? 220 : 0);
 
-    return {
-      categoryMatches: CATEGORIES.filter((category) =>
-        [category.name, category.description].join(" ").toLowerCase().includes(normalizedQuery),
-      ).slice(0, 3),
-      productMatches: CATALOG.filter((product) =>
-        [product.name, product.brand, product.sku, product.categoryName, ...product.specs.flatMap((specification) => [specification.label, specification.value])]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery),
-      ).slice(0, 5),
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
     };
-  }, [normalizedQuery]);
+  }, [normalizedQuery, query]);
 
-  const hasSuggestions = categoryMatches.length > 0 || productMatches.length > 0;
+  const categoryMatches = useMemo(() => {
+    if (!normalizedQuery) return CATEGORIES.slice(0, 4);
+    return CATEGORIES.filter((category) =>
+      [category.name, category.description, categoryNames[category.slug] ?? ""]
+        .join(" ")
+        .toLowerCase()
+        .includes(normalizedQuery),
+    ).slice(0, 3);
+  }, [categoryNames, normalizedQuery]);
+
+  const hasSuggestions = categoryMatches.length > 0 || products.length > 0;
   const listboxId = `${inputId}-${generatedId}-suggestions`;
 
   function navigateToSearch() {
@@ -81,7 +104,7 @@ export function StorefrontSearch({
         />
         <button
           aria-label={t("storefront", "searchCatalogue")}
-          className="focus-ring absolute inset-y-0 end-0 grid w-11 place-items-center rounded-e-xl text-primary hover:brightness-110"
+          className="focus-ring absolute inset-y-0 end-0 grid w-11 place-items-center rounded-e-xl bg-primary text-primary-contrast hover:brightness-110"
           type="submit"
         >
           <SearchIcon />
@@ -89,8 +112,12 @@ export function StorefrontSearch({
       </div>
 
       {isOpen && (
-        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-border bg-surface p-2 text-foreground shadow-2xl backdrop-blur-xl" id={listboxId} role="listbox">
-          {hasSuggestions ? (
+        <div className="absolute inset-x-0 top-[calc(100%+0.5rem)] z-50 overflow-hidden rounded-xl border border-border bg-surface p-2 text-foreground shadow-2xl" id={listboxId} role="listbox">
+          {isLoading && products.length === 0 ? (
+            <div className="space-y-2 p-2" aria-label={t("storefront", "checkingAvailability")}>
+              {Array.from({ length: 3 }, (_, index) => <div className="h-9 animate-pulse rounded-lg bg-elevated" key={index} />)}
+            </div>
+          ) : hasSuggestions ? (
             <>
               {categoryMatches.length > 0 && (
                 <div className="px-2 pb-2 pt-1">
@@ -99,21 +126,33 @@ export function StorefrontSearch({
                   </p>
                   <div className="mt-1 grid gap-1 sm:grid-cols-2">
                     {categoryMatches.map((category) => (
-                      <Link className="focus-ring rounded-lg px-2.5 py-2 text-sm font-medium text-muted transition hover:bg-elevated hover:text-foreground" href={`/shop?category=${category.slug}`} key={category.slug} onClick={() => { setIsOpen(false); onNavigate?.(); }} role="option">
-                        {category.name}
+                      <Link
+                        className="focus-ring rounded-lg px-2.5 py-2 text-sm font-medium text-muted transition hover:bg-elevated hover:text-foreground"
+                        href={`/shop?category=${category.slug}`}
+                        key={category.slug}
+                        onClick={() => { setIsOpen(false); onNavigate?.(); }}
+                        role="option"
+                      >
+                        {categoryNames[category.slug] ?? category.name}
                       </Link>
                     ))}
                   </div>
                 </div>
               )}
-              {productMatches.length > 0 && (
+              {products.length > 0 && (
                 <div className="border-t border-border px-2 pb-1 pt-3">
                   <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">
                     {normalizedQuery ? t("storefront", "matchingProducts") : t("storefront", "popularPicks")}
                   </p>
                   <div className="mt-1 grid gap-1">
-                    {productMatches.map((product) => (
-                      <Link className="focus-ring flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-sm transition hover:bg-elevated" href={`/products/${product.id}`} key={product.id} onClick={() => { setIsOpen(false); onNavigate?.(); }} role="option">
+                    {products.map((product) => (
+                      <Link
+                        className="focus-ring flex items-center justify-between gap-3 rounded-lg px-2.5 py-2 text-sm transition hover:bg-elevated"
+                        href={`/products/${product.id}`}
+                        key={product.id}
+                        onClick={() => { setIsOpen(false); onNavigate?.(); }}
+                        role="option"
+                      >
                         <span className="min-w-0 truncate font-medium text-foreground">{product.name}</span>
                         <span className="shrink-0 text-xs text-primary">{product.brand}</span>
                       </Link>
@@ -126,7 +165,12 @@ export function StorefrontSearch({
             <p className="px-3 py-4 text-sm text-muted">{t("storefront", "noQuickMatch")}</p>
           )}
           {normalizedQuery && (
-            <button className="focus-ring mt-1 flex w-full items-center justify-between border-t border-border px-3 py-2.5 text-start text-sm font-bold text-primary hover:bg-elevated" onMouseDown={(event) => event.preventDefault()} onClick={navigateToSearch} type="button">
+            <button
+              className="focus-ring mt-1 flex w-full items-center justify-between border-t border-border px-3 py-2.5 text-start text-sm font-bold text-primary hover:bg-elevated"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={navigateToSearch}
+              type="button"
+            >
               <span>{t("storefront", "searchAllResults")} “{query.trim()}”</span>
               <span aria-hidden="true">{direction === "rtl" ? "←" : "→"}</span>
             </button>
