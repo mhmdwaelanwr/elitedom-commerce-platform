@@ -24,7 +24,10 @@ class CustomerProfileResponse(BaseModel):
 
     id: int
     name: str
-    email: EmailStr
+    # Phone-only accounts retain a non-public internal identifier because the
+    # legacy Partner schema still requires a database email value. New email
+    # input remains strictly validated by UpdateCustomerProfileRequest.
+    email: str
     phone: str
     company_type: str
     governorate: str | None = None
