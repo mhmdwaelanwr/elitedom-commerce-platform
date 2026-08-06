@@ -11,19 +11,18 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import ProductCategory, ProductImage, ProductTemplate
-from app.shared.events import ProductCreated, ProductUpdated
-from app.shared.outbox import publish_domain_event
-
 from .webhooks import (
+    DatabaseSession,
+    IdempotencyKey,
+    VerifiedOdooBody,
     _OdooWebhookPayload,
     _claim_delivery,
     _event_key,
     _parse_payload,
-    DatabaseSession,
-    IdempotencyKey,
-    VerifiedOdooBody,
 )
+from app.models import ProductCategory, ProductImage, ProductTemplate
+from app.shared.events import ProductCreated, ProductUpdated
+from app.shared.outbox import publish_domain_event
 
 router = APIRouter()
 
