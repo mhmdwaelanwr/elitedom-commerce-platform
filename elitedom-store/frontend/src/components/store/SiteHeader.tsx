@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -13,6 +14,7 @@ import { usePreferences } from "@/providers/AppPreferencesProvider";
 export function SiteHeader() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [departmentsOpen, setDepartmentsOpen] = useState(false);
   const { locale, t } = usePreferences();
   const {
     cartCount,
@@ -25,6 +27,14 @@ export function SiteHeader() {
   } = useStore();
 
   const closeMenu = () => setMenuOpen(false);
+  const categoryNames: Record<string, string> = {
+    gaming: t("storefront", "categoryGaming"),
+    computers: t("storefront", "categoryComputers"),
+    peripherals: t("storefront", "categoryPeripherals"),
+    audio: t("storefront", "categoryAudio"),
+    networking: t("storefront", "categoryNetworking"),
+    mobile: t("storefront", "categoryMobile"),
+  };
   const serviceNavigation = [
     { href: "/b2b", label: t("storefront", "business") },
     { href: "/warranty", label: t("storefront", "warranty") },
@@ -36,19 +46,19 @@ export function SiteHeader() {
         <div className="site-container flex min-h-9 items-center justify-between gap-3 py-2">
           <p className="hidden sm:block">{t("storefront", "deliveryStrip")}</p>
           <p className="sm:hidden">{t("storefront", "deliveryStripMobile")}</p>
-          <Link className="focus-ring font-bold text-primary hover:brightness-110" href="/warranty">
+          <Link className="focus-ring rounded-md font-bold text-primary hover:brightness-110" href="/warranty">
             {t("storefront", "trackWarranty")}
           </Link>
         </div>
       </div>
 
-      <div className="site-container flex min-h-[4.5rem] items-center gap-3 py-3 lg:gap-6">
+      <div className="site-container flex min-h-[4.75rem] items-center gap-3 py-3 lg:gap-5">
         <Link
           aria-label={t("common", "brandHome")}
           className="focus-ring group flex shrink-0 items-center gap-2 rounded-lg"
           href="/"
         >
-          <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-base font-black text-primary-contrast shadow-lg transition group-hover:brightness-110">
+          <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-base font-black text-primary-contrast shadow-lg transition group-hover:brightness-110">
             E
           </span>
           <span className="hidden text-lg font-black tracking-tight text-foreground sm:block">
@@ -71,26 +81,31 @@ export function SiteHeader() {
           </button>
           <Link
             aria-label={`${t("storefront", "wishlist")} (${wishlist.length})`}
-            className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-foreground"
+            className="focus-ring relative flex h-10 items-center gap-2 rounded-lg px-2 text-muted hover:bg-elevated hover:text-foreground"
             href="/wishlist"
           >
             <HeartIcon />
+            <span className="hidden text-xs font-bold xl:block">{t("storefront", "wishlist")}</span>
             {wishlist.length > 0 && <CountBadge value={wishlist.length} />}
           </Link>
           <Link
             aria-label={session ? t("storefront", "account") : t("storefront", "signIn")}
-            className="focus-ring grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-foreground"
+            className="focus-ring flex h-10 items-center gap-2 rounded-lg px-2 text-muted hover:bg-elevated hover:text-foreground"
             href={session ? "/account" : "/signin"}
           >
             <UserIcon />
+            <span className="hidden max-w-24 truncate text-xs font-bold xl:block">
+              {session ? session.name ?? t("storefront", "account") : t("storefront", "signIn")}
+            </span>
           </Link>
           <button
             aria-label={`${t("storefront", "cart")} (${cartCount})`}
-            className="focus-ring relative grid h-10 w-10 place-items-center rounded-lg bg-primary text-primary-contrast shadow-md hover:brightness-110"
+            className="focus-ring relative flex h-10 items-center gap-2 rounded-lg bg-primary px-3 text-primary-contrast shadow-md hover:brightness-110"
             onClick={() => setCartOpen(true)}
             type="button"
           >
             <CartIcon />
+            <span className="hidden text-xs font-black xl:block">{formatPrice(cartSubtotal, currency, locale)}</span>
             {cartCount > 0 && <CountBadge value={cartCount} />}
           </button>
           <button
@@ -107,13 +122,56 @@ export function SiteHeader() {
       </div>
 
       <div className="hidden border-t border-border lg:block">
-        <div className="site-container flex min-h-11 items-center gap-1">
+        <div className="site-container flex min-h-12 items-center gap-1">
+          <div className="relative">
+            <button
+              aria-expanded={departmentsOpen}
+              className="focus-ring flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-black text-primary-contrast hover:brightness-110"
+              onClick={() => setDepartmentsOpen((open) => !open)}
+              type="button"
+            >
+              <MenuGridIcon />
+              {t("storefront", "departments")}
+              <ChevronIcon open={departmentsOpen} />
+            </button>
+            {departmentsOpen && (
+              <div className="absolute start-0 top-[calc(100%+0.55rem)] z-50 w-[42rem] overflow-hidden rounded-2xl border border-border bg-surface p-4 shadow-2xl">
+                <div className="grid grid-cols-3 gap-2">
+                  {CATEGORIES.map((category) => (
+                    <Link
+                      className="focus-ring group flex items-center gap-3 rounded-xl border border-transparent p-3 transition hover:border-border hover:bg-elevated"
+                      href={`/shop?category=${category.slug}`}
+                      key={category.slug}
+                      onClick={() => setDepartmentsOpen(false)}
+                    >
+                      <span className="relative h-12 w-12 shrink-0 overflow-hidden rounded-xl bg-elevated">
+                        <Image alt="" className="object-contain p-1.5 transition group-hover:scale-110" fill sizes="48px" src={category.image} />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-black text-foreground group-hover:text-primary">
+                          {categoryNames[category.slug] ?? category.name}
+                        </span>
+                        <span className="mt-0.5 block truncate text-xs text-muted">{category.description}</span>
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+                <Link
+                  className="focus-ring mt-3 flex items-center justify-between rounded-xl border border-border bg-elevated px-4 py-3 text-sm font-black text-primary hover:bg-surface"
+                  href="/shop"
+                  onClick={() => setDepartmentsOpen(false)}
+                >
+                  {t("storefront", "fullCatalogue")}
+                  <span aria-hidden="true">→</span>
+                </Link>
+              </div>
+            )}
+          </div>
+
           <Link
             className={cn(
               "focus-ring rounded-lg px-3 py-2 text-sm font-bold transition",
-              pathname === "/shop"
-                ? "bg-primary text-primary-contrast"
-                : "text-foreground hover:bg-elevated",
+              pathname === "/shop" ? "bg-elevated text-foreground" : "text-foreground hover:bg-elevated",
             )}
             href="/shop"
           >
@@ -126,7 +184,7 @@ export function SiteHeader() {
                 href={`/shop?category=${category.slug}`}
                 key={category.slug}
               >
-                {category.name}
+                {categoryNames[category.slug] ?? category.name}
               </Link>
             ))}
           </nav>
@@ -135,9 +193,7 @@ export function SiteHeader() {
               <Link
                 className={cn(
                   "focus-ring rounded-lg px-2.5 py-2 text-xs font-semibold transition",
-                  pathname === item.href
-                    ? "bg-elevated text-foreground"
-                    : "text-muted hover:bg-elevated hover:text-foreground",
+                  pathname === item.href ? "bg-elevated text-foreground" : "text-muted hover:bg-elevated hover:text-foreground",
                 )}
                 href={item.href}
                 key={item.href}
@@ -145,12 +201,6 @@ export function SiteHeader() {
                 {item.label}
               </Link>
             ))}
-            <span className="ms-2 text-xs text-muted">
-              {t("storefront", "cart")}: {" "}
-              <strong className="text-foreground">
-                {formatPrice(cartSubtotal, currency, locale)}
-              </strong>
-            </span>
           </nav>
         </div>
       </div>
@@ -178,7 +228,7 @@ export function SiteHeader() {
                     key={category.slug}
                     onClick={closeMenu}
                   >
-                    {category.name}
+                    {categoryNames[category.slug] ?? category.name}
                   </Link>
                 ))}
               </div>
@@ -209,7 +259,7 @@ export function SiteHeader() {
 
 function CountBadge({ value }: { value: number }) {
   return (
-    <span className="absolute -end-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-warning px-1 text-[10px] font-black text-primary-contrast">
+    <span className="absolute -end-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-danger px-1 text-[10px] font-black text-primary-contrast">
       {value > 99 ? "99+" : value}
     </span>
   );
@@ -229,4 +279,12 @@ function CartIcon() {
 
 function MenuIcon({ open }: { open: boolean }) {
   return open ? <span aria-hidden="true" className="text-xl">×</span> : <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="round" strokeWidth="2" /></svg>;
+}
+
+function MenuGridIcon() {
+  return <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18"><rect height="6" rx="1" stroke="currentColor" strokeWidth="1.8" width="6" x="3" y="3" /><rect height="6" rx="1" stroke="currentColor" strokeWidth="1.8" width="6" x="15" y="3" /><rect height="6" rx="1" stroke="currentColor" strokeWidth="1.8" width="6" x="3" y="15" /><rect height="6" rx="1" stroke="currentColor" strokeWidth="1.8" width="6" x="15" y="15" /></svg>;
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return <svg aria-hidden="true" className={`transition ${open ? "rotate-180" : ""}`} fill="none" height="16" viewBox="0 0 24 24" width="16"><path d="m6 9 6 6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" /></svg>;
 }

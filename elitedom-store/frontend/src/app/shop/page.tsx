@@ -2,15 +2,19 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, type ReactNode, useEffect, useMemo, useState } from "react";
 import { StoreProductCard } from "@/components/store/StoreProductCard";
+import { Drawer } from "@/components/ui/Overlay";
 import { fetchCatalog } from "@/lib/api";
-import { CATALOG, CATEGORIES } from "@/lib/catalog";
+import { CATEGORIES } from "@/lib/catalog";
+import { usePreferences } from "@/providers/AppPreferencesProvider";
 import type { CategorySlug, Product } from "@/types/store";
 
 type SortOption = "featured" | "price-low" | "price-high" | "stock";
 type ViewMode = "grid" | "list";
 type SpecificationFilter = { key: string; label: string };
+
+const PAGE_SIZE = 12;
 
 export default function ShopPage() {
   return (
@@ -23,12 +27,14 @@ export default function ShopPage() {
 function ShopContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { locale, t } = usePreferences();
   const requestedQuery = searchParams.get("q") ?? "";
   const requestedCategory = searchParams.get("category") as CategorySlug | null;
   const [query, setQuery] = useState(requestedQuery);
-  const [products, setProducts] = useState<Product[]>(CATALOG);
+  const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [onlyAvailable, setOnlyAvailable] = useState(false);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
   const [selectedSpecifications, setSelectedSpecifications] = useState<string[]>([]);
@@ -37,6 +43,16 @@ function ShopContent() {
   const [sort, setSort] = useState<SortOption>("featured");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const categoryNames: Record<string, string> = {
+    gaming: t("storefront", "categoryGaming"),
+    computers: t("storefront", "categoryComputers"),
+    peripherals: t("storefront", "categoryPeripherals"),
+    audio: t("storefront", "categoryAudio"),
+    networking: t("storefront", "categoryNetworking"),
+    mobile: t("storefront", "categoryMobile"),
+  };
 
   useEffect(() => {
     let live = true;
@@ -44,14 +60,15 @@ function ShopContent() {
       setQuery(requestedQuery);
       setIsLoading(true);
       setError(null);
-      fetchCatalog(requestedQuery)
+
+      void fetchCatalog(requestedQuery)
         .then((nextProducts) => {
           if (live) setProducts(nextProducts);
         })
         .catch((requestError: unknown) => {
           if (!live) return;
           setProducts([]);
-          setError(requestError instanceof Error ? requestError.message : "Could not load the catalogue.");
+          setError(requestError instanceof Error ? requestError.message : t("storefront", "catalogueLoadError"));
         })
         .finally(() => {
           if (live) setIsLoading(false);
@@ -62,7 +79,7 @@ function ShopContent() {
       live = false;
       window.clearTimeout(timer);
     };
-  }, [requestedQuery]);
+  }, [reloadToken, requestedQuery, t]);
 
   const availableBrands = useMemo(
     () => [...new Set(products.map((product) => product.brand).filter(Boolean))].sort(),
@@ -77,8 +94,10 @@ function ShopContent() {
         uniqueSpecifications.set(key, { key, label: `${specification.label}: ${specification.value}` });
       });
     });
-    return [...uniqueSpecifications.values()].sort((first, second) => first.label.localeCompare(second.label)).slice(0, 10);
-  }, [products]);
+    return [...uniqueSpecifications.values()]
+      .sort((first, second) => first.label.localeCompare(second.label, locale))
+      .slice(0, 16);
+  }, [locale, products]);
 
   const visibleProducts = useMemo(() => {
     const minimum = toPrice(minimumPrice);
@@ -89,7 +108,7 @@ function ShopContent() {
       .filter((product) => selectedBrands.length === 0 || selectedBrands.includes(product.brand))
       .filter((product) =>
         selectedSpecifications.length === 0 ||
-        selectedSpecifications.some((selectedSpecification) =>
+        selectedSpecifications.every((selectedSpecification) =>
           product.specs.some((specification) => `${specification.label}:${specification.value}` === selectedSpecification),
         ),
       )
@@ -99,7 +118,9 @@ function ShopContent() {
     return [...nextProducts].sort((first, second) => {
       if (sort === "price-low") return first.priceEgp - second.priceEgp;
       if (sort === "price-high") return second.priceEgp - first.priceEgp;
-      if (sort === "stock") return Number(second.stockQty > 0) - Number(first.stockQty > 0);
+      if (sort === "stock") {
+        return Number(second.stockQty > 0) - Number(first.stockQty > 0) || second.stockQty - first.stockQty;
+      }
       return Number(Boolean(second.featured)) - Number(Boolean(first.featured));
     });
   }, [maximumPrice, minimumPrice, onlyAvailable, products, requestedCategory, selectedBrands, selectedSpecifications, sort]);
@@ -113,6 +134,10 @@ function ShopContent() {
     Number(Boolean(minimumPrice)) +
     Number(Boolean(maximumPrice));
 
+  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, pageCount);
+  const paginatedProducts = visibleProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   function updateFilters(next: { category?: CategorySlug | null; query?: string }) {
     const parameters = new URLSearchParams(searchParams.toString());
     const nextCategory = next.category === undefined ? requestedCategory : next.category;
@@ -124,16 +149,20 @@ function ShopContent() {
     if (nextQuery?.trim()) parameters.set("q", nextQuery.trim());
     else parameters.delete("q");
 
-    router.push(`/shop${parameters.size ? `?${parameters.toString()}` : ""}`);
+    const serialized = parameters.toString();
+    setCurrentPage(1);
+    router.push(`/shop${serialized ? `?${serialized}` : ""}`);
   }
 
   function toggleBrand(brand: string) {
+    setCurrentPage(1);
     setSelectedBrands((current) =>
       current.includes(brand) ? current.filter((item) => item !== brand) : [...current, brand],
     );
   }
 
   function toggleSpecification(specification: string) {
+    setCurrentPage(1);
     setSelectedSpecifications((current) =>
       current.includes(specification)
         ? current.filter((item) => item !== specification)
@@ -148,6 +177,7 @@ function ShopContent() {
     setMinimumPrice("");
     setMaximumPrice("");
     setSort("featured");
+    setCurrentPage(1);
   }
 
   function clearAllFilters() {
@@ -159,14 +189,14 @@ function ShopContent() {
   const filterProps: Omit<CatalogFilterControlsProps, "idPrefix"> = {
     availableBrands,
     availableSpecifications,
+    categoryNames,
     maximumPrice,
     minimumPrice,
     onlyAvailable,
     onCategoryChange: (category) => updateFilters({ category }),
-    onClose: () => setIsFiltersOpen(false),
-    onMaximumPriceChange: setMaximumPrice,
-    onMinimumPriceChange: setMinimumPrice,
-    onOnlyAvailableChange: setOnlyAvailable,
+    onMaximumPriceChange: (value) => { setMaximumPrice(value); setCurrentPage(1); },
+    onMinimumPriceChange: (value) => { setMinimumPrice(value); setCurrentPage(1); },
+    onOnlyAvailableChange: (value) => { setOnlyAvailable(value); setCurrentPage(1); },
     onReset: resetLocalFilters,
     onToggleBrand: toggleBrand,
     onToggleSpecification: toggleSpecification,
@@ -175,58 +205,60 @@ function ShopContent() {
     selectedSpecifications,
   };
 
+  const requestedCategoryName = requestedCategory
+    ? categoryNames[requestedCategory] ?? CATEGORIES.find((category) => category.slug === requestedCategory)?.name
+    : null;
   const pageTitle = requestedQuery
-    ? `Results for “${requestedQuery}”`
-    : requestedCategory
-      ? CATEGORIES.find((category) => category.slug === requestedCategory)?.name ?? "Catalogue"
-      : "Everything we stock";
+    ? `${t("storefront", "resultsFor")} “${requestedQuery}”`
+    : requestedCategoryName ?? t("storefront", "everythingWeStock");
+  const productsCountLabel = visibleProducts.length === 1
+    ? t("storefront", "productShown")
+    : t("storefront", "productsShown");
 
   return (
     <div className="site-container py-8 sm:py-12">
-      <nav aria-label="Breadcrumb" className="text-sm text-slate-400">
-        <Link className="hover:text-white focus-ring" href="/">Home</Link>
+      <nav aria-label="Breadcrumb" className="text-sm text-muted">
+        <Link className="focus-ring rounded-md hover:text-foreground" href="/">{t("storefront", "home")}</Link>
         <span aria-hidden="true"> / </span>
-        <span className="text-slate-200">Shop</span>
+        <span className="text-foreground">{t("storefront", "shop")}</span>
       </nav>
 
-      <section className="mt-6 overflow-hidden rounded-3xl border border-sky-400/15 bg-[radial-gradient(circle_at_85%_0%,rgba(14,165,233,0.16),transparent_45%)] bg-slate-900/60 p-6 sm:p-8">
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_21rem] lg:items-end">
+      <section className="surface-grid mt-6 overflow-hidden rounded-3xl border border-border bg-surface p-6 shadow-sm sm:p-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-end">
           <div>
-            <p className="section-kicker">Browse with confidence</p>
-            <h1 className="mt-2 text-3xl font-black tracking-tight text-white sm:text-4xl">Find the technology that fits.</h1>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">Search products, narrow by department, brand, price, and availability, then review the technical details before checkout.</p>
+            <p className="section-kicker">{t("storefront", "browseWithConfidence")}</p>
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
+              {t("storefront", "shopHeroTitle")}
+            </h1>
+            <p className="mt-3 max-w-2xl text-sm leading-6 text-muted">
+              {t("storefront", "shopHeroDescription")}
+            </p>
           </div>
           <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); updateFilters({ query }); }} role="search">
-            <label className="sr-only" htmlFor="catalogue-page-search">Search catalogue</label>
+            <label className="sr-only" htmlFor="catalogue-page-search">{t("storefront", "searchCatalogue")}</label>
             <input
-              className="min-w-0 flex-1 rounded-xl border border-slate-700 bg-slate-950/85 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
+              className="form-input min-w-0 flex-1"
               id="catalogue-page-search"
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Try a product, brand, or SKU…"
+              placeholder={t("storefront", "trySearch")}
               value={query}
             />
-            <button className="button-primary px-4 py-2" type="submit">Search</button>
+            <button className="button-primary shrink-0 px-4 py-2" type="submit">{t("storefront", "search")}</button>
           </form>
         </div>
         <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
-          <button
-            aria-pressed={!requestedCategory}
-            className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition focus-ring ${!requestedCategory ? "border-sky-400 bg-sky-400 text-slate-950" : "border-slate-700 bg-slate-950/65 text-slate-300 hover:border-sky-400 hover:text-white"}`}
+          <CategoryChip
+            active={!requestedCategory}
+            label={t("storefront", "allDepartments")}
             onClick={() => updateFilters({ category: null })}
-            type="button"
-          >
-            All departments
-          </button>
+          />
           {CATEGORIES.map((category) => (
-            <button
-              aria-pressed={requestedCategory === category.slug}
-              className={`shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition focus-ring ${requestedCategory === category.slug ? "border-sky-400 bg-sky-400 text-slate-950" : "border-slate-700 bg-slate-950/65 text-slate-300 hover:border-sky-400 hover:text-white"}`}
+            <CategoryChip
+              active={requestedCategory === category.slug}
               key={category.slug}
+              label={categoryNames[category.slug] ?? category.name}
               onClick={() => updateFilters({ category: category.slug })}
-              type="button"
-            >
-              {category.name}
-            </button>
+            />
           ))}
         </div>
       </section>
@@ -239,102 +271,161 @@ function ShopContent() {
         <section>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="section-kicker">Curated technology</p>
-              <h2 className="mt-2 text-3xl font-black tracking-tight text-white">{pageTitle}</h2>
-              <p className="mt-3 text-sm text-slate-400">
-                {isLoading ? "Checking availability…" : `${visibleProducts.length} product${visibleProducts.length === 1 ? "" : "s"} shown`} · Prices include Egyptian VAT.
+              <p className="section-kicker">{t("storefront", "curatedTechnology")}</p>
+              <h2 className="mt-2 text-3xl font-black tracking-tight text-foreground">{pageTitle}</h2>
+              <p className="mt-3 text-sm text-muted">
+                {isLoading
+                  ? t("storefront", "checkingAvailability")
+                  : `${visibleProducts.length} ${productsCountLabel} · ${t("storefront", "pricesIncludeVat")}`}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
-                aria-controls="mobile-catalogue-filters"
                 aria-expanded={isFiltersOpen}
                 className="button-secondary px-3 py-2 text-sm lg:hidden"
-                onClick={() => setIsFiltersOpen((open) => !open)}
+                onClick={() => setIsFiltersOpen(true)}
                 type="button"
               >
-                Filters{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+                {t("storefront", "filters")}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
               </button>
-              <div aria-label="Product view" className="inline-flex rounded-lg border border-slate-700 bg-slate-900 p-1">
+              <div aria-label={t("storefront", "sortProducts")} className="inline-flex rounded-lg border border-border bg-surface p-1">
                 <button
-                  aria-label="Grid product view"
+                  aria-label={t("storefront", "gridView")}
                   aria-pressed={viewMode === "grid"}
-                  className={`grid h-8 w-8 place-items-center rounded-md focus-ring ${viewMode === "grid" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}
+                  className={`focus-ring grid h-8 w-8 place-items-center rounded-md ${viewMode === "grid" ? "bg-primary text-primary-contrast" : "text-muted hover:text-foreground"}`}
                   onClick={() => setViewMode("grid")}
                   type="button"
                 >
                   <GridIcon />
                 </button>
                 <button
-                  aria-label="List product view"
+                  aria-label={t("storefront", "listView")}
                   aria-pressed={viewMode === "list"}
-                  className={`grid h-8 w-8 place-items-center rounded-md focus-ring ${viewMode === "list" ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}
+                  className={`focus-ring grid h-8 w-8 place-items-center rounded-md ${viewMode === "list" ? "bg-primary text-primary-contrast" : "text-muted hover:text-foreground"}`}
                   onClick={() => setViewMode("list")}
                   type="button"
                 >
                   <ListIcon />
                 </button>
               </div>
-              <label className="text-sm text-slate-400">
-                <span className="sr-only">Sort products</span>
+              <label className="text-sm text-muted">
+                <span className="sr-only">{t("storefront", "sortProducts")}</span>
                 <select
-                  className="rounded-lg border border-slate-700 bg-slate-900 px-3 py-2 text-sm text-white outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
-                  onChange={(event) => setSort(event.target.value as SortOption)}
+                  className="form-input min-h-10 py-2"
+                  onChange={(event) => { setSort(event.target.value as SortOption); setCurrentPage(1); }}
                   value={sort}
                 >
-                  <option value="featured">Featured</option>
-                  <option value="price-low">Price: low to high</option>
-                  <option value="price-high">Price: high to low</option>
-                  <option value="stock">Local stock first</option>
+                  <option value="featured">{t("storefront", "featured")}</option>
+                  <option value="price-low">{t("storefront", "priceLowHigh")}</option>
+                  <option value="price-high">{t("storefront", "priceHighLow")}</option>
+                  <option value="stock">{t("storefront", "localStockFirst")}</option>
                 </select>
               </label>
             </div>
           </div>
 
-          {isFiltersOpen && (
-            <div className="mt-5 lg:hidden" id="mobile-catalogue-filters">
-              <CatalogFilterControls {...filterProps} idPrefix="mobile" />
-            </div>
-          )}
+          <Drawer
+            description={t("storefront", "shopHeroDescription")}
+            onClose={() => setIsFiltersOpen(false)}
+            open={isFiltersOpen}
+            title={t("storefront", "filters")}
+            footer={
+              <button className="button-secondary w-full" onClick={clearAllFilters} type="button">
+                {t("storefront", "clearAll")}
+              </button>
+            }
+          >
+            <CatalogFilterControls {...filterProps} idPrefix="mobile" />
+          </Drawer>
 
           {activeFilterCount > 0 && (
-            <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/50 p-3 text-sm">
-              <span className="font-semibold text-slate-300">Active filters: {activeFilterCount}</span>
-              {requestedCategory && <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-xs font-bold text-sky-200">{CATEGORIES.find((category) => category.slug === requestedCategory)?.name}</span>}
-              {requestedQuery && <span className="rounded-full bg-sky-400/10 px-2.5 py-1 text-xs font-bold text-sky-200">“{requestedQuery}”</span>}
-              {selectedBrands.map((brand) => <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300" key={brand}>{brand}</span>)}
-              {selectedSpecifications.map((specification) => <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300" key={specification}>{specification.replace(":", ": ")}</span>)}
-              {(minimumPrice || maximumPrice) && <span className="rounded-full bg-slate-800 px-2.5 py-1 text-xs font-bold text-slate-300">Price range</span>}
-              {onlyAvailable && <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs font-bold text-emerald-200">Available now</span>}
-              <button className="ml-auto text-xs font-bold text-sky-300 hover:text-white focus-ring" onClick={clearAllFilters} type="button">Clear all</button>
+            <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3 text-sm shadow-sm">
+              <span className="font-semibold text-foreground">{t("storefront", "activeFilters")}: {activeFilterCount}</span>
+              {requestedCategoryName && <FilterTag>{requestedCategoryName}</FilterTag>}
+              {requestedQuery && <FilterTag>“{requestedQuery}”</FilterTag>}
+              {selectedBrands.map((brand) => <FilterTag key={brand}>{brand}</FilterTag>)}
+              {selectedSpecifications.map((specification) => <FilterTag key={specification}>{specification.replace(":", ": ")}</FilterTag>)}
+              {(minimumPrice || maximumPrice) && <FilterTag>{t("storefront", "priceRange")}</FilterTag>}
+              {onlyAvailable && <FilterTag>{t("storefront", "availableNowFilter")}</FilterTag>}
+              <button className="focus-ring ms-auto rounded-md text-xs font-bold text-primary hover:brightness-110" onClick={clearAllFilters} type="button">
+                {t("storefront", "clearAll")}
+              </button>
             </div>
           )}
 
-          {error && <div className="mt-6 rounded-xl border border-rose-400/35 bg-rose-950/50 p-4 text-sm text-rose-100">{error}</div>}
+          {error && (
+            <div className="mt-6 rounded-2xl border border-danger bg-surface p-6 text-center shadow-sm">
+              <p className="font-black text-danger">{t("storefront", "liveCatalogueUnavailable")}</p>
+              <p className="mt-2 text-sm text-muted">{error}</p>
+              <button className="button-primary mt-5" onClick={() => setReloadToken((value) => value + 1)} type="button">
+                {t("storefront", "retryCatalogue")}
+              </button>
+            </div>
+          )}
+
           {isLoading ? (
             <ProductSkeletons viewMode={viewMode} />
-          ) : visibleProducts.length > 0 ? (
-            <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}>
-              {visibleProducts.map((product) => <StoreProductCard key={product.id} product={product} variant={viewMode} />)}
+          ) : !error && visibleProducts.length > 0 ? (
+            <>
+              <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}>
+                {paginatedProducts.map((product) => <StoreProductCard key={product.id} product={product} variant={viewMode} />)}
+              </div>
+              {pageCount > 1 && (
+                <nav aria-label={t("storefront", "shop")} className="mt-8 flex flex-wrap justify-center gap-2">
+                  {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => (
+                    <button
+                      aria-current={safePage === page ? "page" : undefined}
+                      className={`focus-ring grid h-10 min-w-10 place-items-center rounded-lg border px-3 text-sm font-black ${safePage === page ? "border-primary bg-primary text-primary-contrast" : "border-border bg-surface text-muted hover:border-primary hover:text-foreground"}`}
+                      key={page}
+                      onClick={() => setCurrentPage(page)}
+                      type="button"
+                    >
+                      {page}
+                    </button>
+                  ))}
+                </nav>
+              )}
+            </>
+          ) : !error ? (
+            <div className="mt-8 rounded-3xl border border-border bg-surface p-10 text-center shadow-sm">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-elevated text-primary" aria-hidden="true">⌕</span>
+              <h3 className="mt-4 text-xl font-black text-foreground">{t("storefront", "noResultsTitle")}</h3>
+              <p className="mt-2 text-sm text-muted">{t("storefront", "noResultsText")}</p>
+              <button className="button-primary mt-6" onClick={clearAllFilters} type="button">{t("storefront", "resetFilters")}</button>
             </div>
-          ) : (
-            <EmptyResults onClear={clearAllFilters} />
-          )}
+          ) : null}
         </section>
       </div>
     </div>
   );
 }
 
+function CategoryChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      aria-pressed={active}
+      className={`focus-ring shrink-0 rounded-full border px-3 py-2 text-xs font-bold transition ${active ? "border-primary bg-primary text-primary-contrast" : "border-border bg-surface text-muted hover:border-primary hover:text-foreground"}`}
+      onClick={onClick}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+function FilterTag({ children }: { children: ReactNode }) {
+  return <span className="rounded-full bg-elevated px-2.5 py-1 text-xs font-bold text-muted">{children}</span>;
+}
+
 type CatalogFilterControlsProps = {
+  idPrefix: string;
   availableBrands: string[];
   availableSpecifications: SpecificationFilter[];
-  idPrefix: string;
+  categoryNames: Record<string, string>;
   maximumPrice: string;
   minimumPrice: string;
   onlyAvailable: boolean;
   onCategoryChange: (category: CategorySlug | null) => void;
-  onClose: () => void;
   onMaximumPriceChange: (value: string) => void;
   onMinimumPriceChange: (value: string) => void;
   onOnlyAvailableChange: (value: boolean) => void;
@@ -347,14 +438,14 @@ type CatalogFilterControlsProps = {
 };
 
 function CatalogFilterControls({
+  idPrefix,
   availableBrands,
   availableSpecifications,
-  idPrefix,
+  categoryNames,
   maximumPrice,
   minimumPrice,
   onlyAvailable,
   onCategoryChange,
-  onClose,
   onMaximumPriceChange,
   onMinimumPriceChange,
   onOnlyAvailableChange,
@@ -365,184 +456,204 @@ function CatalogFilterControls({
   selectedBrands,
   selectedSpecifications,
 }: CatalogFilterControlsProps) {
+  const { t } = usePreferences();
+
   return (
-    <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 lg:sticky lg:top-32">
+    <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="section-kicker">Refine results</p>
-          <h2 className="mt-1 text-xl font-black text-white">Filters</h2>
-        </div>
-        <button className="text-xs font-bold text-sky-300 hover:text-white focus-ring" onClick={onReset} type="button">Reset</button>
+        <h2 className="font-black text-foreground">{t("storefront", "filters")}</h2>
+        <button className="focus-ring rounded-md text-xs font-bold text-primary hover:brightness-110" onClick={onReset} type="button">
+          {t("storefront", "reset")}
+        </button>
       </div>
 
-      <fieldset className="mt-6">
-        <legend className="text-sm font-bold text-slate-200">Department</legend>
-        <div className="mt-3 grid gap-1">
-          <button
-            aria-pressed={!requestedCategory}
-            className={`rounded-lg px-3 py-2 text-left text-sm font-medium transition focus-ring ${!requestedCategory ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
-            onClick={() => { onCategoryChange(null); onClose(); }}
-            type="button"
-          >
-            All products
-          </button>
-          {CATEGORIES.map((category) => (
-            <button
-              aria-pressed={requestedCategory === category.slug}
-              className={`rounded-lg px-3 py-2 text-left text-sm font-medium transition focus-ring ${requestedCategory === category.slug ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-800 hover:text-white"}`}
-              key={category.slug}
-              onClick={() => { onCategoryChange(category.slug); onClose(); }}
-              type="button"
-            >
-              {category.name}
-            </button>
+      <FilterGroup title={t("storefront", "filterDepartment")}>
+        <RadioRow
+          checked={!requestedCategory}
+          id={`${idPrefix}-category-all`}
+          label={t("storefront", "allDepartments")}
+          onChange={() => onCategoryChange(null)}
+        />
+        {CATEGORIES.map((category) => (
+          <RadioRow
+            checked={requestedCategory === category.slug}
+            id={`${idPrefix}-category-${category.slug}`}
+            key={category.slug}
+            label={categoryNames[category.slug] ?? category.name}
+            onChange={() => onCategoryChange(category.slug)}
+          />
+        ))}
+      </FilterGroup>
+
+      <FilterGroup title={t("storefront", "filterAvailability")}>
+        <CheckboxRow
+          checked={onlyAvailable}
+          id={`${idPrefix}-available`}
+          label={t("storefront", "localOrDropship")}
+          onChange={onOnlyAvailableChange}
+        />
+      </FilterGroup>
+
+      {availableBrands.length > 0 && (
+        <FilterGroup title={t("storefront", "filterBrands")}>
+          {availableBrands.map((brand) => (
+            <CheckboxRow
+              checked={selectedBrands.includes(brand)}
+              id={`${idPrefix}-brand-${toSafeId(brand)}`}
+              key={brand}
+              label={brand}
+              onChange={() => onToggleBrand(brand)}
+            />
           ))}
-        </div>
-      </fieldset>
-
-      <fieldset className="mt-6 border-t border-slate-800 pt-6">
-        <legend className="text-sm font-bold text-slate-200">Price range (EGP)</legend>
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <label className="sr-only" htmlFor={`${idPrefix}-minimum-price`}>Minimum price</label>
-          <input
-            className="min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
-            id={`${idPrefix}-minimum-price`}
-            inputMode="numeric"
-            min="0"
-            onChange={(event) => onMinimumPriceChange(event.target.value)}
-            placeholder="Min"
-            type="number"
-            value={minimumPrice}
-          />
-          <label className="sr-only" htmlFor={`${idPrefix}-maximum-price`}>Maximum price</label>
-          <input
-            className="min-w-0 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-sky-400 focus:ring-2 focus:ring-sky-400/20"
-            id={`${idPrefix}-maximum-price`}
-            inputMode="numeric"
-            min="0"
-            onChange={(event) => onMaximumPriceChange(event.target.value)}
-            placeholder="Max"
-            type="number"
-            value={maximumPrice}
-          />
-        </div>
-      </fieldset>
-
-      {availableBrands.length > 1 && (
-        <fieldset className="mt-6 border-t border-slate-800 pt-6">
-          <legend className="text-sm font-bold text-slate-200">Brand</legend>
-          <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto pr-1">
-            {availableBrands.map((brand) => {
-              const checkboxId = `${idPrefix}-brand-${brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-              return (
-                <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-300" htmlFor={checkboxId} key={brand}>
-                  <input
-                    checked={selectedBrands.includes(brand)}
-                    className="h-4 w-4 rounded accent-sky-400"
-                    id={checkboxId}
-                    onChange={() => onToggleBrand(brand)}
-                    type="checkbox"
-                  />
-                  <span>{brand}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
+        </FilterGroup>
       )}
 
       {availableSpecifications.length > 0 && (
-        <fieldset className="mt-6 border-t border-slate-800 pt-6">
-          <legend className="text-sm font-bold text-slate-200">Key specifications</legend>
-          <div className="mt-3 grid max-h-48 gap-2 overflow-y-auto pr-1">
-            {availableSpecifications.map((specification) => {
-              const checkboxId = `${idPrefix}-spec-${specification.key.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
-              return (
-                <label className="flex cursor-pointer items-center gap-3 text-sm text-slate-300" htmlFor={checkboxId} key={specification.key}>
-                  <input
-                    checked={selectedSpecifications.includes(specification.key)}
-                    className="h-4 w-4 rounded accent-sky-400"
-                    id={checkboxId}
-                    onChange={() => onToggleSpecification(specification.key)}
-                    type="checkbox"
-                  />
-                  <span>{specification.label}</span>
-                </label>
-              );
-            })}
+        <FilterGroup title={t("storefront", "filterSpecifications")}>
+          <div className="max-h-64 space-y-2 overflow-y-auto pe-1">
+            {availableSpecifications.map((specification) => (
+              <CheckboxRow
+                checked={selectedSpecifications.includes(specification.key)}
+                id={`${idPrefix}-spec-${toSafeId(specification.key)}`}
+                key={specification.key}
+                label={specification.label}
+                onChange={() => onToggleSpecification(specification.key)}
+              />
+            ))}
           </div>
-        </fieldset>
+        </FilterGroup>
       )}
 
-      <label className="mt-6 flex cursor-pointer items-start gap-3 border-t border-slate-800 pt-6 text-sm text-slate-300">
-        <input
-          checked={onlyAvailable}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded accent-sky-400"
-          onChange={(event) => onOnlyAvailableChange(event.target.checked)}
-          type="checkbox"
-        />
-        <span><strong className="block text-slate-200">Available to order</strong><span className="mt-0.5 block text-xs leading-5 text-slate-500">Show local stock and verified supplier dropship products.</span></span>
-      </label>
+      <FilterGroup title={t("storefront", "filterPrice")}>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="text-xs font-semibold text-muted" htmlFor={`${idPrefix}-minimum-price`}>
+            {t("storefront", "minPrice")}
+            <input
+              className="form-input mt-1 min-h-10 py-2"
+              id={`${idPrefix}-minimum-price`}
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onMinimumPriceChange(event.target.value)}
+              placeholder="0"
+              type="number"
+              value={minimumPrice}
+            />
+          </label>
+          <label className="text-xs font-semibold text-muted" htmlFor={`${idPrefix}-maximum-price`}>
+            {t("storefront", "maxPrice")}
+            <input
+              className="form-input mt-1 min-h-10 py-2"
+              id={`${idPrefix}-maximum-price`}
+              inputMode="decimal"
+              min="0"
+              onChange={(event) => onMaximumPriceChange(event.target.value)}
+              placeholder="250000"
+              type="number"
+              value={maximumPrice}
+            />
+          </label>
+        </div>
+      </FilterGroup>
     </div>
   );
 }
 
-function EmptyResults({ onClear }: { onClear: () => void }) {
+function FilterGroup({ children, title }: { children: ReactNode; title: string }) {
   return (
-    <div className="mt-8 rounded-2xl border border-dashed border-slate-700 bg-slate-900/40 p-10 text-center">
-      <div className="text-3xl">⌕</div>
-      <h3 className="mt-4 text-lg font-bold text-white">No matching products</h3>
-      <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-slate-400">Try a different keyword, clear a filter, or ask our B2B team to source a requirement.</p>
-      <div className="mt-5 flex flex-wrap justify-center gap-3">
-        <button className="button-secondary" onClick={onClear} type="button">Clear filters</button>
-        <Link className="button-primary" href="/b2b">Request a quote</Link>
-      </div>
-    </div>
+    <fieldset className="mt-5 border-t border-border pt-5">
+      <legend className="mb-3 text-sm font-black text-foreground">{title}</legend>
+      <div className="space-y-2">{children}</div>
+    </fieldset>
+  );
+}
+
+function CheckboxRow({
+  checked,
+  id,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  id: string;
+  label: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-start gap-2.5 text-sm text-muted hover:text-foreground" htmlFor={id}>
+      <input
+        checked={checked}
+        className="mt-0.5 h-4 w-4 accent-[var(--ds-primary)]"
+        id={id}
+        onChange={(event) => onChange(event.target.checked)}
+        type="checkbox"
+      />
+      <span>{label}</span>
+    </label>
+  );
+}
+
+function RadioRow({
+  checked,
+  id,
+  label,
+  onChange,
+}: {
+  checked: boolean;
+  id: string;
+  label: string;
+  onChange: () => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted hover:text-foreground" htmlFor={id}>
+      <input
+        checked={checked}
+        className="h-4 w-4 accent-[var(--ds-primary)]"
+        id={id}
+        name={`${id.split("-category-")[0]}-category`}
+        onChange={onChange}
+        type="radio"
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 
 function ProductSkeletons({ viewMode }: { viewMode: ViewMode }) {
   return (
-    <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}>
-      {Array.from({ length: 6 }).map((_, index) => (
-        <div className={`animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60 ${viewMode === "grid" ? "h-[29rem]" : "h-52"}`} key={index} />
+    <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`} aria-hidden="true">
+      {Array.from({ length: viewMode === "grid" ? 6 : 4 }, (_, index) => (
+        <div className={`overflow-hidden rounded-2xl border border-border bg-surface ${viewMode === "list" ? "flex min-h-64" : ""}`} key={index}>
+          <div className={`${viewMode === "list" ? "w-64" : "aspect-square"} animate-pulse bg-elevated`} />
+          <div className="flex-1 space-y-3 p-5">
+            <div className="h-3 w-20 animate-pulse rounded bg-elevated" />
+            <div className="h-5 w-full animate-pulse rounded bg-elevated" />
+            <div className="h-5 w-2/3 animate-pulse rounded bg-elevated" />
+            <div className="h-10 w-full animate-pulse rounded-xl bg-elevated" />
+          </div>
+        </div>
       ))}
     </div>
   );
 }
 
 function ShopLoadingFallback() {
-  return (
-    <div className="site-container py-14">
-      <div className="h-8 w-48 animate-pulse rounded bg-slate-900" />
-      <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 6 }).map((_, index) => <div className="h-[29rem] animate-pulse rounded-2xl border border-slate-800 bg-slate-900/60" key={index} />)}
-      </div>
-    </div>
-  );
+  return <div className="site-container py-12"><div className="h-96 animate-pulse rounded-3xl border border-border bg-surface" /></div>;
 }
 
-function toPrice(value: string) {
+function GridIcon() {
+  return <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16"><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="3" y="3" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="14" y="3" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="3" y="14" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="14" y="14" /></svg>;
+}
+
+function ListIcon() {
+  return <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16"><path d="M9 6h12M9 12h12M9 18h12" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /><circle cx="4.5" cy="6" fill="currentColor" r="1.2" /><circle cx="4.5" cy="12" fill="currentColor" r="1.2" /><circle cx="4.5" cy="18" fill="currentColor" r="1.2" /></svg>;
+}
+
+function toPrice(value: string): number | null {
   if (!value.trim()) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function GridIcon() {
-  return (
-    <svg aria-hidden="true" fill="currentColor" height="15" viewBox="0 0 16 16" width="15">
-      <path d="M1 1h5v5H1V1Zm9 0h5v5h-5V1ZM1 10h5v5H1v-5Zm9 0h5v5h-5v-5Z" />
-    </svg>
-  );
-}
-
-function ListIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 18 18" width="16">
-      <path d="M5 4h10M5 9h10M5 14h10" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
-      <circle cx="2" cy="4" fill="currentColor" r="1" />
-      <circle cx="2" cy="9" fill="currentColor" r="1" />
-      <circle cx="2" cy="14" fill="currentColor" r="1" />
-    </svg>
-  );
+function toSafeId(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
