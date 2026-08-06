@@ -1,7 +1,6 @@
 """
 Elitedom Store — Odoo ERP Client
-XML-RPC/JSON-RPC client for bi-directional Odoo 17 synchronization.
-Per ODOO.md Section 2.1.
+XML-RPC client for bi-directional Odoo 17 synchronization.
 """
 
 import logging
@@ -15,12 +14,7 @@ settings = get_settings()
 
 
 class OdooClient:
-    """
-    Odoo 17 XML-RPC client.
-
-    Authentication: Dedicated API user (elitedom_api_user) with restricted access.
-    Protocol: XML-RPC over HTTPS.
-    """
+    """Restricted Odoo 17 XML-RPC client."""
 
     def __init__(self):
         self.url = settings.odoo_url
@@ -31,11 +25,9 @@ class OdooClient:
 
     @property
     def is_configured(self) -> bool:
-        """Whether the worker has usable Odoo connection credentials.
-
-        The integration must fail closed instead of treating an empty or
-        copied ``CHANGE_ME`` API key as a successful remote synchronization.
-        """
+        """Whether outbound sync is explicitly enabled with usable credentials."""
+        if not settings.odoo_sync_enabled:
+            return False
         required_values = (self.url, self.db, self.username, self.api_key)
         return all(
             isinstance(value, str)
@@ -46,22 +38,42 @@ class OdooClient:
 
     @property
     def common(self) -> xmlrpc.client.ServerProxy:
-        return xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
+        return xmlrpc.client.ServerProxy(
+            f"{self.url.rstrip('/')}/xmlrpc/2/common",
+            allow_none=True,
+        )
 
     @property
     def models(self) -> xmlrpc.client.ServerProxy:
-        return xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+        return xmlrpc.client.ServerProxy(
+            f"{self.url.rstrip('/')}/xmlrpc/2/object",
+            allow_none=True,
+        )
+
+    def server_version(self) -> dict[str, Any]:
+        """Fetch Odoo's public server version metadata."""
+        result = self.common.version()
+        if not isinstance(result, dict):
+            raise ConnectionError("Odoo returned an invalid server version response")
+        return result
 
     def authenticate(self) -> int:
         """Authenticate with Odoo and cache the UID."""
         if not self.is_configured:
-            raise RuntimeError("Odoo integration credentials are not configured")
+            raise RuntimeError(
+                "Odoo outbound sync is disabled or its credentials are not configured"
+            )
 
         if self._uid is None:
-            self._uid = self.common.authenticate(self.db, self.username, self.api_key, {})
+            self._uid = self.common.authenticate(
+                self.db,
+                self.username,
+                self.api_key,
+                {},
+            )
             if not self._uid:
                 raise ConnectionError("Failed to authenticate with Odoo ERP")
-            logger.info(f"Authenticated with Odoo as UID: {self._uid}")
+            logger.info("Authenticated with Odoo as UID %s", self._uid)
         return self._uid
 
     def execute(
@@ -73,7 +85,33 @@ class OdooClient:
     ) -> Any:
         """Execute an Odoo XML-RPC method on a model."""
         uid = self.authenticate()
-        return self.models.execute_kw(self.db, uid, self.api_key, model, method, list(args), kwargs)
+        return self.models.execute_kw(
+            self.db,
+            uid,
+            self.api_key,
+            model,
+            method,
+            list(args),
+            kwargs,
+        )
+
+    def connector_module_status(self) -> dict[str, Any]:
+        """Return the installed state/version of the bundled Odoo addon."""
+        modules = self.execute(
+            "ir.module.module",
+            "search_read",
+            [("name", "=", "elitedom_connector")],
+            fields=["name", "state", "installed_version", "latest_version"],
+            limit=1,
+        )
+        if not modules:
+            return {
+                "name": "elitedom_connector",
+                "state": "missing",
+                "installed_version": None,
+                "latest_version": None,
+            }
+        return dict(modules[0])
 
     # ── Product Sync (Odoo → FastAPI) ────────────────────────────────
 
@@ -140,12 +178,14 @@ class OdooClient:
             limit=1,
         )
         if partners:
-            return partners[0]["id"]
+            return int(partners[0]["id"])
 
-        return self.execute(
-            "res.partner",
-            "create",
-            [{"name": name, "email": email, "phone": phone}],
+        return int(
+            self.execute(
+                "res.partner",
+                "create",
+                [{"name": name, "email": email, "phone": phone}],
+            )
         )
 
     # ── Inventory Sync (Odoo → FastAPI) ──────────────────────────────
@@ -186,5 +226,4 @@ class OdooClient:
         )
 
 
-# Singleton client instance
 odoo_client = OdooClient()

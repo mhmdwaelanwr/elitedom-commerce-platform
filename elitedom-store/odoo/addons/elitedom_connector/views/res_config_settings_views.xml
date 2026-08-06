@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_elitedom_connector" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.elitedom.connector</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="Elitedom Store" name="elitedom_connector">
+                    <block title="FastAPI webhook delivery">
+                        <setting
+                            string="Enable Elitedom webhooks"
+                            help="Persist and deliver signed inventory and fulfillment events."
+                        >
+                            <field name="elitedom_connector_enabled"/>
+                        </setting>
+                        <setting string="FastAPI webhook base URL">
+                            <field
+                                name="elitedom_connector_api_base_url"
+                                placeholder="http://fastapi:8000/api/v1/webhooks/odoo"
+                            />
+                        </setting>
+                        <setting string="Webhook signing secret">
+                            <field
+                                name="elitedom_connector_webhook_secret"
+                                password="True"
+                                placeholder="At least 32 random characters"
+                            />
+                        </setting>
+                        <setting string="Delivery policy">
+                            <div class="row mt16">
+                                <label for="elitedom_connector_timeout_seconds" class="col-lg-4 o_light_label"/>
+                                <field name="elitedom_connector_timeout_seconds"/>
+                            </div>
+                            <div class="row mt16">
+                                <label for="elitedom_connector_max_attempts" class="col-lg-4 o_light_label"/>
+                                <field name="elitedom_connector_max_attempts"/>
+                            </div>
+                            <div class="row mt16">
+                                <label for="elitedom_connector_retention_days" class="col-lg-4 o_light_label"/>
+                                <field name="elitedom_connector_retention_days"/>
+                            </div>
+                            <div class="text-muted mt8">
+                                Deployment environment variables override values saved here.
+                            </div>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>

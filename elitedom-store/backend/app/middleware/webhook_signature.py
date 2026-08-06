@@ -25,15 +25,12 @@ async def verify_odoo_webhook(
     request: Request,
     x_elitedom_signature: str = Header(..., alias="X-Elitedom-Signature"),
 ) -> bytes:
-    """
-    FastAPI dependency to verify Odoo webhook HMAC-SHA256 signatures.
-    Returns the raw request body on success.
-
-    Per ODOO.md Section 2.2:
-    - All outgoing webhooks from Odoo include X-Elitedom-Signature header.
-    - Algorithm: HMAC-SHA256 hash of the request body using shared secret.
-    """
+    """Verify one explicitly enabled Odoo webhook against the exact raw body."""
     body = await request.body()
+
+    if not settings.odoo_webhooks_enabled:
+        logger.warning("Odoo webhook rejected because inbound webhooks are disabled")
+        raise WebhookNotConfiguredError("Odoo")
 
     if not x_elitedom_signature:
         logger.warning("Odoo webhook received without signature header")
@@ -64,20 +61,13 @@ async def verify_stripe_webhook(
     request: Request,
     stripe_signature: str = Header(..., alias="Stripe-Signature"),
 ) -> bytes:
-    """
-    FastAPI dependency to verify Stripe webhook signatures.
-    Returns the raw request body on success.
-
-    Per STRIPE.md Section 4:
-    - All incoming webhooks verified using Stripe webhook signing secret.
-    """
+    """Extract Stripe's raw body after requiring its signature header."""
     body = await request.body()
 
     if not stripe_signature:
-        logger.warning("Stripe webhook received without Stripe-Signature header")
+        logger.warning("Stripe webhook received without Stripe-Signature")
         raise WebhookSignatureMissingError()
 
-    # Stripe signature verification is handled by the stripe library
-    # This dependency just extracts the body and signature
-    # Actual verification happens in the webhook handler using stripe.Webhook.construct_event()
+    # The Stripe SDK performs the timestamp/signature verification in the
+    # handler because it needs the provider's structured signature format.
     return body

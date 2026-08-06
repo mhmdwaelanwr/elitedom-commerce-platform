@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_elitedom_webhook_outbox_tree" model="ir.ui.view">
+        <field name="name">elitedom.webhook.outbox.tree</field>
+        <field name="model">elitedom.webhook.outbox</field>
+        <field name="arch" type="xml">
+            <tree decoration-success="state == 'sent'" decoration-danger="state == 'dead'">
+                <field name="event_id"/>
+                <field name="event_type"/>
+                <field name="endpoint_path"/>
+                <field name="state"/>
+                <field name="attempts"/>
+                <field name="available_at"/>
+                <field name="response_code"/>
+                <field name="delivered_at"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_elitedom_webhook_outbox_form" model="ir.ui.view">
+        <field name="name">elitedom.webhook.outbox.form</field>
+        <field name="model">elitedom.webhook.outbox</field>
+        <field name="arch" type="xml">
+            <form string="Elitedom Webhook">
+                <header>
+                    <button
+                        name="action_dispatch_now"
+                        string="Dispatch now"
+                        type="object"
+                        class="btn-primary"
+                        invisible="state == 'sent'"
+                    />
+                    <button
+                        name="action_retry"
+                        string="Retry dead letter"
+                        type="object"
+                        invisible="state != 'dead'"
+                    />
+                    <field name="state" widget="statusbar" statusbar_visible="pending,processing,sent,dead"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="event_id"/>
+                            <field name="event_type"/>
+                            <field name="endpoint_path"/>
+                            <field name="attempts"/>
+                        </group>
+                        <group>
+                            <field name="available_at"/>
+                            <field name="locked_until"/>
+                            <field name="response_code"/>
+                            <field name="delivered_at"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Payload">
+                            <field name="payload_json" nolabel="1" widget="text"/>
+                        </page>
+                        <page string="Last error">
+                            <field name="last_error" nolabel="1"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_elitedom_webhook_outbox" model="ir.actions.act_window">
+        <field name="name">Webhook Outbox</field>
+        <field name="res_model">elitedom.webhook.outbox</field>
+        <field name="view_mode">tree,form</field>
+        <field name="context">{'search_default_pending': 1}</field>
+    </record>
+
+    <record id="view_elitedom_webhook_outbox_search" model="ir.ui.view">
+        <field name="name">elitedom.webhook.outbox.search</field>
+        <field name="model">elitedom.webhook.outbox</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="event_id"/>
+                <field name="event_type"/>
+                <filter name="pending" string="Pending" domain="[('state', '=', 'pending')]"/>
+                <filter name="dead" string="Dead letters" domain="[('state', '=', 'dead')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="State" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="Event type" name="group_event_type" context="{'group_by': 'event_type'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <menuitem
+        id="menu_elitedom_connector_root"
+        name="Elitedom Connector"
+        sequence="90"
+        groups="base.group_system"
+    />
+    <menuitem
+        id="menu_elitedom_webhook_outbox"
+        name="Webhook Outbox"
+        parent="menu_elitedom_connector_root"
+        action="action_elitedom_webhook_outbox"
+        sequence="10"
+        groups="base.group_system"
+    />
+</odoo>

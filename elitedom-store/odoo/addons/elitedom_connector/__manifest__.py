@@ -1,0 +1,25 @@
+{
+    "name": "Elitedom Store Connector",
+    "summary": "Reliable signed webhooks between Odoo 17 and Elitedom FastAPI",
+    "version": "17.0.1.0.0",
+    "category": "Sales/Technical",
+    "author": "Elitedom",
+    "website": "https://elitedom.store",
+    "license": "LGPL-3",
+    "depends": [
+        "base",
+        "sale_management",
+        "sale_stock",
+        "stock",
+        "delivery",
+    ],
+    "external_dependencies": {"python": ["requests"]},
+    "data": [
+        "security/ir.model.access.csv",
+        "data/ir_cron.xml",
+        "views/res_config_settings_views.xml",
+        "views/webhook_outbox_views.xml",
+    ],
+    "application": False,
+    "installable": True,
+}

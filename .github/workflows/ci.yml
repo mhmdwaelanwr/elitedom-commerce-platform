@@ -30,14 +30,16 @@ jobs:
       SECRET_KEY: ci-secret-key-with-at-least-32-characters
       JWT_SECRET_KEY: ci-jwt-secret-key-with-at-least-32-characters
       POSTGRES_PASSWORD: ci-postgres-password
-      ODOO_WEBHOOK_SECRET: ci-odoo-webhook-secret
+      ODOO_SYNC_ENABLED: "false"
+      ODOO_WEBHOOKS_ENABLED: "true"
+      ODOO_WEBHOOK_SECRET: ci-odoo-webhook-secret-with-at-least-32-characters
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
           cache: pip
@@ -56,6 +58,59 @@ jobs:
       - name: Test backend
         run: python -m pytest app/tests -q
 
+  odoo-addon:
+    name: Odoo 17 addon install and tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Validate addon structure and contracts
+        working-directory: elitedom-store
+        run: python scripts/validate_odoo_addon.py
+
+      - name: Install addon in clean Odoo and run module tests
+        run: |
+          docker run --rm --network host \
+            -e HOST=127.0.0.1 \
+            -e PORT=5432 \
+            -e USER=odoo \
+            -e PASSWORD=odoo \
+            -v "${GITHUB_WORKSPACE}/elitedom-store/odoo/addons:/mnt/extra-addons:ro" \
+            odoo:17.0 \
+            --database=elitedom_odoo_ci \
+            --db_host=127.0.0.1 \
+            --db_port=5432 \
+            --db_user=odoo \
+            --db_password=odoo \
+            --init=elitedom_connector \
+            --without-demo=all \
+            --test-enable \
+            --test-tags=/elitedom_connector \
+            --stop-after-init \
+            --no-http \
+            --log-level=test
+
   frontend:
     name: Frontend (Node 22)
     runs-on: ubuntu-latest
@@ -68,10 +123,10 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
@@ -98,7 +153,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Prepare environment file
         run: cp ../.env.example ../.env
@@ -120,7 +175,8 @@ jobs:
           JWT_SECRET_KEY: ci-production-jwt-key-with-at-least-32-characters
           POSTGRES_PASSWORD: ci-production-postgres-password
           REDIS_PASSWORD: ci-production-redis-password
-          ODOO_WEBHOOK_SECRET: ci-production-odoo-webhook-secret
+          ODOO_SYNC_ENABLED: "false"
+          ODOO_WEBHOOKS_ENABLED: "false"
           CORS_ORIGINS: https://store.example.com
           ALLOWED_HOSTS: api.store.example.com
         run: |
