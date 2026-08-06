@@ -20,6 +20,7 @@ import {
   removeRemoteWishlistItem,
   updateRemoteCartItem,
 } from "@/lib/api";
+import { refreshSession } from "@/lib/auth-api";
 import { getCartSubtotal } from "@/lib/checkout";
 import type { CartItem, Currency, CustomerSession, Product } from "@/types/store";
 
@@ -54,7 +55,7 @@ const StoreContext = createContext<StoreContextValue | undefined>(undefined);
 const CART_KEY = "elitedom.store.cart.v1";
 const WISHLIST_KEY = "elitedom.store.wishlist.v1";
 const CURRENCY_KEY = "elitedom.store.currency.v1";
-const SESSION_KEY = "elitedom.store.session.v1";
+const LEGACY_SESSION_KEY = "elitedom.store.session.v1";
 const GUEST_SESSION_KEY = "elitedom.store.guest-session.v1";
 
 function safeRead<T>(key: string, fallback: T): T {
@@ -89,6 +90,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       setCart(safeRead<CartItem[]>(CART_KEY, []));
       setWishlist(safeRead<string[]>(WISHLIST_KEY, []));
@@ -103,16 +105,43 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       } catch {
         setGuestSessionId(createGuestSessionId());
       }
+
+      // Remove access tokens written by pre-Stage-4 builds. The only durable
+      // credential is now the HttpOnly refresh cookie managed by the API.
       try {
-        const storedSession = window.sessionStorage.getItem(SESSION_KEY);
-        setSessionState(storedSession ? (JSON.parse(storedSession) as CustomerSession) : null);
+        window.sessionStorage.removeItem(LEGACY_SESSION_KEY);
       } catch {
-        setSessionState(null);
+        // Some privacy modes block sessionStorage; no token is written there.
       }
-      setHydrated(true);
+
+      void refreshSession()
+        .then((restoredSession) => {
+          if (!cancelled) setSessionState(restoredSession);
+        })
+        .catch(() => {
+          if (!cancelled) setSessionState(null);
+        })
+        .finally(() => {
+          if (!cancelled) setHydrated(true);
+        });
     }, 0);
-    return () => window.clearTimeout(timer);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
   }, []);
+
+  useEffect(() => {
+    if (!hydrated || !session?.expiresAt) return;
+    const refreshDelay = Math.max(1_000, session.expiresAt - Date.now() - 60_000);
+    const timer = window.setTimeout(() => {
+      void refreshSession()
+        .then(setSessionState)
+        .catch(() => setSessionState(null));
+    }, refreshDelay);
+    return () => window.clearTimeout(timer);
+  }, [hydrated, session?.expiresAt]);
 
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(CART_KEY, JSON.stringify(cart));
@@ -159,7 +188,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         try {
           const remoteWishlist = await fetchRemoteWishlist(session);
           const localWishlist = safeRead<string[]>(WISHLIST_KEY, []).filter(isServerProductId);
-          const missingRemoteItems = localWishlist.filter((productId) => !remoteWishlist.includes(productId));
+          const missingRemoteItems = localWishlist.filter(
+            (productId) => !remoteWishlist.includes(productId),
+          );
           await Promise.all(
             missingRemoteItems.map((productId) =>
               addRemoteWishlistItem(productId, session).catch(() => undefined),
@@ -218,36 +249,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [guestSessionId, notify, session],
   );
 
-  const updateQuantity = useCallback((productId: string, quantity: number) => {
-    const target = cart.find((item) => item.product.id === productId);
-    const maximum = target?.product.dropshipEnabled ? 100 : target?.product.stockQty ?? 0;
-    const nextQuantity = Math.min(maximum, Math.max(0, quantity));
-    setCart((current) =>
-      current.flatMap((item) => {
-        if (item.product.id !== productId) return [item];
-        if (nextQuantity <= 0) return [];
-        const maximum = item.product.dropshipEnabled ? 100 : item.product.stockQty;
-        return [{ ...item, quantity: Math.min(maximum, nextQuantity) }];
-      }),
-    );
-    if (!guestSessionId || !target?.serverItemId) return;
-    const request = nextQuantity <= 0
-      ? removeRemoteCartItem(target.serverItemId, guestSessionId, session)
-      : updateRemoteCartItem(target.serverItemId, nextQuantity, guestSessionId, session);
-    void request.then((remoteCart) => setCart(mapRemoteCart(remoteCart))).catch(() => undefined);
-  }, [cart, guestSessionId, session]);
+  const updateQuantity = useCallback(
+    (productId: string, quantity: number) => {
+      const target = cart.find((item) => item.product.id === productId);
+      const maximum = target?.product.dropshipEnabled ? 100 : target?.product.stockQty ?? 0;
+      const nextQuantity = Math.min(maximum, Math.max(0, quantity));
+      setCart((current) =>
+        current.flatMap((item) => {
+          if (item.product.id !== productId) return [item];
+          if (nextQuantity <= 0) return [];
+          const itemMaximum = item.product.dropshipEnabled ? 100 : item.product.stockQty;
+          return [{ ...item, quantity: Math.min(itemMaximum, nextQuantity) }];
+        }),
+      );
+      if (!guestSessionId || !target?.serverItemId) return;
+      const request =
+        nextQuantity <= 0
+          ? removeRemoteCartItem(target.serverItemId, guestSessionId, session)
+          : updateRemoteCartItem(
+              target.serverItemId,
+              nextQuantity,
+              guestSessionId,
+              session,
+            );
+      void request.then((remoteCart) => setCart(mapRemoteCart(remoteCart))).catch(() => undefined);
+    },
+    [cart, guestSessionId, session],
+  );
 
-  const removeFromCart = useCallback((productId: string) => {
-    const target = cart.find((item) => item.product.id === productId);
-    setCart((current) => current.filter((item) => item.product.id !== productId));
-    if (!guestSessionId || !target?.serverItemId) return;
-    void removeRemoteCartItem(target.serverItemId, guestSessionId, session)
-      .then((remoteCart) => setCart(mapRemoteCart(remoteCart)))
-      .catch(() => undefined);
-  }, [cart, guestSessionId, session]);
+  const removeFromCart = useCallback(
+    (productId: string) => {
+      const target = cart.find((item) => item.product.id === productId);
+      setCart((current) => current.filter((item) => item.product.id !== productId));
+      if (!guestSessionId || !target?.serverItemId) return;
+      void removeRemoteCartItem(target.serverItemId, guestSessionId, session)
+        .then((remoteCart) => setCart(mapRemoteCart(remoteCart)))
+        .catch(() => undefined);
+    },
+    [cart, guestSessionId, session],
+  );
 
   const clearCart = useCallback(() => {
-    const remoteItemIds = cart.flatMap((item) => item.serverItemId ? [item.serverItemId] : []);
+    const remoteItemIds = cart.flatMap((item) =>
+      item.serverItemId ? [item.serverItemId] : [],
+    );
     setCart([]);
     if (!guestSessionId || remoteItemIds.length === 0) return;
     void Promise.all(
@@ -257,35 +302,31 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     );
   }, [cart, guestSessionId, session]);
 
-  const toggleWishlist = useCallback((productId: string) => {
-    const isSaved = wishlist.includes(productId);
-    setWishlist((current) =>
-      current.includes(productId)
-        ? current.filter((id) => id !== productId)
-        : [...current, productId],
-    );
-    if (!session || !isServerProductId(productId)) return;
-    const request = isSaved
-      ? removeRemoteWishlistItem(productId, session)
-      : addRemoteWishlistItem(productId, session);
-    void request.catch(() => undefined);
-  }, [session, wishlist]);
+  const toggleWishlist = useCallback(
+    (productId: string) => {
+      const isSaved = wishlist.includes(productId);
+      setWishlist((current) =>
+        current.includes(productId)
+          ? current.filter((id) => id !== productId)
+          : [...current, productId],
+      );
+      if (!session || !isServerProductId(productId)) return;
+      const request = isSaved
+        ? removeRemoteWishlistItem(productId, session)
+        : addRemoteWishlistItem(productId, session);
+      void request.catch(() => undefined);
+    },
+    [session, wishlist],
+  );
 
   const setCurrency = useCallback((nextCurrency: Currency) => {
     setCurrencyState(nextCurrency);
   }, []);
 
   const setSession = useCallback((nextSession: CustomerSession | null) => {
+    // Access tokens intentionally remain in React memory. Reloads restore a
+    // fresh access token through the HttpOnly refresh cookie.
     setSessionState(nextSession);
-    try {
-      if (nextSession) {
-        window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(nextSession));
-      } else {
-        window.sessionStorage.removeItem(SESSION_KEY);
-      }
-    } catch {
-      // A private browser session may block storage; keep the in-memory session usable.
-    }
   }, []);
 
   const value = useMemo<StoreContextValue>(
@@ -329,7 +370,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   return (
     <StoreContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] mx-auto flex max-w-md flex-col gap-2 px-4" aria-live="polite">
+      <div
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 bottom-5 z-[100] mx-auto flex max-w-md flex-col gap-2 px-4"
+      >
         {toasts.map((toast) => (
           <div
             className={`rounded-xl border px-4 py-3 text-sm shadow-xl backdrop-blur ${
