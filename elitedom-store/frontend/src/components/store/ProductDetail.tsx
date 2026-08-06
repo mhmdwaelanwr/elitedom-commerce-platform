@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ProductDetailStates } from "@/components/store/ProductDetailStates";
+import { ProductSkeleton, ProductUnavailable } from "@/components/store/ProductDetailStates";
 import { ProductDetailView } from "@/components/store/ProductDetailView";
 import { fetchCatalog, fetchProduct } from "@/lib/api";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
@@ -59,9 +59,9 @@ export function ProductDetail({ productId }: { productId: string }) {
     };
   }, [productId, t]);
 
-  if (isLoading) return <ProductDetailStates.Skeleton />;
+  if (isLoading) return <ProductSkeleton />;
   if (error || !product) {
-    return <ProductDetailStates.Unavailable message={error ?? t("storefront", "productNoLongerAvailable")} />;
+    return <ProductUnavailable message={error ?? t("storefront", "productNoLongerAvailable")} />;
   }
 
   return <ProductDetailView key={product.id} product={product} relatedProducts={relatedProducts} />;
