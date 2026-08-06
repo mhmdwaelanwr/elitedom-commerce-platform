@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import Base, get_db
 from app.main import app
+from app.middleware import rate_limit
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -40,12 +41,17 @@ test_session_factory = async_sessionmaker(
 
 @pytest.fixture(autouse=True)
 async def setup_database():
-    """Create all tables in the test database before each test."""
+    """Create isolated database and middleware state before each test."""
+    # Every ASGI test client uses the same testserver peer address. Without
+    # clearing this process-local window, unrelated tests eventually share the
+    # production request budget and fail with 429 responses based on test order.
+    rate_limit._request_counts.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     try:
         yield
     finally:
+        rate_limit._request_counts.clear()
         async with test_engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
         # aiosqlite owns a worker thread per pooled connection. Disposing it
