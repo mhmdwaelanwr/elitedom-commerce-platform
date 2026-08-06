@@ -4,50 +4,50 @@
 # =============================================================================
 
 services:
-  # A local browser can reach the API over localhost. Override the production
-  # required build arg so `make dev` works with the existing root .env.
   frontend:
     build:
       args:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
 
-  # Override PostgreSQL to expose on localhost with debug logging
   postgres:
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
       POSTGRES_LOG_STATEMENT: all
 
-  # Override Odoo for development (debug mode)
   odoo:
-    command: ["odoo", "--dev=all", "-d", "${ODOO_DB:-elitedom_db}"]
+    command: ["odoo", "--dev=all"]
     ports:
-      - "8069:8069"
-      - "8072:8072"
+      - "${ODOO_PORT:-8069}:8069"
+      - "${ODOO_LONGPOLL_PORT:-8072}:8072"
 
-  # FastAPI with hot-reload for development
   fastapi:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
     ports:
-      - "8000:8000"
+      - "${FASTAPI_PORT:-8000}:8000"
     environment:
       ENVIRONMENT: development
       DEBUG: "true"
+    volumes:
+      - ../backend:/app
 
-  # Keep Redis authentication aligned with the API/Celery connection URLs.
-  # A password is deliberately retained in development so background jobs and
-  # their production behavior are exercised by `make dev`.
+  celery-worker:
+    volumes:
+      - ../backend:/app
+
+  celery-beat:
+    volumes:
+      - ../backend:/app
+
   redis:
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-elitedom_redis}
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
 
-  # Disable Nginx Proxy Manager in local dev
   nginx-proxy-manager:
     profiles:
       - production
 
-  # Disable Portainer in local dev
   portainer:
     profiles:
       - production
