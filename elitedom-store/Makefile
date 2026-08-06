@@ -50,7 +50,7 @@ prod-migrate: ## Run FastAPI database migrations in production
 	cd infrastructure && $(COMPOSE_PROD) exec -w /app fastapi sh -lc 'PYTHONPATH=/app alembic upgrade head'
 
 prod-odoo-upgrade: ## Upgrade the bundled connector in the production Odoo database
-	cd infrastructure && $(COMPOSE_PROD) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
+	cd infrastructure && $(COMPOSE_PROD) run --rm --no-deps odoo -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
 
 prod-odoo-smoke: ## Verify production Odoo auth and connector installation
 	cd infrastructure && $(COMPOSE_PROD) exec -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
@@ -71,10 +71,10 @@ admin-bootstrap: ## Interactively create one development system administrator
 	cd infrastructure && $(COMPOSE_DEV) exec -it -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.bootstrap_admin'
 
 odoo-install-connector: ## Install the bundled connector into the configured Odoo database
-	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -i elitedom_connector --stop-after-init --no-http
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -d "$${ODOO_DB:-elitedom_db}" -i elitedom_connector --stop-after-init --no-http
 
 odoo-upgrade-connector: ## Upgrade the bundled connector after pulling changes
-	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
 
 odoo-smoke: ## Authenticate to Odoo and verify the connector is installed
 	cd infrastructure && $(COMPOSE_DEV) exec -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
