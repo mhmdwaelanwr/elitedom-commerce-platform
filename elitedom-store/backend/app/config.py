@@ -74,7 +74,7 @@ class Settings(BaseSettings):
     otel_trace_sample_ratio: float = Field(default=0.1, ge=0, le=1)
     trusted_proxy_ips: str = ""
 
-    media_root: str = "/app/media"
+    media_root: str = "media"
     media_public_path: str = "/media"
     product_image_max_bytes: int = Field(default=5_242_880, ge=65_536, le=20_971_520)
 
