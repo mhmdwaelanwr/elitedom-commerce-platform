@@ -112,6 +112,12 @@ export default function AccountPage() {
           label={t("account", "savedAddresses")}
         />
         <AccountLink
+          detail={t("auth", "securityDescription")}
+          href="/account/security"
+          icon="◆"
+          label={t("auth", "securityTitle")}
+        />
+        <AccountLink
           detail={t("account", "openClaim")}
           href="/warranty"
           icon="⌁"
