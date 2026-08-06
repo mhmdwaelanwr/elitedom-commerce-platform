@@ -1,0 +1,270 @@
+# =============================================================================
+# Elitedom Store — Docker Compose base
+# Infrastructure per: 08_INFRASTRUCTURE/INFRASTRUCTURE.md
+# Combine with docker-compose.dev.yml for local development or
+# docker-compose.prod.yml for the production-only storefront checks.
+# =============================================================================
+# Services:
+#   - odoo:17.0        → ERP Core (Store, Inventory, POS)
+#   - postgres:15      → Primary RDBMS
+#   - redis:7-alpine   → Celery broker & cache
+#   - nginx-proxy-mgr  → Reverse proxy + SSL (Let's Encrypt)
+#   - portainer        → Container management GUI
+#   - fastapi          → Elitedom backend API
+#   - frontend         → Next.js storefront (standalone runtime)
+# =============================================================================
+
+networks:
+  elitedom-net:
+    driver: bridge
+
+volumes:
+  pg-data:
+  odoo-data:
+  odoo-addons:
+  redis-data:
+  nginx-data:
+  nginx-letsencrypt:
+  portainer-data:
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 15 — Primary Database
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15-alpine
+    container_name: elitedom-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-elitedom}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-elitedom_db}
+      APP_POSTGRES_DB: ${APP_POSTGRES_DB:-elitedom_store}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    networks:
+      - elitedom-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elitedom}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # Store API database bootstrap — isolated from Odoo's native schema
+  # ---------------------------------------------------------------------------
+  app-db-init:
+    image: postgres:15-alpine
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: ${POSTGRES_USER:-elitedom}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      APP_POSTGRES_DB: ${APP_POSTGRES_DB:-elitedom_store}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        if psql -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$$APP_POSTGRES_DB'" | grep -q 1; then
+          echo "Application database $$APP_POSTGRES_DB already exists."
+        else
+          createdb "$$APP_POSTGRES_DB"
+          echo "Created application database $$APP_POSTGRES_DB."
+        fi
+    networks:
+      - elitedom-net
+
+  # ---------------------------------------------------------------------------
+  # Odoo 17 Community Edition — ERP Core
+  # ---------------------------------------------------------------------------
+  odoo:
+    image: odoo:17.0
+    container_name: elitedom-odoo
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      HOST: postgres
+      PORT: 5432
+      USER: ${POSTGRES_USER:-elitedom}
+      PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    ports:
+      - "${ODOO_PORT:-8069}:8069"
+      - "${ODOO_LONGPOLL_PORT:-8072}:8072"
+    volumes:
+      - odoo-data:/var/lib/odoo
+      - odoo-addons:/mnt/extra-addons
+    networks:
+      - elitedom-net
+
+  # ---------------------------------------------------------------------------
+  # Redis 7 — Celery Broker & Cache
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: elitedom-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-elitedom_redis}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - elitedom-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-elitedom_redis}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ---------------------------------------------------------------------------
+  # FastAPI Backend — Elitedom API
+  # ---------------------------------------------------------------------------
+  fastapi:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: elitedom-fastapi
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    ports:
+      - "${FASTAPI_PORT:-8000}:8000"
+    volumes:
+      - ../backend:/app
+    networks:
+      - elitedom-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # ---------------------------------------------------------------------------
+  # Next.js Storefront — production standalone server
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        # This is compiled into browser JavaScript, so it must be a public URL
+        # that a customer browser can resolve; never use http://fastapi:8000.
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}"
+    container_name: elitedom-storefront
+    restart: unless-stopped
+    depends_on:
+      fastapi:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+    # Bind direct access to the host loopback only. Nginx Proxy Manager reaches
+    # this service at frontend:3000 over elitedom-net.
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - elitedom-net
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+      # Next's image optimizer cache needs a small writable runtime location.
+      - /app/.next/cache:rw,noexec,nosuid,size=64m
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  # ---------------------------------------------------------------------------
+  # Celery Worker — Background Task Processing
+  # ---------------------------------------------------------------------------
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: elitedom-celery-worker
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      app-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    volumes:
+      - ../backend:/app
+    networks:
+      - elitedom-net
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=4
+
+  # ---------------------------------------------------------------------------
+  # Celery Beat — Scheduled Task Scheduler
+  # ---------------------------------------------------------------------------
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: elitedom-celery-beat
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - ../.env
+    volumes:
+      - ../backend:/app
+    networks:
+      - elitedom-net
+    command: celery -A app.celery_app beat --loglevel=info
+
+  # ---------------------------------------------------------------------------
+  # Nginx Proxy Manager — Reverse Proxy & SSL
+  # ---------------------------------------------------------------------------
+  nginx-proxy-manager:
+    image: jc21/nginx-proxy-manager:latest
+    container_name: elitedom-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "81:81"    # Admin UI
+    volumes:
+      - nginx-data:/data
+      - nginx-letsencrypt:/etc/letsencrypt
+    networks:
+      - elitedom-net
+
+  # ---------------------------------------------------------------------------
+  # Portainer — Container Management GUI
+  # ---------------------------------------------------------------------------
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: elitedom-portainer
+    restart: unless-stopped
+    ports:
+      - "${PORTAINER_PORT:-9443}:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+    networks:
+      - elitedom-net

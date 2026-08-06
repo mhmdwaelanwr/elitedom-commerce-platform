@@ -1,0 +1,33 @@
+[project]
+name = "elitedom-store"
+version = "1.0.0"
+description = "Elitedom Store — Enterprise E-Commerce API"
+requires-python = ">=3.11"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+# FastAPI's dependency declarations are intentionally calls in parameter
+# defaults, and the established codebase uses Optional[] annotations. Keep the
+# checker focused on correctness/security issues rather than a disruptive
+# annotation-only rewrite.
+ignore = ["E501", "B008", "UP007", "UP011"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-v --tb=short"

@@ -1,0 +1,19 @@
+# Python build/test artifacts are neither needed nor safe to copy into a
+# runtime image.  Ignoring them also keeps Docker from walking root-owned cache
+# entries created by containerized development tools.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+.coverage*
+celerybeat-schedule
+
+# Local settings and repository metadata must never become image layers.
+.env
+.env.*
+!.env.example
+.git/
+.gitignore
+.DS_Store

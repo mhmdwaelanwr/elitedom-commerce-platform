@@ -1,0 +1,13 @@
+# =============================================================================
+# Elitedom Store — Production-only Compose overrides
+# Use together with docker-compose.yml. This separate file makes the public API
+# address mandatory without blocking the local docker-compose.dev.yml workflow.
+# =============================================================================
+
+services:
+  frontend:
+    build:
+      args:
+        # Browser code receives this at image-build time. Use the public HTTPS
+        # API domain, not an internal Docker service hostname.
+        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL to the browser-reachable API URL}"
