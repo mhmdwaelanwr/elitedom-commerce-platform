@@ -193,7 +193,7 @@ class Settings(BaseSettings):
         return normalized
 
     @model_validator(mode="after")
-    def validate_deployment_safety(self) -> "Settings":
+    def validate_deployment_safety(self) -> Settings:
         if self.app_postgres_db == self.odoo_db:
             raise ValueError("APP_POSTGRES_DB must differ from ODOO_DB.")
 
