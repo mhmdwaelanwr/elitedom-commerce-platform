@@ -1,7 +1,7 @@
 # Environment
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
 # Python
 __pycache__/
@@ -12,11 +12,14 @@ build/
 .eggs/
 venv/
 .venv/
+.mypy_cache/
+.ruff_cache/
 
 # Testing
 .pytest_cache/
 htmlcov/
 .coverage
+.coverage.*
 coverage.xml
 
 # IDE
@@ -37,13 +40,13 @@ docker-compose.override.yml
 node_modules/
 .next/
 out/
-
-# Alembic
-*.pyc
+.turbo/
+.npm/
 
 # Celery runtime state
 celerybeat-schedule
 celerybeat-schedule.*
 
-# Logs
+# Local product media and logs
+media/
 *.log
