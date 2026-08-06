@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "check:design-system": "node scripts/check-design-system.mjs",
+    "check:types": "tsc --noEmit",
+    "verify": "npm run check:design-system && npm run lint && npm run check:types",
+    "build": "npm run check:design-system && next build",
     "start": "next start",
     "lint": "eslint"
   },

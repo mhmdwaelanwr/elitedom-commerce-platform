@@ -1,0 +1,16 @@
+export const admin = {
+  operations: "العمليات",
+  overview: "نظرة عامة",
+  orders: "الطلبات",
+  catalogStock: "الكتالوج والمخزون",
+  customers: "العملاء",
+  warrantyDesk: "مكتب الضمان",
+  b2bRfqs: "طلبات عروض الشركات",
+  fulfilment: "التجهيز والشحن",
+  restrictedArea: "منطقة مقيدة",
+  staffRequired: "يلزم حساب موظف",
+  restrictedDescription: "لوحة العمليات متاحة فقط لموظفي إليت دوم المصرح لهم.",
+  returnToStore: "العودة للمتجر",
+  checkingSession: "جارٍ التحقق من جلسة الموظف…",
+  sessionEnded: "تم إنهاء جلسة الموظف.",
+} as const;
