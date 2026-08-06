@@ -1,6 +1,5 @@
 # =============================================================================
 # Elitedom Store — Docker Compose base
-# Infrastructure per: 08_INFRASTRUCTURE/INFRASTRUCTURE.md
 # Combine with docker-compose.dev.yml for local development or
 # docker-compose.prod.yml for production.
 # =============================================================================
@@ -12,7 +11,6 @@ networks:
 volumes:
   pg-data:
   odoo-data:
-  odoo-addons:
   redis-data:
   nginx-data:
   nginx-letsencrypt:
@@ -75,11 +73,28 @@ services:
       PORT: 5432
       USER: ${POSTGRES_USER:-elitedom}
       PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      ODOO_DB: ${ODOO_DB:-elitedom_db}
+      ELITEDOM_CONNECTOR_ENABLED: ${ODOO_WEBHOOKS_ENABLED:-false}
+      ELITEDOM_API_BASE_URL: ${ODOO_FASTAPI_WEBHOOK_URL:-http://fastapi:8000/api/v1/webhooks/odoo}
+      ELITEDOM_WEBHOOK_SECRET: ${ODOO_WEBHOOK_SECRET:-}
+      ELITEDOM_CONNECTOR_TIMEOUT_SECONDS: ${ODOO_CONNECTOR_TIMEOUT_SECONDS:-10}
+      ELITEDOM_CONNECTOR_MAX_ATTEMPTS: ${ODOO_CONNECTOR_MAX_ATTEMPTS:-8}
+      ELITEDOM_CONNECTOR_RETENTION_DAYS: ${ODOO_CONNECTOR_RETENTION_DAYS:-30}
     volumes:
       - odoo-data:/var/lib/odoo
-      - odoo-addons:/mnt/extra-addons
+      - ../odoo/addons:/mnt/extra-addons:ro
     networks:
       - elitedom-net
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - "import socket; connection = socket.create_connection(('127.0.0.1', 8069), 3); connection.close()"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
 
   redis:
     image: redis:7-alpine

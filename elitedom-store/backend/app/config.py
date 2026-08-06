@@ -22,6 +22,13 @@ _PLACEHOLDER_SECRET_MARKERS = (
     "dummy",
     "not-set",
 )
+_ALLOWED_INTERNAL_HTTP_HOSTS = {
+    "odoo",
+    "fastapi",
+    "localhost",
+    "127.0.0.1",
+    "::1",
+}
 
 
 def is_secure_secret(value: object, *, minimum_length: int = 32) -> bool:
@@ -43,6 +50,19 @@ def is_https_url(value: str) -> bool:
         and bool(parsed.netloc)
         and parsed.username is None
         and parsed.password is None
+    )
+
+
+def is_safe_service_url(value: str) -> bool:
+    """Allow HTTPS publicly and HTTP only for explicit container/loopback hosts."""
+    parsed = urlsplit(value.strip())
+    if not parsed.netloc or parsed.username is not None or parsed.password is not None:
+        return False
+    if parsed.scheme == "https":
+        return True
+    return (
+        parsed.scheme == "http"
+        and (parsed.hostname or "").casefold() in _ALLOWED_INTERNAL_HTTP_HOSTS
     )
 
 
@@ -131,6 +151,11 @@ class Settings(BaseSettings):
     apple_oauth_client_id: str = ""
 
     # ── Odoo 17 ──────────────────────────────────────────────────────────
+    # Outbound sync (FastAPI/Celery -> Odoo XML-RPC) and inbound webhooks
+    # (Odoo addon -> FastAPI) are independently gated. A credential merely
+    # existing must never enable an integration by accident.
+    odoo_sync_enabled: bool = False
+    odoo_webhooks_enabled: bool = False
     odoo_url: str = "http://odoo:8069"
     odoo_db: str = "elitedom_db"
     odoo_api_user: str = "elitedom_api_user"
@@ -198,6 +223,17 @@ class Settings(BaseSettings):
             )
 
         integration_errors: list[str] = []
+        if self.odoo_sync_enabled:
+            if not is_safe_service_url(self.odoo_url):
+                integration_errors.append("ODOO_URL")
+            if not self.odoo_db.strip():
+                integration_errors.append("ODOO_DB")
+            if not self.odoo_api_user.strip():
+                integration_errors.append("ODOO_API_USER")
+            if not is_secure_secret(self.odoo_api_key, minimum_length=16):
+                integration_errors.append("ODOO_API_KEY")
+        if self.odoo_webhooks_enabled and not is_secure_secret(self.odoo_webhook_secret):
+            integration_errors.append("ODOO_WEBHOOK_SECRET")
         if self.sendgrid_enabled and not is_secure_secret(
             self.sendgrid_api_key, minimum_length=20
         ):
@@ -234,7 +270,6 @@ class Settings(BaseSettings):
             "JWT_SECRET_KEY": self.jwt_secret_key,
             "POSTGRES_PASSWORD": self.postgres_password,
             "REDIS_PASSWORD": self.redis_password,
-            "ODOO_WEBHOOK_SECRET": self.odoo_webhook_secret,
         }
         invalid = [
             name for name, value in required_secrets.items() if not is_secure_secret(value)

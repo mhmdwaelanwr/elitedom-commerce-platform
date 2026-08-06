@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="ir_cron_elitedom_webhook_dispatch" model="ir.cron">
+        <field name="name">Elitedom: Dispatch webhook outbox</field>
+        <field name="model_id" ref="model_elitedom_webhook_outbox"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_dispatch()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+    <record id="ir_cron_elitedom_webhook_purge" model="ir.cron">
+        <field name="name">Elitedom: Purge delivered webhook records</field>
+        <field name="model_id" ref="model_elitedom_webhook_outbox"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_purge()</field>
+        <field name="interval_number">1</field>
+        <field name="interval_type">days</field>
+        <field name="active">True</field>
+    </record>
+</odoo>

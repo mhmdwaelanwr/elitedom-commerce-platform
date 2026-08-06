@@ -2,14 +2,14 @@
 # Elitedom Store — Developer Makefile
 # =============================================================================
 
-.PHONY: help dev stop build logs logs-api prod-config prod-up prod-down prod-logs test test-unit test-api lint lint-fix typecheck audit migrate migrate-new migrate-down seed admin-bootstrap shell db-shell app-db-shell redis-cli clean
+.PHONY: help dev stop build logs logs-api logs-odoo prod-config prod-up prod-down prod-logs prod-migrate prod-odoo-upgrade prod-odoo-smoke test test-unit test-api test-e2e lint lint-fix typecheck audit validate-odoo migrate migrate-new migrate-down seed admin-bootstrap odoo-install-connector odoo-upgrade-connector odoo-smoke shell db-shell app-db-shell redis-cli clean
 
 DOCKER_COMPOSE ?= $(shell if docker compose version >/dev/null 2>&1; then printf '%s' 'docker compose'; elif docker-compose version >/dev/null 2>&1; then printf '%s' 'docker-compose'; else printf '%s' 'docker compose'; fi)
 COMPOSE_DEV = $(DOCKER_COMPOSE) --env-file ../.env -f docker-compose.yml -f docker-compose.dev.yml
 COMPOSE_PROD = $(DOCKER_COMPOSE) --env-file ../.env -f docker-compose.yml -f docker-compose.prod.yml
 
 help: ## Show available commands
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
 dev: ## Start all services in development mode
 	cd infrastructure && $(COMPOSE_DEV) up -d --build
@@ -31,6 +31,9 @@ logs: ## Tail development logs for all services
 logs-api: ## Tail FastAPI logs only
 	cd infrastructure && $(COMPOSE_DEV) logs -f fastapi
 
+logs-odoo: ## Tail Odoo and connector logs
+	cd infrastructure && $(COMPOSE_DEV) logs -f odoo
+
 prod-config: ## Validate the production Compose topology
 	cd infrastructure && $(COMPOSE_PROD) config --quiet
 
@@ -42,6 +45,15 @@ prod-down: ## Stop the production topology
 
 prod-logs: ## Tail production logs for all services
 	cd infrastructure && $(COMPOSE_PROD) logs -f
+
+prod-migrate: ## Run FastAPI database migrations in production
+	cd infrastructure && $(COMPOSE_PROD) exec -w /app fastapi sh -lc 'PYTHONPATH=/app alembic upgrade head'
+
+prod-odoo-upgrade: ## Upgrade the bundled connector in the production Odoo database
+	cd infrastructure && $(COMPOSE_PROD) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
+
+prod-odoo-smoke: ## Verify production Odoo auth and connector installation
+	cd infrastructure && $(COMPOSE_PROD) exec -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
 
 migrate: ## Run database migrations
 	cd infrastructure && $(COMPOSE_DEV) exec -w /app fastapi sh -lc 'PYTHONPATH=/app alembic upgrade head'
@@ -58,6 +70,15 @@ seed: ## Insert a non-destructive local demo catalog (development only)
 admin-bootstrap: ## Interactively create one development system administrator
 	cd infrastructure && $(COMPOSE_DEV) exec -it -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.bootstrap_admin'
 
+odoo-install-connector: ## Install the bundled connector into the configured Odoo database
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -i elitedom_connector --stop-after-init --no-http
+
+odoo-upgrade-connector: ## Upgrade the bundled connector after pulling changes
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps odoo -- -d "$${ODOO_DB:-elitedom_db}" -u elitedom_connector --stop-after-init --no-http
+
+odoo-smoke: ## Authenticate to Odoo and verify the connector is installed
+	cd infrastructure && $(COMPOSE_DEV) exec -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
+
 test: ## Run all tests with coverage
 	cd backend && pytest -v --cov=app --cov-report=html
 
@@ -66,6 +87,12 @@ test-unit: ## Run unit tests only
 
 test-api: ## Run API integration tests
 	cd backend && pytest app/tests/api -v
+
+test-e2e: ## Run checkout/payment/Odoo contract flow
+	cd backend && pytest app/tests/integration/test_odoo_connector_contract.py -v
+
+validate-odoo: ## Statically validate the Odoo 17 addon
+	python scripts/validate_odoo_addon.py
 
 lint: ## Run linter (ruff)
 	cd backend && ruff check .
@@ -83,7 +110,7 @@ shell: ## Open a Python shell inside the FastAPI container
 	cd infrastructure && $(COMPOSE_DEV) exec fastapi python
 
 db-shell: ## Open an Odoo PostgreSQL shell
-	cd infrastructure && $(COMPOSE_DEV) exec postgres psql -U elitedom -d elitedom_db
+	cd infrastructure && $(COMPOSE_DEV) exec postgres sh -lc 'psql -U "$$POSTGRES_USER" -d "$${ODOO_DB:-elitedom_db}"'
 
 app-db-shell: ## Open the Store API PostgreSQL shell
 	cd infrastructure && $(COMPOSE_DEV) exec postgres sh -lc 'psql -U "$$POSTGRES_USER" -d "$${APP_POSTGRES_DB:-elitedom_store}"'
