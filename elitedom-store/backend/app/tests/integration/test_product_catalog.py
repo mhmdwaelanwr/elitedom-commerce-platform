@@ -84,11 +84,15 @@ async def test_category_tree_is_correct_when_child_sorts_before_parent(
             "id": parent.id,
             "name": "Components",
             "slug": "components",
+            "description": None,
+            "is_active": True,
             "children": [
                 {
                     "id": child.id,
                     "name": "Graphics Cards",
                     "slug": "graphics-cards",
+                    "description": None,
+                    "is_active": True,
                     "children": [],
                 }
             ],
