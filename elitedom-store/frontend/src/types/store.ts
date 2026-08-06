@@ -1,12 +1,5 @@
 export type Currency = "EGP" | "USD";
-
-export type CategorySlug =
-  | "gaming"
-  | "computers"
-  | "peripherals"
-  | "audio"
-  | "networking"
-  | "mobile";
+export type CategorySlug = string;
 
 export type ProductSpec = {
   label: string;
@@ -18,7 +11,7 @@ export type Product = {
   sku: string;
   name: string;
   description: string;
-  category: CategorySlug;
+  category: string;
   categoryName: string;
   brand: string;
   priceEgp: number;
@@ -33,7 +26,7 @@ export type Product = {
 };
 
 export type Category = {
-  slug: CategorySlug;
+  slug: string;
   name: string;
   description: string;
   image: string;

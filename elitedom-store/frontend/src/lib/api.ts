@@ -10,6 +10,22 @@ import type {
 const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"
 ).replace(/\/$/, "");
+const API_ORIGIN = (() => {
+  try {
+    return new URL(API_BASE_URL).origin;
+  } catch {
+    return "";
+  }
+})();
+const DEMO_FALLBACK = process.env.NEXT_PUBLIC_DEMO_CATALOG_FALLBACK === "true";
+const PRODUCT_PLACEHOLDER = "/images/gpu_card.png";
+
+type ApiCategory = {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string | null;
+};
 
 type ApiProduct = {
   id: number;
@@ -21,8 +37,15 @@ type ApiProduct = {
   is_dropship_enabled: boolean;
   brand?: string | null;
   category_id?: number | null;
+  category?: ApiCategory | null;
   warranty_months?: number;
-  images?: Array<{ url: string; alt_text?: string | null; is_primary: boolean }>;
+  images?: Array<{
+    id: number;
+    url: string;
+    alt_text?: string | null;
+    sort_order: number;
+    is_primary: boolean;
+  }>;
   socket_type?: string | null;
   ram_type?: string | null;
   form_factor?: string | null;
@@ -30,10 +53,7 @@ type ApiProduct = {
   pcie_gen?: string | null;
 };
 
-type ApiProductList = {
-  products: ApiProduct[];
-  total_count: number;
-};
+type ApiProductList = { products: ApiProduct[]; total_count: number };
 
 type ApiCart = {
   id: number;
@@ -48,11 +68,7 @@ type ApiCart = {
   }>;
 };
 
-type ApiWishlist = {
-  items: Array<{
-    product_id: number;
-  }>;
-};
+type ApiWishlist = { items: Array<{ product_id: number }> };
 
 export type CustomerProfile = {
   id: number;
@@ -96,12 +112,8 @@ async function request<T>(
 ): Promise<T> {
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-  if (accessToken) {
-    headers.set("Authorization", `Bearer ${accessToken}`);
-  }
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
+  if (accessToken) headers.set("Authorization", `Bearer ${accessToken}`);
 
   let response: Response;
   try {
@@ -113,7 +125,6 @@ async function request<T>(
   } catch {
     throw new ApiError("The Elitedom service is currently unreachable.", 0);
   }
-
   if (!response.ok) {
     let message = "We could not complete that request.";
     try {
@@ -126,72 +137,74 @@ async function request<T>(
         payload.message ??
         message;
     } catch {
-      // A non-JSON upstream error should still be represented consistently.
+      // Preserve the generic message for non-JSON gateway errors.
     }
     throw new ApiError(message, response.status);
   }
-
-  if (response.status === 204) {
-    return undefined as T;
-  }
+  if (response.status === 204) return undefined as T;
   return response.json() as Promise<T>;
 }
 
+function resolveImageUrl(url: string | undefined): string {
+  if (!url) return PRODUCT_PLACEHOLDER;
+  if (url.startsWith("/media/")) return `${API_ORIGIN}${url}`;
+  if (url.startsWith("/") || url.startsWith("https://")) return url;
+  return PRODUCT_PLACEHOLDER;
+}
+
 function apiProductToStoreProduct(apiProduct: ApiProduct): Product {
-  const existing = findCatalogProduct(apiProduct.id, apiProduct.sku);
-  const primaryImage = apiProduct.images?.find((image) => image.is_primary)?.url;
-  const imageCandidate = primaryImage ?? apiProduct.images?.[0]?.url;
-  // The storefront only uses local image assets until an approved remote image
-  // origin is configured in next.config.ts. This prevents Next/Image runtime
-  // failures when an API product stores an arbitrary external URL.
-  const image = imageCandidate?.startsWith("/")
-    ? imageCandidate
-    : existing?.image ?? "/images/gpu_card.png";
-  const additionalSpecs = [
+  const orderedImages = [...(apiProduct.images ?? [])].sort(
+    (first, second) =>
+      Number(second.is_primary) - Number(first.is_primary) ||
+      first.sort_order - second.sort_order ||
+      first.id - second.id,
+  );
+  const gallery = orderedImages.map((image) => resolveImageUrl(image.url));
+  const image = gallery[0] ?? PRODUCT_PLACEHOLDER;
+  const specs = [
     apiProduct.socket_type && { label: "Socket", value: apiProduct.socket_type },
     apiProduct.ram_type && { label: "Memory", value: apiProduct.ram_type },
     apiProduct.form_factor && { label: "Form factor", value: apiProduct.form_factor },
     apiProduct.pcie_gen && { label: "PCIe", value: apiProduct.pcie_gen },
+    apiProduct.power_wattage_draw
+      ? { label: "Power", value: `${apiProduct.power_wattage_draw} W` }
+      : null,
   ].filter(Boolean) as Product["specs"];
+  const category = apiProduct.category?.slug ?? "uncategorized";
 
   return {
-    ...(existing ?? CATALOG[0]),
     id: String(apiProduct.id),
     sku: apiProduct.sku,
     name: apiProduct.name,
-    description: apiProduct.description ?? existing?.description ?? "Elitedom verified technology product.",
-    brand: apiProduct.brand ?? existing?.brand ?? "Elitedom",
+    description: apiProduct.description ?? "Verified technology product from Elitedom.",
+    brand: apiProduct.brand ?? "Elitedom",
+    category,
+    categoryName: apiProduct.category?.name ?? "Technology",
     priceEgp: Number(apiProduct.list_price),
     stockQty: apiProduct.stock_qty,
     dropshipEnabled: apiProduct.is_dropship_enabled,
     image,
-    gallery:
-      apiProduct.images
-        ?.map((item) => item.url)
-        .filter((url) => url.startsWith("/")) ??
-      existing?.gallery ??
-      [image],
-    warrantyMonths: apiProduct.warranty_months ?? existing?.warrantyMonths ?? 12,
-    specs: additionalSpecs.length > 0 ? additionalSpecs : existing?.specs ?? [],
+    gallery: gallery.length > 0 ? gallery : [image],
+    warrantyMonths: apiProduct.warranty_months ?? 12,
+    specs,
+    rating: 0,
   };
 }
 
 export async function fetchCatalog(query?: string): Promise<Product[]> {
   try {
     const path = query?.trim()
-      ? `/products/search?q=${encodeURIComponent(query.trim())}&limit=24`
-      : "/products?limit=24";
+      ? `/products/search?q=${encodeURIComponent(query.trim())}&limit=100`
+      : "/products?limit=100";
     const payload = await request<ApiProductList>(path);
     return payload.products.map(apiProductToStoreProduct);
   } catch (error) {
-    if (error instanceof ApiError && error.status !== 0) {
-      throw error;
-    }
+    if (!DEMO_FALLBACK || (error instanceof ApiError && error.status !== 0)) throw error;
     const normalizedQuery = query?.trim().toLowerCase();
     return normalizedQuery
       ? CATALOG.filter((product) =>
-        [product.name, product.brand, product.sku, product.categoryName]
-          .concat(product.specs.flatMap((specification) => [specification.label, specification.value]))
+          [product.name, product.brand, product.sku, product.categoryName]
+            .concat(product.specs.flatMap((specification) => [specification.label, specification.value]))
             .join(" ")
             .toLowerCase()
             .includes(normalizedQuery),
@@ -202,12 +215,12 @@ export async function fetchCatalog(query?: string): Promise<Product[]> {
 
 export async function fetchProduct(productId: string): Promise<Product | undefined> {
   try {
-    const product = await request<ApiProduct>(`/products/${encodeURIComponent(productId)}`);
-    return apiProductToStoreProduct(product);
+    return apiProductToStoreProduct(
+      await request<ApiProduct>(`/products/${encodeURIComponent(productId)}`),
+    );
   } catch (error) {
-    if (error instanceof ApiError && error.status !== 0 && error.status !== 404) {
-      throw error;
-    }
+    if (error instanceof ApiError && error.status === 404) return undefined;
+    if (!DEMO_FALLBACK || (error instanceof ApiError && error.status !== 0)) throw error;
     return findCatalogProduct(productId);
   }
 }
@@ -219,7 +232,23 @@ function cartPath(path: string, guestSessionId: string | undefined, session?: Cu
 
 function cartItemToStoreItem(item: ApiCart["items"][number]): CartItem {
   const matchingProduct = findCatalogProduct(item.product_id, item.sku);
-  const fallbackProduct = matchingProduct ?? CATALOG[0];
+  const fallbackProduct: Product = matchingProduct ?? {
+    id: String(item.product_id),
+    sku: item.sku ?? `PRODUCT-${item.product_id}`,
+    name: item.product_name ?? "Elitedom product",
+    description: "Product details will refresh from the catalogue service.",
+    category: "uncategorized",
+    categoryName: "Technology",
+    brand: "Elitedom",
+    priceEgp: Number(item.unit_price ?? 0),
+    stockQty: 0,
+    dropshipEnabled: false,
+    image: PRODUCT_PLACEHOLDER,
+    gallery: [PRODUCT_PLACEHOLDER],
+    specs: [],
+    warrantyMonths: 12,
+    rating: 0,
+  };
   return {
     serverItemId: item.id,
     quantity: item.quantity,
@@ -310,18 +339,11 @@ export async function removeRemoteWishlistItem(productId: string, session: Custo
   );
 }
 
-export async function login(input: {
-  email: string;
-  password: string;
-}): Promise<CustomerSession> {
-  const result = await request<{
-    access_token: string;
-    user_id: number;
-    role: string;
-  }>("/auth/login", {
-    method: "POST",
-    body: JSON.stringify(input),
-  });
+export async function login(input: { email: string; password: string }): Promise<CustomerSession> {
+  const result = await request<{ access_token: string; user_id: number; role: string }>(
+    "/auth/login",
+    { method: "POST", body: JSON.stringify(input) },
+  );
   return {
     accessToken: result.access_token,
     userId: result.user_id,
@@ -364,7 +386,6 @@ export async function fetchAccountOverview(session: CustomerSession) {
       session.accessToken,
     ),
   ]);
-
   return {
     profile: profileResult.status === "fulfilled" ? profileResult.value : null,
     orders: ordersResult.status === "fulfilled" ? ordersResult.value.orders ?? [] : [],
@@ -435,10 +456,7 @@ export async function submitCheckout(
       : details.paymentMethod === "instapay"
         ? "mobile_wallet"
         : "credit_card";
-  const result = await request<{
-    order: { name: string };
-    payment_gateway_url?: string | null;
-  }>(
+  const result = await request<{ order: { name: string }; payment_gateway_url?: string | null }>(
     cartPath("/orders/checkout", guestSessionId ?? undefined, session),
     {
       method: "POST",
@@ -516,20 +534,14 @@ export async function checkWarranty(serialNumber: string, session: CustomerSessi
 }
 
 export async function submitRfq(
-  input: {
-    items: Array<{ product_id: number; quantity: number }>;
-    notes?: string;
-  },
+  input: { items: Array<{ product_id: number; quantity: number }>; notes?: string },
   session: CustomerSession,
 ) {
   return request<{ rfq_code: string; status: string }>(
     "/b2b/rfq",
     {
       method: "POST",
-      body: JSON.stringify({
-        items: input.items,
-        notes: input.notes || null,
-      }),
+      body: JSON.stringify({ items: input.items, notes: input.notes || null }),
     },
     session.accessToken,
   );

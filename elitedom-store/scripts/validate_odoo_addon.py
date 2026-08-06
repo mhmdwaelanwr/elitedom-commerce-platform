@@ -1,8 +1,4 @@
-"""Static validation for the bundled Odoo 17 addon.
-
-This deliberately uses only the Python standard library so it can run before
-Odoo is installed. CI follows it with a real Odoo module installation/test run.
-"""
+"""Static validation for the bundled Odoo 17 addon."""
 
 from __future__ import annotations
 
@@ -20,13 +16,16 @@ REQUIRED_FILES = {
     "__manifest__.py",
     "models/__init__.py",
     "models/webhook_outbox.py",
+    "models/product_outbox.py",
+    "models/product_catalog.py",
     "services/payloads.py",
     "security/ir.model.access.csv",
     "data/ir_cron.xml",
     "views/res_config_settings_views.xml",
+    "views/product_template_views.xml",
     "views/webhook_outbox_views.xml",
 }
-EXPECTED_ENDPOINTS = {"/inventory", "/order-status"}
+EXPECTED_ENDPOINTS = {"/product", "/inventory", "/order-status"}
 
 
 def fail(message: str) -> None:
@@ -43,9 +42,16 @@ def validate_manifest() -> dict:
         fail("manifest must be a dictionary")
     if not str(manifest.get("version", "")).startswith("17.0."):
         fail("manifest version must target Odoo 17")
-    required_dependencies = {"base", "sale_management", "sale_stock", "stock", "delivery"}
+    required_dependencies = {
+        "base",
+        "product",
+        "sale_management",
+        "sale_stock",
+        "stock",
+        "delivery",
+    }
     if not required_dependencies.issubset(set(manifest.get("depends", []))):
-        fail("manifest is missing required sales/stock/delivery dependencies")
+        fail("manifest is missing required product/sales/stock/delivery dependencies")
     for relative_path in manifest.get("data", []):
         if not (ADDON / relative_path).is_file():
             fail(f"manifest data file does not exist: {relative_path}")
@@ -91,13 +97,16 @@ def validate_access_csv() -> None:
 
 
 def validate_contract() -> None:
-    source = (ADDON / "models" / "webhook_outbox.py").read_text(encoding="utf-8")
-    missing = [endpoint for endpoint in EXPECTED_ENDPOINTS if endpoint not in source]
+    model_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (ADDON / "models").glob("*.py")
+    )
+    missing = [endpoint for endpoint in EXPECTED_ENDPOINTS if endpoint not in model_source]
     if missing:
         fail(f"missing FastAPI contract endpoints: {', '.join(missing)}")
-    if "X-Elitedom-Signature" not in source or "X-Idempotency-Key" not in source:
+    outbox_source = (ADDON / "models" / "webhook_outbox.py").read_text(encoding="utf-8")
+    if "X-Elitedom-Signature" not in outbox_source or "X-Idempotency-Key" not in outbox_source:
         fail("signed/idempotent request headers are missing")
-    if "CHANGE_ME" in source:
+    if "CHANGE_ME" in model_source:
         fail("runtime source must not contain a default shared secret")
 
 

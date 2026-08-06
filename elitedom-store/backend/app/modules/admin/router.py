@@ -1,10 +1,10 @@
-"""HTTP boundary for the role-protected Elitedom staff administration console."""
+"""HTTP boundary for the role-protected staff administration console."""
 
 from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Form, Query, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
@@ -26,11 +26,15 @@ from app.modules.admin.schemas import (
 from app.modules.admin.service import AdminService
 from app.modules.b2b.schemas import B2BRFQResponse, IssueQuoteRequest
 from app.modules.b2b.service import B2BService
-from app.modules.shipping.service import (
-    DispatchOrderRequest,
-    DispatchOrderResponse,
-    ShippingService,
+from app.modules.products.media import delete_product_image_file, store_product_image
+from app.modules.products.schemas import (
+    ProductCreateRequest,
+    ProductDetailResponse,
+    ProductImageResponse,
+    ProductUpdateRequest,
 )
+from app.modules.products.service import ProductService
+from app.modules.shipping.service import DispatchOrderRequest, DispatchOrderResponse, ShippingService
 from app.modules.warranty.service import RMAReviewRequest
 from app.shared.schemas import OrderState, PaymentStatus, RFQStatus, RMAStatus, UserRole
 from app.shared.security import require_role
@@ -38,9 +42,6 @@ from app.shared.security import require_role
 router = APIRouter()
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 
-# A customer JWT can never reach this module. Sub-sections deliberately narrow
-# these roles further so support, finance, and warehouse staff see only their
-# operational surface.
 StaffUser = Annotated[
     dict,
     Depends(
@@ -67,17 +68,26 @@ OrderStaff = Annotated[
 InventoryStaff = Annotated[
     dict,
     Depends(
-        require_role(UserRole.SYSTEM_ADMIN, UserRole.INVENTORY_MANAGER, UserRole.WAREHOUSE_OPERATOR)
+        require_role(
+            UserRole.SYSTEM_ADMIN,
+            UserRole.INVENTORY_MANAGER,
+            UserRole.WAREHOUSE_OPERATOR,
+        )
     ),
 ]
 InventoryManager = Annotated[
     dict,
     Depends(require_role(UserRole.SYSTEM_ADMIN, UserRole.INVENTORY_MANAGER)),
 ]
+SystemAdmin = Annotated[dict, Depends(require_role(UserRole.SYSTEM_ADMIN))]
 CustomerStaff = Annotated[
     dict,
     Depends(
-        require_role(UserRole.SYSTEM_ADMIN, UserRole.CUSTOMER_SUPPORT, UserRole.FINANCE_OFFICER)
+        require_role(
+            UserRole.SYSTEM_ADMIN,
+            UserRole.CUSTOMER_SUPPORT,
+            UserRole.FINANCE_OFFICER,
+        )
     ),
 ]
 SupportStaff = Annotated[
@@ -95,11 +105,7 @@ WarehouseStaff = Annotated[
 
 
 @router.get("/dashboard", response_model=AdminDashboardResponse)
-async def get_dashboard(
-    db: DatabaseSession,
-    current_user: StaffUser,
-) -> AdminDashboardResponse:
-    """Load persisted operational KPIs for an authenticated staff member."""
+async def get_dashboard(db: DatabaseSession, current_user: StaffUser) -> AdminDashboardResponse:
     return await AdminService(db).dashboard()
 
 
@@ -114,16 +120,16 @@ async def list_orders(
     q: str | None = Query(default=None, min_length=1, max_length=128),
 ) -> AdminOrderListResponse:
     return await AdminService(db).list_orders(
-        page=page, limit=limit, state=state, payment_status=payment_status, query=q
+        page=page,
+        limit=limit,
+        state=state,
+        payment_status=payment_status,
+        query=q,
     )
 
 
 @router.get("/orders/{order_id}", response_model=AdminOrderDetail)
-async def get_order(
-    order_id: int,
-    db: DatabaseSession,
-    current_user: OrderStaff,
-) -> AdminOrderDetail:
+async def get_order(order_id: int, db: DatabaseSession, current_user: OrderStaff) -> AdminOrderDetail:
     return await AdminService(db).get_order(order_id)
 
 
@@ -156,6 +162,88 @@ async def list_products(
     )
 
 
+@router.get("/products/categories")
+async def list_product_categories(db: DatabaseSession, current_user: InventoryStaff):
+    return await ProductService(db).get_category_tree(include_inactive=True)
+
+
+@router.get("/products/{product_id}", response_model=ProductDetailResponse)
+async def get_admin_product(
+    product_id: int,
+    db: DatabaseSession,
+    current_user: InventoryStaff,
+) -> ProductDetailResponse:
+    return await ProductService(db).get_product_detail(product_id, include_inactive=True)
+
+
+@router.post("/products", response_model=ProductDetailResponse, status_code=201)
+async def create_admin_product(
+    request: ProductCreateRequest,
+    db: DatabaseSession,
+    current_user: InventoryManager,
+) -> ProductDetailResponse:
+    return await ProductService(db).create_product(request)
+
+
+@router.put("/products/{product_id}", response_model=ProductDetailResponse)
+async def update_admin_product(
+    product_id: int,
+    request: ProductUpdateRequest,
+    db: DatabaseSession,
+    current_user: InventoryManager,
+) -> ProductDetailResponse:
+    return await ProductService(db).update_product(product_id, request)
+
+
+@router.delete("/products/{product_id}", status_code=204)
+async def archive_admin_product(
+    product_id: int,
+    db: DatabaseSession,
+    current_user: SystemAdmin,
+):
+    await ProductService(db).delete_product(product_id)
+    return None
+
+
+@router.post(
+    "/products/{product_id}/images",
+    response_model=ProductImageResponse,
+    status_code=201,
+)
+async def upload_admin_product_image(
+    product_id: int,
+    db: DatabaseSession,
+    current_user: InventoryManager,
+    image: UploadFile = File(...),
+    alt_text: str | None = Form(default=None, max_length=255),
+    is_primary: bool = Form(default=False),
+) -> ProductImageResponse:
+    product = await ProductService(db).get_product_detail(product_id, include_inactive=True)
+    url = await store_product_image(image, product_id)
+    try:
+        return await ProductService(db).add_product_image(
+            product_id,
+            url=url,
+            alt_text=alt_text or product.name,
+            is_primary=is_primary,
+        )
+    except Exception:
+        delete_product_image_file(url)
+        raise
+
+
+@router.delete("/products/{product_id}/images/{image_id}", status_code=204)
+async def delete_admin_product_image(
+    product_id: int,
+    image_id: int,
+    db: DatabaseSession,
+    current_user: InventoryManager,
+):
+    url = await ProductService(db).delete_product_image(product_id, image_id)
+    delete_product_image_file(url)
+    return None
+
+
 @router.post(
     "/products/{product_id}/stock-adjustments",
     response_model=AdminStockAdjustmentResponse,
@@ -166,7 +254,6 @@ async def adjust_product_stock(
     db: DatabaseSession,
     current_user: InventoryManager,
 ) -> AdminStockAdjustmentResponse:
-    """Record a reasoned local stock correction through the inventory service."""
     return await AdminService(db).adjust_product_stock(product_id, request)
 
 
@@ -232,7 +319,6 @@ async def issue_rfq_quote(
     db: DatabaseSession,
     current_user: FinanceStaff,
 ) -> B2BRFQResponse:
-    """Reuse the B2B bounded-context service so quote invariants stay intact."""
     return await B2BService(db).issue_quote(rfq_code, request, current_user)
 
 
@@ -255,5 +341,4 @@ async def dispatch_order(
     db: DatabaseSession,
     current_user: WarehouseStaff,
 ) -> DispatchOrderResponse:
-    """Dispatch via the fulfilment service; serial assignment rules still apply."""
     return await ShippingService(db).dispatch_order(order_id, request)

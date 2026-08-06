@@ -1,16 +1,18 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Produces a minimal Node server and its traced runtime dependencies for the
-  // multi-stage production Docker image.
   output: "standalone",
   poweredByHeader: false,
   compress: true,
-  turbopack: {
-    // This frontend is nested under an architecture workspace that has other lockfiles.
-    // Keep filesystem watching and build resolution scoped to this actual Next.js app.
-    root: process.cwd(),
+  images: {
+    unoptimized: true,
+    remotePatterns: [
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "localhost" },
+      { protocol: "http", hostname: "127.0.0.1" },
+    ],
   },
+  turbopack: { root: process.cwd() },
   async headers() {
     return [
       {
