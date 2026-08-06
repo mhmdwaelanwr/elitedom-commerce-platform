@@ -66,7 +66,10 @@ export function CatalogAdminWorkspace() {
     }
   }, [allowed, query, session]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(), 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
   const categoryOptions = useMemo(() => flattenCatalogCategories(categories), [categories]);
 
   async function openProduct(productId: number) {
