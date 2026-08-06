@@ -67,7 +67,7 @@ def _hash_refresh_token(token: str) -> str:
 
 
 def _hash_otp(challenge_id: str, mobile: str, code: str) -> str:
-    payload = f"{challenge_id}:{mobile}:{code}".encode("utf-8")
+    payload = f"{challenge_id}:{mobile}:{code}".encode()
     return hmac.new(settings.secret_key.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
