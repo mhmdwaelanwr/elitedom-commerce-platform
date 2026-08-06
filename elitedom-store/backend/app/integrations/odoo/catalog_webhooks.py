@@ -11,15 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from .webhooks import (
-    _OdooWebhookPayload,
-    _claim_delivery,
-    _event_key,
-    _parse_payload,
-    DatabaseSession,
-    IdempotencyKey,
-    VerifiedOdooBody,
-)
+from app.integrations.odoo import webhooks as odoo_webhooks
 from app.models import ProductCategory, ProductImage, ProductTemplate
 from app.shared.events import ProductCreated, ProductUpdated
 from app.shared.outbox import publish_domain_event
@@ -27,7 +19,7 @@ from app.shared.outbox import publish_domain_event
 router = APIRouter()
 
 
-class ProductCatalogWebhookPayload(_OdooWebhookPayload):
+class ProductCatalogWebhookPayload(odoo_webhooks._OdooWebhookPayload):
     product_sku: str = Field(..., min_length=1, max_length=64)
     name: str = Field(..., min_length=2, max_length=255)
     description: str | None = None
@@ -100,14 +92,14 @@ async def _category_for_payload(
 
 @router.post("/product")
 async def odoo_product_catalog_webhook(
-    body: VerifiedOdooBody,
-    db: DatabaseSession,
-    idempotency_key: IdempotencyKey = None,
+    body: odoo_webhooks.VerifiedOdooBody,
+    db: odoo_webhooks.DatabaseSession,
+    idempotency_key: odoo_webhooks.IdempotencyKey = None,
 ):
     """Upsert Odoo master data while preserving the curated local gallery."""
-    payload = _parse_payload(body, ProductCatalogWebhookPayload)
-    event_key = _event_key(body, payload.event_id, idempotency_key)
-    if not await _claim_delivery(
+    payload = odoo_webhooks._parse_payload(body, ProductCatalogWebhookPayload)
+    event_key = odoo_webhooks._event_key(body, payload.event_id, idempotency_key)
+    if not await odoo_webhooks._claim_delivery(
         db,
         body=body,
         event_key=event_key,
