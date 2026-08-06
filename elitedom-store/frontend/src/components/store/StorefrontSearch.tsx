@@ -28,14 +28,14 @@ export function StorefrontSearch({
   const [isLoading, setIsLoading] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const resolvedPlaceholder = placeholder ?? t("storefront", "searchPlaceholder");
-  const categoryNames: Record<string, string> = {
+  const categoryNames = useMemo<Record<string, string>>(() => ({
     gaming: t("storefront", "categoryGaming"),
     computers: t("storefront", "categoryComputers"),
     peripherals: t("storefront", "categoryPeripherals"),
     audio: t("storefront", "categoryAudio"),
     networking: t("storefront", "categoryNetworking"),
     mobile: t("storefront", "categoryMobile"),
-  };
+  }), [t]);
 
   useEffect(() => {
     let active = true;
