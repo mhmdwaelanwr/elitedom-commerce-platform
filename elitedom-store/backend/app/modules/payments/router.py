@@ -28,6 +28,23 @@ async def _load_order(order_id: int, db: AsyncSession, *, lock: bool = False) ->
     return order
 
 
+async def _authorize_cross_owner_staff(
+    *,
+    order_id: int,
+    db: AsyncSession,
+    current_user: dict,
+    permission: AdminPermission,
+) -> tuple[str, frozenset[str]]:
+    """Authorize staff without revealing another customer's order to non-staff callers."""
+    access = AdminAccessService(db)
+    role, _ = await access.resolve_permissions(current_user["user_id"])
+    if role is None:
+        # Preserve the customer-facing anti-enumeration contract: another
+        # customer's order is indistinguishable from a missing order.
+        raise ResourceNotFoundError("SaleOrder", order_id)
+    return await access.require(current_user["user_id"], permission.value)
+
+
 async def _latest_attempt(order_id: int, db: AsyncSession) -> PaymentAttempt | None:
     return await db.scalar(
         select(PaymentAttempt)
@@ -77,8 +94,11 @@ async def get_payment_status(
     """Return the local order state and latest provider attempt/refund trail."""
     order = await _load_order(order_id, db)
     if order.partner_id != current_user["user_id"]:
-        await AdminAccessService(db).require(
-            current_user["user_id"], AdminPermission.PAYMENTS_VIEW.value
+        await _authorize_cross_owner_staff(
+            order_id=order_id,
+            db=db,
+            current_user=current_user,
+            permission=AdminPermission.PAYMENTS_VIEW,
         )
 
     attempt = await _latest_attempt(order.id, db)
@@ -117,8 +137,11 @@ async def request_refund(
     order = await _load_order(order_id, db, lock=True)
     privileged = order.partner_id != current_user["user_id"]
     if privileged:
-        role, permissions = await AdminAccessService(db).require(
-            current_user["user_id"], AdminPermission.PAYMENTS_REFUND.value
+        role, permissions = await _authorize_cross_owner_staff(
+            order_id=order_id,
+            db=db,
+            current_user=current_user,
+            permission=AdminPermission.PAYMENTS_REFUND,
         )
         current_user = {**current_user, "role": role, "permissions": sorted(permissions)}
 
