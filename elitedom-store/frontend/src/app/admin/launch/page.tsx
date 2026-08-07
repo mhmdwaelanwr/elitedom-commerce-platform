@@ -141,7 +141,7 @@ export default function AdminLaunchReadinessPage() {
                       canManage={canManage}
                       copy={copy}
                       gate={gate}
-                      key={gate.key}
+                      key={`${gate.key}:${gate.status}:${gate.evidence_ref ?? ""}:${gate.notes ?? ""}`}
                       locale={locale}
                       onSave={saveGate}
                     />
@@ -180,13 +180,6 @@ function LaunchGateCard({
   const [evidenceRef, setEvidenceRef] = useState(gate.evidence_ref ?? "");
   const [notes, setNotes] = useState(gate.notes ?? "");
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (gate.status !== "automatic") setStatus(gate.status);
-    setEvidenceRef(gate.evidence_ref ?? "");
-    setNotes(gate.notes ?? "");
-  }, [gate.evidence_ref, gate.notes, gate.status]);
-
   const operatorGate = gate.source === "operator";
 
   async function save() {
