@@ -31,3 +31,21 @@ class OtpDeliveryUnavailableError(ElitedomException):
             error_code="ELITE_1007",
             detail="Phone verification is not configured for this environment.",
         )
+
+
+class MfaRequiredError(ElitedomException):
+    def __init__(self):
+        super().__init__(
+            status_code=status.HTTP_403_FORBIDDEN,
+            error_code="ELITE_1008",
+            detail="Multi-factor authentication is required for staff access.",
+        )
+
+
+class InvalidMfaError(ElitedomException):
+    def __init__(self, detail: str = "The multi-factor authentication code is invalid."):
+        super().__init__(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            error_code="ELITE_1009",
+            detail=detail,
+        )
