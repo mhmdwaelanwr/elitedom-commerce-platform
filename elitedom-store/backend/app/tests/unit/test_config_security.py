@@ -20,6 +20,10 @@ def _production_settings(**overrides: object) -> Settings:
         "redis_password": "redis-password-value-with-32-plus-characters",
         "allowed_hosts": "api.elitedom.store",
         "cors_origins": "https://elitedom.store",
+        "staff_mfa_required": True,
+        "rate_limit_backend": "redis",
+        "metrics_enabled": True,
+        "metrics_bearer_token": "metrics-bearer-token-value-with-32-plus-characters",
     }
     values.update(overrides)
     return Settings(**values)
