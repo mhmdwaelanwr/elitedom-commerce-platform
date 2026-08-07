@@ -7,11 +7,15 @@ on:
       - main
     paths:
       - "elitedom-store/**"
+      - "docs/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/launch-smoke.yml"
   pull_request:
     paths:
       - "elitedom-store/**"
+      - "docs/**"
       - ".github/workflows/ci.yml"
+      - ".github/workflows/launch-smoke.yml"
 
 permissions:
   contents: read
@@ -294,3 +298,25 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.prod.yml \
             config --quiet
+
+  launch-acceptance:
+    name: Launch acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Validate release-control assets
+        run: |
+          set -euxo pipefail
+          python -m py_compile \
+            elitedom-store/scripts/live_smoke.py \
+            elitedom-store/scripts/validate_launch_assets.py
+          python elitedom-store/scripts/validate_launch_assets.py
