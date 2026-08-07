@@ -20,8 +20,9 @@ import { usePreferences } from "@/providers/AppPreferencesProvider";
 type NavigationItem = {
   href: string;
   label: TranslationKey<"admin">;
-  section: AdminSection;
   icon: IconName;
+  section?: AdminSection;
+  permission?: string;
 };
 
 const navigation: NavigationItem[] = [
@@ -32,6 +33,9 @@ const navigation: NavigationItem[] = [
   { href: "/admin/rma", label: "warrantyDesk", section: "rma", icon: "shield" },
   { href: "/admin/rfqs", label: "b2bRfqs", section: "rfqs", icon: "quote" },
   { href: "/admin/shipments", label: "fulfilment", section: "shipments", icon: "truck" },
+  { href: "/admin/payments", label: "payments", permission: "payments.view", icon: "credit" },
+  { href: "/admin/suppliers", label: "suppliers", permission: "suppliers.view", icon: "factory" },
+  { href: "/admin/integrations", label: "integrations", permission: "integrations.view", icon: "link" },
   { href: "/admin/staff", label: "staffAccess", section: "staff", icon: "key" },
   { href: "/admin/audit", label: "auditLog", section: "audit", icon: "history" },
 ];
@@ -81,9 +85,10 @@ export function AdminShell({ children }: { children: ReactNode }) {
   if (!access && !accessError) return <AdminBootScreen />;
   if (accessError || !access) return <RestrictedAdminAccess />;
 
-  const visibleNavigation = navigation.filter((item) =>
-    canAccessAdminSection(access.permissions, item.section),
-  );
+  const visibleNavigation = navigation.filter((item) => {
+    if (item.permission) return access.permissions.includes(item.permission as never);
+    return item.section ? canAccessAdminSection(access.permissions, item.section) : false;
+  });
 
   async function signOut() {
     if (!session) return;
@@ -183,7 +188,7 @@ function AdminBootScreen() {
   );
 }
 
-type IconName = "bag" | "bolt" | "box" | "grid" | "history" | "key" | "lock" | "quote" | "shield" | "truck" | "users";
+type IconName = "bag" | "bolt" | "box" | "credit" | "factory" | "grid" | "history" | "key" | "link" | "lock" | "quote" | "shield" | "truck" | "users";
 
 export function AdminIcon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -197,6 +202,9 @@ export function AdminIcon({ name }: { name: IconName }) {
     lock: <><rect height="10" rx="2" width="14" x="5" y="11" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
     key: <><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M16 7l2 2M14 9l2 2" /></>,
     history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>,
+    credit: <><rect height="14" rx="2" width="20" x="2" y="5" /><path d="M2 10h20M6 15h4" /></>,
+    factory: <><path d="M3 21V9l6 3V9l6 3V5h6v16H3Z" /><path d="M7 17h2M12 17h2M17 17h2" /></>,
+    link: <><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.1 1.1" /><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.1-1.1" /></>,
     bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z" />,
   };
   return <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
