@@ -17,6 +17,7 @@ from app.integrations.odoo.webhooks import router as odoo_webhook_router
 from app.integrations.paymob.webhooks import router as paymob_webhook_router
 from app.integrations.stripe.webhooks import router as stripe_webhook_router
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.modules.admin.control_router import router as admin_control_router
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.b2b.router import router as b2b_router
@@ -91,6 +92,11 @@ def create_app() -> FastAPI:
     application.include_router(b2b_router, prefix=f"{api_prefix}/b2b", tags=["B2B Portal"])
     application.include_router(reporting_router, prefix=f"{api_prefix}/reports", tags=["Reporting"])
     application.include_router(admin_router, prefix=f"{api_prefix}/admin", tags=["Staff Administration"])
+    application.include_router(
+        admin_control_router,
+        prefix=f"{api_prefix}/admin",
+        tags=["Staff Control Plane"],
+    )
     application.include_router(
         stripe_webhook_router,
         prefix=f"{api_prefix}/webhooks/payment",
