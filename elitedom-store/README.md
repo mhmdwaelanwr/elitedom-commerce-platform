@@ -16,12 +16,19 @@ elitedom-store/
 └── Makefile          Developer/operator shortcuts
 ```
 
+Component entry points:
+
+- [`backend/README.md`](backend/README.md)
+- [`frontend/README.md`](frontend/README.md)
+- [`infrastructure/README.md`](infrastructure/README.md)
+- [`odoo/README.md`](odoo/README.md)
+- [`scripts/README.md`](scripts/README.md)
+
 ## Local bootstrap
 
 ```bash
 cp .env.example .env
-python3 scripts/check_repository_hygiene.py
-python3 scripts/validate_documentation.py
+make verify-repo
 make dev
 make migrate
 make seed
@@ -44,15 +51,15 @@ Use `make admin-bootstrap` to create a development administrator interactively. 
 ## Quality commands
 
 ```bash
-# from elitedom-store/
-python3 scripts/check_repository_hygiene.py
-python3 scripts/validate_documentation.py
-make validate-odoo
+# repository/documentation/launch/Odoo static contracts
+make verify-repo
 
+# backend
 cd backend
 python -m ruff check .
 python -m pytest app/tests -q
 
+# frontend
 cd ../frontend
 npm ci
 npm run verify
@@ -60,6 +67,8 @@ npm run build
 ```
 
 GitHub CI additionally replays migrations against PostgreSQL 15, installs/tests the Odoo addon in a clean Odoo 17 container, validates Compose overlays and validates launch assets.
+
+Use `make clean` when you need to reset local containers/volumes and remove generated Python, test, Next.js, and TypeScript build artifacts.
 
 ## Environment safety
 
