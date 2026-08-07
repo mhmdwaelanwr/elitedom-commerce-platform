@@ -21,6 +21,7 @@ ALLOWED_ROOT_FILES = {
     "CODE_OF_CONDUCT.md",
     "CONTRIBUTING.md",
     "LICENSE",
+    "NOTICE",
     "README.md",
     "SECURITY.md",
 }
@@ -33,6 +34,8 @@ CANONICAL_PATHS = (
     ".github/ISSUE_TEMPLATE/bug_report.yml",
     ".github/ISSUE_TEMPLATE/feature_request.yml",
     ".github/ISSUE_TEMPLATE/config.yml",
+    "LICENSE",
+    "NOTICE",
     "docs/README.md",
     "docs/governance/DOCUMENTATION_STANDARD.md",
     "docs/product/foundation/PROJECT_FOUNDATION.md",
