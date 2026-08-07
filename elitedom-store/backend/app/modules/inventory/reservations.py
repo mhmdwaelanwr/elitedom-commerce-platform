@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ProductTemplate, SaleOrderLine
 from app.modules.fulfillment.models import InventoryReservation, InventorySourceBalance
-from app.shared.exceptions import ExternalServiceError, InsufficientStockError, ResourceConflictError
+from app.shared.exceptions import (
+    ExternalServiceError,
+    InsufficientStockError,
+    ResourceConflictError,
+)
 
 RESERVED = "reserved"
 RELEASED = "released"
@@ -40,6 +44,7 @@ class InventoryReservationService:
                 select(SaleOrderLine, ProductTemplate)
                 .join(ProductTemplate, SaleOrderLine.product_id == ProductTemplate.id)
                 .where(SaleOrderLine.order_id == order_id)
+                .execution_options(populate_existing=True)
             )
         ).all()
         quantities: dict[int, int] = {}
