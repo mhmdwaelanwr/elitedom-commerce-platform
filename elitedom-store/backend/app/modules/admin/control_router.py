@@ -179,8 +179,11 @@ async def get_admin_runtime_configuration(
 async def get_admin_launch_readiness(
     db: DatabaseSession,
     current_user: ConfigViewer,
+    release_ref: str = Query(..., min_length=7, max_length=128),
 ) -> AdminLaunchReadinessResponse:
-    return await AdminControlPlaneService(db).launch_readiness()
+    return await AdminControlPlaneService(db).launch_readiness(
+        release_ref=release_ref,
+    )
 
 
 @router.patch(
@@ -193,9 +196,11 @@ async def update_admin_launch_gate(
     request: Request,
     db: DatabaseSession,
     current_user: ConfigManager,
+    release_ref: str = Query(..., min_length=7, max_length=128),
 ) -> AdminLaunchReadinessResponse:
     service = AdminControlPlaneService(db)
     record, before = await service.update_launch_gate(
+        release_ref=release_ref,
         gate_key=gate_key,
         payload=payload,
         verified_by=int(current_user["user_id"]),
@@ -207,6 +212,8 @@ async def update_admin_launch_gate(
         entity_id=gate_key,
         before=before,
         after={
+            "release_ref": record.release_ref,
+            "environment": record.environment,
             "status": record.status,
             "evidence_ref": record.evidence_ref,
             "notes": record.notes,
@@ -215,4 +222,4 @@ async def update_admin_launch_gate(
         },
         request=request,
     )
-    return await service.launch_readiness()
+    return await service.launch_readiness(release_ref=release_ref)
