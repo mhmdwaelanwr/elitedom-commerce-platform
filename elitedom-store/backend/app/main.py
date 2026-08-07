@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.integrations.odoo.catalog_webhooks import router as odoo_catalog_webhook_router
 from app.integrations.odoo.webhooks import router as odoo_webhook_router
+from app.integrations.paymob.webhooks import router as paymob_webhook_router
 from app.integrations.stripe.webhooks import router as stripe_webhook_router
 from app.middleware.rate_limit import RateLimitMiddleware
 from app.modules.admin.router import router as admin_router
@@ -94,6 +95,11 @@ def create_app() -> FastAPI:
         stripe_webhook_router,
         prefix=f"{api_prefix}/webhooks/payment",
         tags=["Webhooks — Stripe"],
+    )
+    application.include_router(
+        paymob_webhook_router,
+        prefix=f"{api_prefix}/webhooks/paymob",
+        tags=["Webhooks — Paymob"],
     )
     application.include_router(
         odoo_webhook_router,
