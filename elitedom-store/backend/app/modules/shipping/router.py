@@ -1,4 +1,4 @@
-"""Customer-owned tracking and warehouse-controlled dispatch endpoints."""
+"""Customer tracking and controlled local/dropship shipment endpoints."""
 
 from typing import Annotated
 
@@ -11,6 +11,7 @@ from app.modules.shipping.service import (
     DispatchOrderResponse,
     ShippingService,
     ShippingTrackingResponse,
+    SupplierShipmentRequest,
 )
 from app.shared.schemas import UserRole
 from app.shared.security import get_current_user, require_role
@@ -20,6 +21,9 @@ DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[dict, Depends(get_current_user)]
 WarehouseUser = Annotated[
     dict, Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN))
+]
+SupplierOperationsUser = Annotated[
+    dict, Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN))
 ]
 
 
@@ -72,5 +76,26 @@ async def dispatch_order(
     db: DatabaseSession,
     current_user: WarehouseUser,
 ) -> DispatchOrderResponse:
-    """Record a warehouse dispatch and transition a confirmed order to done."""
+    """Record a warehouse dispatch while keeping delivery as a separate state."""
     return await ShippingService(db).dispatch_order(order_id, request)
+
+
+@router.post("/{order_id}/deliver", response_model=ShippingTrackingResponse)
+async def mark_order_delivered(
+    order_id: int,
+    db: DatabaseSession,
+    current_user: WarehouseUser,
+) -> ShippingTrackingResponse:
+    """Confirm delivery only after a shipment has already been dispatched."""
+    return await ShippingService(db).mark_delivered(order_id)
+
+
+@router.post("/{order_id}/dropship", response_model=ShippingTrackingResponse)
+async def update_dropship_shipment(
+    order_id: int,
+    request: SupplierShipmentRequest,
+    db: DatabaseSession,
+    current_user: SupplierOperationsUser,
+) -> ShippingTrackingResponse:
+    """Record supplier-provided tracking/status for a vetted dropship PO."""
+    return await ShippingService(db).update_supplier_shipment(order_id, request)

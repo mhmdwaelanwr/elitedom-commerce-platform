@@ -227,35 +227,39 @@ class SupplierService:
         order.status = request.status
         if request.status == "received":
             order.actual_delivery_date = request.actual_delivery_date or date.today()
-            products = await self._products(
-                [int(item["product_id"]) for item in self._purchase_order_items(order)],
-                lock=True,
-                active_only=False,
+            # A system-generated dropship PO represents supplier-to-customer
+            # fulfilment.  Receiving/closing that PO must never create local
+            # warehouse stock.  Standard procurement POs keep the existing
+            # goods-receipt behaviour.
+            is_dropship_fulfillment = bool(
+                order.fulfillment_key and order.fulfillment_key.startswith("dropship:")
             )
-            for item in self._purchase_order_items(order):
-                product = products[int(item["product_id"])]
-                quantity = int(item["quantity"])
-                previous_stock_qty = product.stock_qty
-                product.stock_qty += quantity
-                # Goods receipt and its availability change must commit as one
-                # transaction.  The durable outbox later routes this event to
-                # catalog search; an in-process bus alone would lose it on a
-                # process or broker failure.
-                await publish_domain_event(
-                    self.db,
-                    InventoryUpdated(
-                        payload={
-                            "product_id": product.id,
-                            "sku": product.sku,
-                            "previous_quantity": previous_stock_qty,
-                            "quantity_delta": quantity,
-                            "new_quantity": product.stock_qty,
-                            "purchase_order_number": order.po_number,
-                            "reason": f"Purchase order {order.po_number} received",
-                        }
-                    ),
-                    source_context="supplier_receipt",
+            if not is_dropship_fulfillment:
+                products = await self._products(
+                    [int(item["product_id"]) for item in self._purchase_order_items(order)],
+                    lock=True,
+                    active_only=False,
                 )
+                for item in self._purchase_order_items(order):
+                    product = products[int(item["product_id"])]
+                    quantity = int(item["quantity"])
+                    previous_stock_qty = product.stock_qty
+                    product.stock_qty += quantity
+                    await publish_domain_event(
+                        self.db,
+                        InventoryUpdated(
+                            payload={
+                                "product_id": product.id,
+                                "sku": product.sku,
+                                "previous_quantity": previous_stock_qty,
+                                "quantity_delta": quantity,
+                                "new_quantity": product.stock_qty,
+                                "purchase_order_number": order.po_number,
+                                "reason": f"Purchase order {order.po_number} received",
+                            }
+                        ),
+                        source_context="supplier_receipt",
+                    )
         elif request.actual_delivery_date is not None:
             raise ResourceConflictError(
                 "actual_delivery_date can only be set when a purchase order is received."

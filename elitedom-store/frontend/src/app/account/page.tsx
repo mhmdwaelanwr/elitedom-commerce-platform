@@ -98,10 +98,11 @@ export default function AccountPage() {
           label={t("account", "loyaltyPoints")}
           value={overview?.loyalty ? String(overview.loyalty.points_balance) : isLoading ? "…" : "0"}
         />
-        <AccountMetric
-          detail={t("account", "latestFive")}
-          label={t("account", "recentOrders")}
-          value={isLoading ? "…" : String(recentOrders.length)}
+        <AccountLink
+          detail={t("account", "allOrdersDescription")}
+          href="/account/orders"
+          icon="▤"
+          label={t("account", "orders")}
         />
         <AccountLink
           detail={t("account", "updateContact")}
@@ -141,8 +142,8 @@ export default function AccountPage() {
             <h2 className="text-xl font-black text-foreground">{t("account", "recentOrders")}</h2>
             <p className="mt-1 text-sm text-muted">{t("account", "ordersSynced")}</p>
           </div>
-          <Link className="focus-ring rounded-md text-sm font-bold text-primary hover:brightness-110" href="/shop">
-            {t("account", "shopAgain")}
+          <Link className="focus-ring rounded-md text-sm font-bold text-primary hover:brightness-110" href="/account/orders">
+            {t("account", "allOrders")}
           </Link>
         </div>
 
@@ -151,7 +152,9 @@ export default function AccountPage() {
             {recentOrders.map((order) => (
               <article className="grid gap-3 p-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center" key={order.id}>
                 <div>
-                  <p className="font-bold text-foreground">{order.name}</p>
+                  <Link className="focus-ring rounded-md font-bold text-foreground hover:text-primary" href={`/account/orders/${order.id}`}>
+                    {order.name}
+                  </Link>
                   <p className="mt-1 text-xs text-muted">{formatDate(order.created_at, locale)}</p>
                 </div>
                 <div className="sm:text-end">
