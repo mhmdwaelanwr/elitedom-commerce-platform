@@ -15,6 +15,7 @@ from app.modules.admin.models import *  # noqa: F401,F403 — Stage 7 admin acce
 from app.modules.auth.models import *  # noqa: F401,F403 — Import auth persistence models
 from app.modules.fulfillment.models import *  # noqa: F401,F403 — Stage 6 fulfillment models
 from app.modules.payments.models import *  # noqa: F401,F403 — Import payment persistence models
+from app.modules.products.catalog_models import *  # noqa: F401,F403 — Stage 8 catalog models
 
 # Alembic Config object
 config = context.config
