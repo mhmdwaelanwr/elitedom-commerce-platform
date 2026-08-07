@@ -75,18 +75,30 @@ const STAFF_ROLES: AdminRole[] = [
   "content_catalog",
 ];
 
+const ROLE_SECTION_FALLBACK: Record<AdminRole, AdminSection[]> = {
+  system_admin: ["dashboard", "orders", "products", "customers", "rma", "rfqs", "shipments", "staff", "audit"],
+  operations_manager: ["dashboard", "orders", "products", "customers", "rma", "shipments"],
+  finance_officer: ["dashboard", "orders", "customers", "rfqs", "audit"],
+  inventory_manager: ["dashboard", "products", "shipments"],
+  warehouse_operator: ["dashboard", "orders", "products", "shipments"],
+  customer_support: ["dashboard", "orders", "customers", "rma", "shipments"],
+  content_catalog: ["dashboard", "products"],
+};
+
 export function isStaffRole(role: string | undefined | null): role is AdminRole {
   return Boolean(role && STAFF_ROLES.includes(role as AdminRole));
 }
 
 export function canAccessAdminSection(
-  permissions: readonly string[] | Set<string>,
+  access: readonly string[] | Set<string> | string | undefined | null,
   section: AdminSection,
 ) {
+  if (!access) return false;
+  if (typeof access === "string") {
+    return isStaffRole(access) && ROLE_SECTION_FALLBACK[access].includes(section);
+  }
   const permission = ADMIN_SECTION_PERMISSIONS[section];
-  return permissions instanceof Set
-    ? permissions.has(permission)
-    : permissions.includes(permission);
+  return access instanceof Set ? access.has(permission) : access.includes(permission);
 }
 
 export class AdminApiError extends Error {
@@ -312,9 +324,7 @@ async function adminRequest<T>(
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   headers.set("Authorization", `Bearer ${session.accessToken}`);
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   let response: Response;
   try {
@@ -349,9 +359,7 @@ async function adminRequest<T>(
 function queryString(values: Record<string, string | number | boolean | undefined | null>) {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      params.set(key, String(value));
-    }
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
   });
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
@@ -362,10 +370,7 @@ export function fetchAdminAccess(session: CustomerSession) {
 }
 
 export function fetchAdminPermissionCatalog(session: CustomerSession) {
-  return adminRequest<{ permissions: AdminPermissionDefinition[] }>(
-    "/access/permissions",
-    session,
-  );
+  return adminRequest<{ permissions: AdminPermissionDefinition[] }>("/access/permissions", session);
 }
 
 export function fetchAdminStaff(session: CustomerSession) {
@@ -385,12 +390,7 @@ export function updateAdminStaffAccess(
 
 export function fetchAdminAuditLogs(
   session: CustomerSession,
-  params: {
-    page?: number;
-    action?: string;
-    entity_type?: string;
-    actor_partner_id?: number;
-  } = {},
+  params: { page?: number; action?: string; entity_type?: string; actor_partner_id?: number } = {},
 ) {
   return adminRequest<Paginated<AdminAuditLog, "logs">>(
     `/audit-logs${queryString({ page: 1, limit: 50, ...params })}`,
@@ -416,11 +416,7 @@ export function fetchAdminOrder(orderId: number, session: CustomerSession) {
   return adminRequest<AdminOrderDetail>(`/orders/${orderId}`, session);
 }
 
-export function updateAdminOrderState(
-  orderId: number,
-  state: string,
-  session: CustomerSession,
-) {
+export function updateAdminOrderState(orderId: number, state: string, session: CustomerSession) {
   return adminRequest<AdminOrderDetail>(`/orders/${orderId}/state`, session, {
     method: "PUT",
     body: JSON.stringify({ state }),
