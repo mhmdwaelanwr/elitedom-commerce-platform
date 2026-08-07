@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class AdminPaymentAttemptItem(BaseModel):
@@ -58,7 +59,7 @@ class AdminRefundListResponse(BaseModel):
 
 
 class AdminRefundRequest(BaseModel):
-    reason: str
+    reason: str = Field(..., min_length=3, max_length=255)
 
 
 class AdminRefundRequestResponse(BaseModel):
@@ -113,9 +114,9 @@ class AdminSupplierSummary(BaseModel):
     lead_time_days: int
     is_active: bool
     is_verified: bool
-    performance_rating: str | float | None = None
+    performance_rating: Decimal | None = None
     total_orders: int
-    defect_rate_percent: str | float
+    defect_rate_percent: Decimal
     created_at: datetime
 
 
@@ -134,10 +135,10 @@ class AdminPurchaseOrderSummary(BaseModel):
     supplier_id: int
     sale_order_id: int | None = None
     status: str
-    total_amount: str | float
+    total_amount: Decimal
     currency: str
-    expected_delivery_date: str | None = None
-    actual_delivery_date: str | None = None
+    expected_delivery_date: date | None = None
+    actual_delivery_date: date | None = None
     created_at: datetime
 
 
