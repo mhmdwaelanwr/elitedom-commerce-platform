@@ -118,7 +118,7 @@ class ProductAttributeDefinition(Base):
         DateTime(timezone=True), nullable=True, onupdate=func.now()
     )
 
-    values: Mapped[list["ProductAttributeValue"]] = relationship(
+    values: Mapped[list[ProductAttributeValue]] = relationship(
         back_populates="attribute",
         cascade="all, delete-orphan",
     )
