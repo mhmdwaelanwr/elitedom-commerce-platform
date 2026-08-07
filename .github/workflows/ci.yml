@@ -226,6 +226,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
+      NEXT_PUBLIC_SITE_URL: http://localhost:3000
 
     steps:
       - name: Check out source
@@ -278,6 +279,7 @@ jobs:
           ENVIRONMENT: production
           DEBUG: "false"
           NEXT_PUBLIC_API_URL: https://store.example.com/api/v1
+          NEXT_PUBLIC_SITE_URL: https://store.example.com
           SECRET_KEY: ci-production-secret-key-with-at-least-32-characters
           JWT_SECRET_KEY: ci-production-jwt-key-with-at-least-32-characters
           POSTGRES_PASSWORD: ci-production-postgres-password
