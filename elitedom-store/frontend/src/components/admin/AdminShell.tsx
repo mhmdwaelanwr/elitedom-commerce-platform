@@ -54,10 +54,12 @@ export function AdminShell({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || !session || !isStaffRole(session.role)) return;
     let active = true;
-    setAccessError(false);
     fetchAdminAccess(session)
       .then((payload) => {
-        if (active) setAccess(payload);
+        if (active) {
+          setAccess(payload);
+          setAccessError(false);
+        }
       })
       .catch(() => {
         if (active) {
