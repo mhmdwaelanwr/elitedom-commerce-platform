@@ -129,7 +129,7 @@ export default function AdminStaffPage() {
     }
   }
 
-  if (!allowed) return <AdminSectionDenied section="staff access" />;
+  if (!allowed) return <AdminSectionDenied section={t("admin", "staffAccess")} />;
 
   return (
     <>
@@ -223,9 +223,9 @@ export default function AdminStaffPage() {
                                 }))}
                                 value={role === "system_admin" ? "default" : mode}
                               >
-                                <option value="default">Default role access</option>
-                                <option value="allow">Explicit allow</option>
-                                <option value="deny">Explicit deny</option>
+                                <option value="default">{t("admin", "defaultRoleAccess")}</option>
+                                <option value="allow">{t("admin", "explicitAllow")}</option>
+                                <option value="deny">{t("admin", "explicitDeny")}</option>
                               </select>
                             </div>
                           );
