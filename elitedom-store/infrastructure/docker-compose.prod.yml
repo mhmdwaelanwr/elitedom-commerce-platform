@@ -26,3 +26,4 @@ services:
       args:
         NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL to the browser-reachable HTTPS API URL}"
         NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:?Set NEXT_PUBLIC_SITE_URL to the public HTTPS storefront URL}"
+        NEXT_PUBLIC_MEDIA_URL: "${NEXT_PUBLIC_MEDIA_URL:-}"
