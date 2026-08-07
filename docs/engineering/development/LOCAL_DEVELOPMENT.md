@@ -1,60 +1,41 @@
-# Local Development Setup (LOCAL_DEVELOPMENT.md)
-
-Document Classification: Internal / Software Engineering & Environment Guide  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Local Development"
+status: current
+owner: engineering
+document_type: development
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Local Development behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document provides the mandatory steps to bootstrap the Elitedom Store local development environment. The architecture relies heavily on Docker for infrastructure (PostgreSQL, Odoo 17, Redis) and native virtual environments for the FastAPI Python backend.
+# Local Development
 
-## 2. Prerequisites
-Before proceeding, ensure the following dependencies are installed on your local machine:
-* Python 3.11+
-* Docker & Docker Compose (v2)
-* Git
-* Postgres Client (optional, for direct DB inspection)
+## Purpose
 
-## 3. Environment Configuration
-1. Clone the repository: `git clone <repository_url> && cd elitedom-store`
-2. Create and activate a Python virtual environment:
-   - Linux/macOS: `python3 -m venv venv && source venv/bin/activate`
-   - Windows: `python -m venv venv && venv\Scripts\activate`
-3. Install backend dependencies: `pip install -r requirements.txt`
-4. Setup Environment Variables: 
-   - Copy the example environment file: `cp .env.example .env`
-   - Fill in the required local development secrets (DO NOT commit this file).
+Documents the supported local bootstrap path and the difference between development defaults and production controls.
 
-## 4. Bootstrapping Infrastructure (Docker)
-We use Docker Compose to spin up the Odoo ERP and PostgreSQL database locally.
-1. Start the infrastructure in the background:
-   `docker compose up -d`
-2. Verify services are running:
-   `docker compose ps`
-3. Odoo will be accessible at: `http://localhost:8069`
-4. PostgreSQL will be accessible on port `5432`.
+## Current state
 
-## 5. Database Migrations (FastAPI / Alembic)
-Before running the backend, ensure the database schema is up to date:
-1. Run migrations: `alembic upgrade head`
-2. If you modify SQLAlchemy models, generate a new migration: 
-   `alembic revision --autogenerate -m "description_of_changes"`
+Local development uses `.env.example`, Docker Compose development overlay, FastAPI/Odoo/PostgreSQL/Redis services and the Next.js application. Provider integrations can remain disabled where external accounts are not required.
 
-## 6. Running the FastAPI Backend
-With the database and Odoo running, start the FastAPI asynchronous server:
-1. Execute Uvicorn: 
-   `uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload`
-2. The API will be accessible at: `http://localhost:8000`
-3. Interactive Swagger UI Documentation: `http://localhost:8000/docs`
+## Invariants and controls
 
-## 7. Shutting Down & Cleanup
-To stop development and tear down the infrastructure:
-1. Stop Uvicorn using `CTRL+C`.
-2. Stop Docker containers without deleting data: `docker compose stop`
-3. To stop and completely remove containers/networks: `docker compose down`
-4. To obliterate the database volume (WARNING: Data Loss): `docker compose down -v`
+- Copy `.env.example` to untracked `.env`; never commit the result.
+- Use separate Odoo/application databases as configured.
+- Run migrations before relying on new schema.
+- Development may use memory rate limiting and local media; production cannot infer safety from those defaults.
+- Use safe local seed/admin bootstrap paths; no default production admin password exists.
 
----
-End of Document
+## Source of truth
+
+- `elitedom-store/README.md`
+- `elitedom-store/SETUP_AND_ENV_GUIDE.md`
+- `elitedom-store/Makefile`
+- `elitedom-store/infrastructure/docker-compose.dev.yml`
+
+## Verification
+
+Follow quick-start commands and run local hygiene/documentation validation before pushing.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

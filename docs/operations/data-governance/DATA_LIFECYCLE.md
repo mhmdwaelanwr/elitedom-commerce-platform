@@ -1,29 +1,40 @@
-# Data Lifecycle Management (DATA_LIFECYCLE.md)
-
-Document Classification: Internal / Security & Compliance  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Data Lifecycle"
+status: current
+owner: operations
+document_type: data-governance
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Data Lifecycle behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-Data lifecycle management (DLM) defines how information flows through the Elitedom Store platform—from initial creation and ingestion by FastAPI to long-term archiving in PostgreSQL and Odoo 17, and final secure destruction.
+# Data Lifecycle
 
-## 2. The Stages of Data Lifecycle
-* Stage 1: Creation & Ingestion
-  - Data enters the system via user registration, checkout, or webhook payloads.
-  - Ingestion is validated rigorously using Pydantic v2 schemas in FastAPI to ensure integrity before writing to PostgreSQL or triggering Odoo 17 syncs.
-* Stage 2: Storage & Active Processing
-  - Data resides in primary production databases (PostgreSQL / Odoo 17).
-  - Actively utilized for real-time order processing, inventory updates, and customer service operations.
-* Stage 3: Archiving & Cold Storage
-  - Transactional and financial records older than 1 year are moved to compressed, encrypted cold storage tiers to optimize primary database performance while satisfying compliance laws.
-* Stage 4: Deletion & Destruction
-  - Data reaching the end of its statutory retention window is securely purged, overwritten, or anonymized in accordance with our Data Retention Policy.
+## Purpose
 
-## 3. Automation & Enforcement
-* Automated background tasks and cron jobs execute database partition pruning and log truncation to enforce lifecycle policies without manual intervention.
+Describes how data enters, is validated, persisted, synchronized, observed and retired.
 
----
-End of Document
+## Current state
+
+Data enters through browser/API/admin/provider/webhook boundaries, is validated/authorized in backend domains, persists in the application or Odoo database, may be propagated through outbox/provider tasks, and is exposed only through authorized/public interfaces.
+
+## Invariants and controls
+
+- Ingress data is untrusted until schema/domain/authenticity validation.
+- Persistence ownership is explicit: application DB versus Odoo versus external provider.
+- Derived external indexes/messages do not become the only canonical copy of critical commerce data.
+- Logs/traces/metrics are secondary operational data and should minimize PII/secrets.
+- Deletion/retention must consider synchronized providers/backups and audit obligations.
+
+## Source of truth
+
+- `docs/architecture/overview/CONTEXT_MAP.md`
+- `docs/architecture/data/DATABASE_SCHEMA.md`
+- `elitedom-store/backend/app/integrations/`
+
+## Verification
+
+Trace representative identity/order/payment/RMA records end-to-end during data/privacy review.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

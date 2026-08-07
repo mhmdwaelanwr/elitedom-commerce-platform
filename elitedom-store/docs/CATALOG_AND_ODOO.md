@@ -1,25 +1,46 @@
-# Catalogue ownership and Odoo synchronization
+---
+title: "Catalogue and Odoo Ownership"
+status: reference
+owner: architecture
+document_type: implementation-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Catalogue and Odoo Ownership scope or referenced implementation sources change."
+---
 
-## Ownership model
+# Catalogue and Odoo Ownership
 
-Odoo owns SKU identity, sellability, product name, price, category, stock, tracking mode, warranty metadata, and archive state. FastAPI persists the commerce read model. Staff-managed product images and merchandising order remain local so an ERP edit cannot erase a curated storefront gallery.
+## Purpose
 
-## Event flow
+Clarifies catalogue ownership between customer-facing FastAPI data and Odoo ERP synchronization.
 
-1. A published Odoo product or variant is created, edited, archived, or assigned an SKU.
-2. `elitedom_connector` writes a `product.catalog.updated` record to the same durable outbox used by inventory and order-status events.
-3. The cron dispatcher signs the canonical body with HMAC SHA-256 and sends it to `/api/v1/webhooks/odoo/product` with an idempotency key.
-4. FastAPI claims a webhook receipt, upserts category/product data by SKU, preserves an existing local gallery, and publishes a local domain event.
-5. The Next.js storefront reads only the live FastAPI catalogue. A static demo fallback is available only when `NEXT_PUBLIC_DEMO_CATALOG_FALLBACK=true` is explicitly set.
+## Reference
 
-## Odoo operator steps
+### Customer catalogue
 
-- Install or upgrade `elitedom_connector`.
-- Configure the FastAPI webhook base URL and shared secret.
-- On a product, set an internal reference/SKU and enable **Publish to Elitedom Store**.
-- Set the storefront brand, warranty, dropship flag, and optional HTTPS image seed URLs.
-- Inspect **Technical → Elitedom Webhook Outbox** for pending, delivered, or dead-letter events.
+FastAPI exposes/publicates customer-facing catalogue/content/media with publication and media validation rules.
 
-## Media
+### ERP input
 
-Staff uploads accept JPEG, PNG, and WebP only, with a default 5 MB limit. Files receive generated names under `/app/media/products/<product-id>/` and are served from `/media`. The Docker volume is persistent for a single-host deployment; use object storage/CDN for scalable production.
+Odoo product/inventory updates enter through signed/idempotent integration paths using stable identifiers such as SKU/external IDs.
+
+### Inventory
+
+Stock changes are server/ERP-controlled and reconciled; browser catalogue state is not stock authority.
+
+### Content/media
+
+Staff administration can manage customer-facing content/media; object storage is a media boundary, not an ERP database.
+
+### Failure
+
+Odoo unavailability/retries must not duplicate catalogue/inventory/order effects.
+
+## Source of truth
+
+- `elitedom-store/backend/app/modules/products/`
+- `elitedom-store/backend/app/integrations/odoo/catalog_webhooks.py`
+- `elitedom-store/odoo/addons/elitedom_connector/`
+
+## Maintenance rule
+
+This page is a curated reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.

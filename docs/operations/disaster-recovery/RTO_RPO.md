@@ -1,29 +1,38 @@
-# Recovery Time & Recovery Point Objectives (RTO_RPO.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "RTO and RPO Objectives"
+status: current
+owner: operations
+document_type: disaster-recovery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "RTO and RPO Objectives behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document establishes the quantitative recovery metrics—Recovery Time Objective (RTO) and Recovery Point Objective (RPO)—for all critical services within the Elitedom Store platform.
+# RTO and RPO Objectives
 
-## 2. Core Definitions
-* RTO (Recovery Time Objective): The maximum acceptable duration of time that a service can be down after a disaster before severely impacting business operations and customers.
-* RPO (Recovery Point Objective): The maximum acceptable data loss measured in time (e.g., how old the restored data can be) following a disruption.
+## Purpose
 
-## 3. Elitedom Store Service Objectives
-* FastAPI Backend & Storefront:
-  - RTO: $\le$ 1 Hour (Time required to provision a new VPS, pull Docker containers, and restore routing).
-  - RPO: $\le$ 15 Minutes (Maximum acceptable transactional data loss via continuous database replication / transaction logs).
-* Odoo 17 ERP & Inventory Database:
-  - RTO: $\le$ 2 Hours (Time required to restore Odoo database instances, verify module states, and re-establish bidirectional webhooks).
-  - RPO: $\le$ 1 Hour (Daily incremental / hourly transactional database dumps).
-* Static Assets & Media Storage:
-  - RTO: $\le$ 4 Hours.
-  - RPO: 0 Hours (Zero data loss, maintained via real-time object storage replication).
+Defines how Recovery Time Objective and Recovery Point Objective are agreed and measured.
 
----
-End of Document
+## Current state
+
+No repository-only value is treated as a contractual RTO/RPO. Targets depend on business risk, backup frequency/storage, hosting and staffing; achieved values require drills.
+
+## Invariants and controls
+
+- RPO is bounded by actual backup/replication frequency and transaction recovery capability.
+- RTO includes infrastructure replacement, restore, migration, validation, provider/DNS/TLS work and traffic cutover.
+- Use separate objectives for critical commerce data versus optional derived indexes when appropriate.
+- Revisit objectives after architecture or business criticality changes.
+
+## Source of truth
+
+- `docs/operations/disaster-recovery/BACKUP_STRATEGY.md`
+- `docs/operations/disaster-recovery/DR_TESTING.md`
+
+## Verification
+
+Approve targets with business/operations and compare them with measured drill results.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

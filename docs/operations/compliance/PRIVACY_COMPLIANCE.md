@@ -1,25 +1,40 @@
-# Privacy & Data Protection Compliance (PRIVACY_COMPLIANCE.md)
-
-Document Classification: Internal / Legal & Privacy Compliance  
-Version: 1.0  
-Status: Approved / Commercial Readiness  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Privacy Compliance Readiness"
+status: current
+owner: operations
+document_type: compliance-readiness
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Privacy Compliance Readiness behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document details the operational and technical mechanisms implemented within the Elitedom Store platform to ensure full compliance with global privacy regulations (such as GDPR and regional consumer data protection laws).
+# Privacy Compliance Readiness
 
-## 2. Consent Management Architecture
-* Explicit Opt-In: Users must explicitly check mandatory consent boxes during account registration and checkout regarding terms of service and data processing.
-* Granular Consent: Separate consents for transactional processing vs. marketing communications, stored immutably in PostgreSQL with timestamps and user IP records.
+## Purpose
 
-## 3. Data Subject Access Requests (DSAR) Workflow
-* Right to Access: Automated FastAPI endpoints allowing authenticated users to request and export their profile data, order history, and preferences in a structured JSON format.
-* Right to Erasure ("Forgotten"): An automated workflow that triggers PII anonymization across PostgreSQL and Odoo 17 ERP tables while retaining legally mandated financial transaction logs.
+Maps privacy engineering controls to readiness questions without giving legal advice or declaring compliance.
 
-## 4. Cross-Border Data Privacy
-* All customer personal data is encrypted at rest and in transit, residing securely within our primary Oracle Cloud infrastructure regions under strict access control policies.
+## Current state
 
----
-End of Document
+The repository provides technical foundations for access control, minimization, logging hygiene, provider boundaries and data lifecycle documentation. Customer notices, lawful basis/consent, statutory retention and rights procedures require operating-entity/legal decisions.
+
+## Invariants and controls
+
+- Maintain a current data/provider inventory.
+- Document purpose and minimum data for new fields/integrations.
+- Provide authorized workflows/processes for applicable access/correction/deletion requests.
+- Ensure backups/providers are considered in retention/deletion procedures.
+- Record security incidents/breach handling according to applicable law and company policy.
+
+## Source of truth
+
+- `docs/operations/data-governance/`
+- `SECURITY.md`
+- `docs/operations/runbooks/INCIDENT_RESPONSE.md`
+
+## Verification
+
+Legal/privacy owner review plus technical evidence is required before asserting regulatory compliance.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

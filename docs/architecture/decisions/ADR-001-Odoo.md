@@ -1,38 +1,38 @@
-# ADR-001: Selection of Odoo 17 as ERP Master Backbone
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-001 — Odoo 17 for ERP"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted
 ---
 
-## 1. Context and Problem Statement
-Elitedom Store requires a robust, scalable, and fully integrated enterprise resource planning (ERP) backbone to manage complex operational domains, including inventory, procurement, sales orders, accounting, and warehouse management. We need to evaluate whether to build a custom enterprise management backend from scratch or adopt an established, extensible ERP framework that can act as the master system of record.
+# ADR-001 — Odoo 17 for ERP
 
-## 2. Decision Drivers
-* Need for a single source of truth for inventory, fulfillment, and financial ledgers.
-* Out-of-the-box capabilities for multi-currency pricing, supplier management, and hardware serial tracking.
-* Extensibility to support a modular monolith architecture and custom API middleware.
-* Reduced development overhead and time-to-market compared to writing custom ERP modules from scratch.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Custom-built backend services for inventory, orders, and accounting.
-* **Option 2:** Heavy proprietary enterprise ERP solutions (e.g., SAP/Oracle).
-* **Option 3:** Odoo 17 Enterprise/Community ERP framework.
+Accepted
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Odoo 17)**, because it provides extensible core business capabilities, native Python/PostgreSQL architecture, strong community support, and high extensibility that aligns with our technology stack. Required business functions shall be validated against the selected Odoo 17 deployment edition and any approved custom or third-party modules. Odoo 17 shall remain the master owner of inventory, procurement, sales orders, and warehouse operations. Financial/accounting workflows shall be provided through the validated Odoo deployment configuration, including any required custom or third-party modules, and shall not be assumed to be Community Edition functionality without validation.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Centralized, reliable management of core business logic and financial transactions.
-* Native support for stock tracking, multi-currency ledgers, and structured database schemas (`res_partner`, `product_product`, `stock_lot`, etc.).
-* Accelerated deployment timeline by leveraging pre-built business workflows.
+The platform needs ERP-grade product, sales, stock and delivery capabilities while keeping customer-facing application behavior independently evolvable.
 
-### Negative Consequences / Trade-offs
-* Requires a dedicated API integration middleware layer to handle real-time synchronization between the reactive storefront/mobile app and Odoo.
-* Custom developments must follow Odoo's framework conventions to maintain compatibility during future system upgrades.
+## Decision
 
----
-**End of Document**
+Use Odoo 17 Community as the ERP boundary and ship a repository-owned `elitedom_connector` addon for signed catalogue, inventory, order and shipment events. Keep the FastAPI application database separate from the Odoo database.
+
+## Consequences
+
+- ERP synchronization is an integration boundary, not a shared-database shortcut.
+- Connector installation/tests are part of CI.
+- Failures require retry/idempotency rather than cross-database transactions.
+
+## Implementation evidence
+
+- `elitedom-store/odoo/addons/elitedom_connector/__manifest__.py`
+- `elitedom-store/backend/app/integrations/odoo/`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

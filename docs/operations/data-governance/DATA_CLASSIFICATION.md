@@ -1,28 +1,41 @@
-# Data Classification Policy (DATA_CLASSIFICATION.md)
-
-Document Classification: Internal / Security & Compliance  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Data Classification"
+status: reference
+owner: operations
+document_type: data-governance-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Data Classification scope or referenced implementation sources change."
 ---
 
-## 1. Overview
-Data classification dictates how information is handled, stored, transmitted, and destroyed based on its sensitivity level within the Elitedom Store ecosystem.
+# Data Classification
 
-## 2. Classification Tiers
-* Level 1: Public
-  - Definition: Information intended for public consumption.
-  - Examples: Marketing materials, public product catalog descriptions, public API documentation.
-* Level 2: Internal
-  - Definition: Operational data meant exclusively for internal use by Elitedom employees and engineers.
-  - Examples: Architectural documents, internal staging URLs, development guidelines, non-sensitive logs.
-* Level 3: Confidential
-  - Definition: Sensitive business or customer data requiring controlled access.
-  - Examples: Internal financial reports, business analytics, unreleased feature roadmaps, vendor contracts.
-* Level 4: Restricted (PII & Secrets)
-  - Definition: Highly sensitive data protected by strict legal or security mandates. Unauthorized disclosure causes severe harm.
-  - Examples: Customer Personally Identifiable Information (PII), database credentials, JWT secrets, Stripe API keys, cryptographic private keys.
+## Purpose
 
----
-End of Document
+Defines practical sensitivity levels used for engineering and operations.
+
+## Reference
+
+### Public
+
+Published catalogue/marketing content intentionally exposed without authentication.
+
+### Internal
+
+Non-sensitive operational/configuration metadata not intended for public disclosure.
+
+### Confidential
+
+Customer/contact/order/support data and business/supplier information requiring authorized access.
+
+### Restricted
+
+Passwords/hashes, session/token material, MFA/OTP secrets, provider/database secrets, private keys and highly sensitive security data.
+
+## Source of truth
+
+- `docs/operations/data-governance/PII_HANDLING.md`
+- `docs/operations/infrastructure/SECRETS.md`
+
+## Maintenance rule
+
+This page is a curated reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.

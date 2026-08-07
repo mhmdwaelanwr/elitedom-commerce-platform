@@ -1,72 +1,40 @@
-# Odoo Connector Operations Runbook
+---
+title: "Odoo Connector Runbook"
+status: current
+owner: operations
+document_type: implementation-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Odoo Connector Runbook behavior, evidence, or source-of-truth changes."
+---
 
-## Readiness checklist
+# Odoo Connector Runbook
 
-1. `ODOO_WEBHOOK_SECRET` is a generated value of at least 32 characters.
-2. `ODOO_WEBHOOKS_ENABLED=true` is set only after the same secret is available
-   to FastAPI and Odoo.
-3. `ODOO_SYNC_ENABLED=true` is set only after the dedicated Odoo API user and
-   API key are provisioned.
-4. The addon is installed with `make odoo-install-connector`.
-5. `make odoo-smoke` reports the Odoo server version and addon state.
-6. The Odoo Webhook Outbox has no growing dead-letter backlog.
-7. The FastAPI logs show signed webhook receipts without signature failures.
+## Purpose
 
-## Deployment sequence
+Defines operator checks for Odoo↔FastAPI synchronization and retry handling.
 
-```bash
-make prod-config
-make prod-up
-make prod-odoo-upgrade
-make prod-migrate
-make prod-odoo-smoke
-```
+## Current state
 
-Run the addon upgrade before enabling webhooks when a release changes its
-models, views or scheduled actions.
+The Odoo 17 addon emits signed catalogue/inventory/order/shipment events and maintains delivery/outbox retry state. FastAPI receives Odoo callbacks through dedicated verified/idempotent routes.
 
-## Smoke test
+## Invariants and controls
 
-```bash
-make odoo-smoke
-```
+- Confirm connector addon installed and enabled only with valid endpoint/secret.
+- Check FastAPI readiness before blaming Odoo delivery.
+- Inspect outbox delivery state/attempts without exposing webhook secret.
+- Do not manually replay by creating new semantic events when an idempotent retry path exists.
+- Reconcile SKU/order/shipment external IDs before manual correction.
 
-The command fails non-zero when:
+## Source of truth
 
-- outbound XML-RPC sync is disabled or missing credentials;
-- authentication fails;
-- `elitedom_connector` is absent or not installed.
+- `elitedom-store/odoo/addons/elitedom_connector/`
+- `elitedom-store/backend/app/integrations/odoo/`
+- `elitedom-store/infrastructure/docker-compose.yml`
 
-For inbound webhooks, create or adjust a stock quantity in Odoo and confirm:
+## Verification
 
-1. A pending event appears in **Elitedom Connector → Webhook Outbox**.
-2. It transitions to **Sent**.
-3. The matching FastAPI product stock changes.
-4. Re-dispatching the same event returns a duplicate receipt without a second
-   state mutation.
+CI proves clean install/tests; staging proves real signed delivery and retry/recovery.
 
-## Dead-letter triage
+## Change policy
 
-1. Open the event and note the HTTP status.
-2. `401`: secrets differ between Odoo and FastAPI.
-3. `404`: the SKU/order reference does not exist in FastAPI.
-4. `422`: payload contract mismatch; do not blindly retry.
-5. `429` or `5xx`: the connector automatically retries.
-6. Fix the root cause, select **Retry dead letter**, then **Dispatch now**.
-
-Do not copy payloads into public tickets; order references and tracking numbers
-are operational data.
-
-## Recovery and replay
-
-The outbox is the recovery record. Restoring the Odoo database restores pending
-events too. Events already delivered may be replayed after a point-in-time
-restore, but FastAPI's receipt table makes the replay idempotent.
-
-## Disable procedure
-
-Set `ODOO_WEBHOOKS_ENABLED=false` and restart Odoo/FastAPI. Existing pending
-or dead-letter events remain available for inspection, but the addon stops
-creating and dispatching new events while disabled. Re-enable only after the
-shared secret and FastAPI endpoint are ready. Uninstall the addon only after
-the outbox is empty and the integration is intentionally retired.
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

@@ -1,25 +1,39 @@
-# Disaster Recovery Strategy (DR_STRATEGY.md)
-
-Document Classification: Internal / Site Reliability Engineering & Security  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, Oracle Cloud VPS  
-
+---
+title: "Disaster Recovery Strategy"
+status: current
+owner: operations
+document_type: disaster-recovery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Disaster Recovery Strategy behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the overarching Disaster Recovery (DR) strategy for the Elitedom Store platform. The goal is to ensure business continuity, protect customer data, and minimize downtime in the event of catastrophic infrastructure failures, data corruption, or regional outages on our Oracle Cloud VPS environment.
+# Disaster Recovery Strategy
 
-## 2. Disaster Scenarios & Classifications
-* Tier 1 - Infrastructure Outage (VPS Failure): Complete loss of the primary Oracle Cloud compute instance hosting FastAPI, Odoo 17, and PostgreSQL.
-* Tier 2 - Database Corruption: Unrecoverable logical or physical damage to PostgreSQL or Odoo ERP internal databases due to bad migrations or faulty queries.
-* Tier 3 - Ransomware / Security Breach: Malicious compromise of server access requiring full environment isolation and rebuild from clean snapshots.
-* Tier 4 - Third-Party Integration Outage: Extended downtime of external dependencies (e.g., Stripe, Algolia) requiring graceful degradation modes.
+## Purpose
 
-## 3. High-Level DR Architecture
-* Primary Region: Oracle Cloud VPS production instance (`elitedom.store`).
-* Backup Storage: Encrypted off-site object storage (Oracle Cloud Object Storage / secure external bucket) located in a secondary isolated availability domain.
-* Infrastructure as Code (IaC): Complete server provisioning, Docker Compose configurations, and Nginx setups are fully version-controlled, allowing rapid redeployment on a fresh VPS instance.
+Defines recovery strategy for loss of host, database, application release or critical dependency.
 
----
-End of Document
+## Current state
+
+The repository provides portable container topology and database backup/restore tooling. Actual multi-region failover, off-site backup storage and infrastructure replacement depend on the chosen hosting environment and must not be assumed to exist.
+
+## Invariants and controls
+
+- Prioritize preservation/recovery of application DB, Odoo DB, media/object data and secrets/config references.
+- Use immutable release artifacts/refs to rebuild application containers.
+- Keep backup copies outside the failure domain they protect.
+- Restore into isolated targets for drills; reconcile provider/ERP events after point-in-time recovery.
+- Treat DNS/TLS/provider reconfiguration as part of recovery where host endpoints change.
+
+## Source of truth
+
+- `elitedom-store/infrastructure/`
+- `docs/operations/runbooks/BACKUP_RECOVERY.md`
+
+## Verification
+
+Perform documented staging recovery drills and record measured outcomes.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

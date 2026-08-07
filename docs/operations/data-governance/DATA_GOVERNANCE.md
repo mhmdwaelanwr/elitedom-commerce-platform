@@ -1,25 +1,40 @@
-# Data Governance Framework (DATA_GOVERNANCE.md)
-
-Document Classification: Internal / Security & Compliance  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Data Governance"
+status: current
+owner: operations
+document_type: data-governance
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Data Governance behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-Data governance at Elitedom Store ensures that data is managed as a high-value corporate asset. This framework establishes accountability, policies, and standards to guarantee data quality, security, privacy, and regulatory compliance across our FastAPI microservices and Odoo 17 ERP databases.
+# Data Governance
 
-## 2. Core Principles
-* Accountability: Clear ownership assigned for every data domain (e.g., customer data, inventory, financial transactions).
-* Integrity & Quality: Data entering PostgreSQL and Odoo must be accurate, consistent, and validated via Pydantic schemas.
-* Security by Design: Protection of data across its entire lifecycle, enforcing encryption at rest and in transit.
-* Compliance: Strict adherence to data protection regulations and internal policies regarding PII and financial records.
+## Purpose
 
-## 3. Data Domains & Ownership
-* Customer Data Domain: Managed by Customer Success and Storefront APIs (FastAPI).
-* ERP & Inventory Data Domain: Managed by Supply Chain and Odoo 17 ERP modules.
-* Financial & Transaction Domain: Managed by Payment Gateways (Stripe) and Billing Systems.
+Defines ownership, classification and control expectations for data handled by Elitedom.
 
----
-End of Document
+## Current state
+
+Application, ERP, provider and operational data have different owners and retention needs. Data governance is implemented through domain ownership, access controls, database constraints, provider contracts and operational policy; this document does not claim external legal certification.
+
+## Invariants and controls
+
+- Collect/store only data needed for defined commerce, identity, service and operational purposes.
+- Classify authentication secrets/payment-provider credentials as restricted.
+- Apply object/role authorization before exposing customer or staff data.
+- Document system-of-record and synchronization ownership for ERP/provider-derived fields.
+- Use retention/deletion rules that preserve statutory/audit obligations while avoiding indefinite unnecessary PII.
+
+## Source of truth
+
+- `docs/operations/data-governance/`
+- `elitedom-store/backend/app/modules/`
+- `elitedom-store/backend/app/integrations/`
+
+## Verification
+
+Review schema/data flows and provider scopes during feature/privacy/security review.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

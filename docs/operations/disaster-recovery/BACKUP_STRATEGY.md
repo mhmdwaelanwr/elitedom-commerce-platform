@@ -1,29 +1,39 @@
-# Backup Strategy & Automation (BACKUP_STRATEGY.md)
-
-Document Classification: Internal / Site Reliability Engineering & Security  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Backup Strategy"
+status: current
+owner: operations
+document_type: disaster-recovery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Backup Strategy behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document outlines the automated backup strategy for the Elitedom Store platform. Regular, verified backups are our primary defense against data corruption, hardware failure, and catastrophic outages on our Oracle Cloud VPS infrastructure.
+# Backup Strategy
 
-## 2. Backup Scope & Targets
-* PostgreSQL Primary Database: Contains core user profiles, storefront orders, and application state.
-* Odoo 17 ERP Database: Contains accounting, supply chain, warehouse inventory, and business logic configurations.
-* Environment Secrets & Configuration: Encrypted backups of environment variables (`.env`), Nginx configurations, and Docker Compose scripts.
-* Uploaded Media & Assets: Product images, attachments, and static assets stored on disk or object storage.
+## Purpose
 
-## 3. Backup Schedule & Retention Windows
-* Hourly Incremental Backups: Captured every hour for PostgreSQL transaction logs (WAL files) to achieve the 15-minute RPO target. Retained for 7 days.
-* Daily Full Snapshots: Automated full database dumps (compressed SQL / custom format) executed daily at 02:00 UTC. Retained for 30 days.
-* Monthly Archives: Full system snapshots taken on the 1st of every month. Retained for 12 months to satisfy financial and statutory auditing requirements.
+Defines what must be backed up and how backup quality is demonstrated.
 
-## 4. Off-Site Storage & Security
-* All backup archives are automatically encrypted using AES-256 before being transferred securely to an isolated, secondary Oracle Cloud Object Storage bucket or external storage target.
-* Access to backup buckets is restricted strictly through IAM policies and service account keys following the principle of least privilege.
+## Current state
 
----
-End of Document
+Database backup scripts cover application and Odoo databases. Media/object data, proxy/operations-tool configuration and off-site retention are deployment-specific and require explicit production policy.
+
+## Invariants and controls
+
+- Back up both databases independently with identifiable timestamps/environment.
+- Encrypt/protect backup storage and credentials.
+- Use retention/rotation appropriate to approved RPO and legal requirements.
+- Back up media/object storage or use provider versioning/replication appropriate to risk.
+- Verify backups by restore, not file existence alone.
+
+## Source of truth
+
+- `elitedom-store/infrastructure/scripts/backup.sh`
+- `docs/operations/runbooks/BACKUP_RECOVERY.md`
+
+## Verification
+
+Run restore drills and capture recovery point/time and integrity checks.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

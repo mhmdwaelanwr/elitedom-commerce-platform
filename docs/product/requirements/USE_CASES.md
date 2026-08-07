@@ -1,133 +1,112 @@
-# Use Cases Document (UC) - Elitedom Store
-
-**Document Classification:** Internal  
-**Version:** 2.1  
-**Status:** Under Review  
-**Owner:** Mohamed Anwar  
-**Target System:** Elitedom E-Commerce & Odoo ERP Integration  
-
+---
+title: "Use Cases"
+status: reference
+owner: product
+document_type: use-cases
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Critical customer, staff, provider, fulfillment, service, or launch-control journeys change."
 ---
 
-## 1. Introduction & Purpose
-This document outlines the detailed use cases for the **Elitedom Store** platform. It describes the interactions between system actors (Customers, B2B Clients, Admin Staff, Warehouse Operators, and Odoo ERP) and the system functionality required to fulfill core business goals.
+# Use Cases
 
----
+## Purpose
 
-## 2. Actors Definition
-- **Customer (CUST):** Standard end-user browsing products, placing orders, and requesting support.
-- **B2B Client (B2BC):** Verified institutional customer placing bulk orders or requesting customized quotes.
-- **Support Agent (SUPP):** Customer service staff managing inquiries, returns, and ticket escalations.
-- **Warehouse Operator (WHOP):** Staff handling local stock picking, packing, shipping, and physical inventory.
-- **System Administrator (SYSA):** Technical user managing users, system configurations, and permissions.
-- **Odoo ERP / Middleware (ERP):** External/Integrated enterprise resource planning engine synchronizing inventory, orders, and financial data.
+Summarizes the primary customer, staff, system, and operator journeys implemented by the platform. This page describes outcomes and trust boundaries; route-level schemas and UI details remain owned by executable code.
 
----
+## Actors
 
-## 3. Detailed Use Cases
+- **Anonymous customer** — browses catalogue and may build a cart before authentication.
+- **Authenticated customer** — manages account/address state and completes commerce/post-purchase journeys.
+- **Staff user** — performs authorized administrative/operations work subject to backend RBAC and staff MFA policy.
+- **Operations/release operator** — evaluates runtime readiness and records release-scoped acceptance evidence.
+- **Paymob** — primary payment provider callback/checkout boundary.
+- **Odoo** — ERP boundary for catalogue, stock, order, and shipment synchronization.
+- **Optional providers** — Google, Apple, Twilio, SendGrid/ZeptoMail, Algolia, and other enabled adapters according to implementation/configuration status.
 
-### UC-01: User Registration & Authentication
-- **ID:** UC-01
-- **Primary Actor:** Customer / B2B Client
-- **Preconditions:** The user does not have an active account or is logged out.
-- **Trigger:** User clicks "Register" or "Login" on the storefront.
-- **Main Flow:**
-  1. User navigates to the authentication page and chooses to register or log in.
-  2. For registration, the user enters email, mobile number, and secure password (or uses Google/Apple SSO).
-  3. The system validates input data, creates the user record with the `Customer` role, and sends a verification notification.
-  4. For login, the system verifies credentials against stored password hashes or token providers.
-  5. The system issues a secure JWT session token and redirects the user to their account dashboard.
-- **Alternative Flows / Exceptions:**
-  - *Invalid Credentials:* The system displays an error message and prompts the user to retry or reset their password.
-  - *Duplicate Email:* The system notifies the user that an account with that email already exists.
-- **Postconditions:** User is authenticated and session is active.
+## UC-01 — Browse and discover catalogue
 
----
+**Precondition:** storefront/API are available.  
+**Primary flow:** customer opens home/category/search/product views, changes locale/theme as needed, reviews product/media/availability data, and navigates to a purchasable product.  
+**Controls:** catalogue publication rules and API data are server-provided; Arabic/RTL and English/LTR remain supported presentation modes.  
+**Failure outcome:** empty/error/loading states remain usable and do not fabricate stock or price.
 
-### UC-02: Intelligent Product Search & Filtering
-- **ID:** UC-02
-- **Primary Actor:** Customer / B2B Client
-- **Preconditions:** Catalog database is populated and synchronized with Odoo ERP.
-- **Trigger:** User enters a search query or applies filters on the category page.
-- **Main Flow:**
-  1. User types keywords into the search bar or selects filters (brand, price range, RAM, processor type).
-  2. The system queries **Algolia** for matching products with typo-tolerance.
-  3. The search engine returns matching items with real-time stock and pricing status.
-  4. The UI renders the filtered product list dynamically without full page reload.
-- **Alternative Flows / Exceptions:**
-  - *No Results Found:* The system displays a "No products found" message with recommended alternative categories or popular items.
-- **Postconditions:** User views relevant product listings matching their criteria.
+## UC-02 — Build and retain a cart
 
----
+**Precondition:** catalogue item is eligible for cart addition.  
+**Primary flow:** anonymous or authenticated customer adds/removes/updates lines and continues browsing. Anonymous cart state can later be reconciled with authenticated state.  
+**Controls:** browser totals are display values; checkout revalidates price, discount, shipping, stock, and payable amount server-side.  
+**Failure outcome:** invalid/unavailable lines produce explicit correction/error behavior rather than silent order creation.
 
-### UC-03: Order Placement & Checkout Process
-- **ID:** UC-03
-- **Primary Actor:** Customer
-- **Preconditions:** User has added items to the shopping cart.
-- **Trigger:** User clicks "Proceed to Checkout".
-- **Main Flow:**
-  1. User reviews shopping cart contents and applies any valid loyalty points or discount codes.
-  2. User enters or selects a saved shipping address within Egypt governorates.
-  3. System calculates applicable shipping fees and taxes based on location.
-  4. User selects a payment method (Online Credit Card, Mobile Wallet, or Cash on Delivery).
-  5. User confirms and places the order.
-  6. The system generates a unique Order Number, deducts temporary stock, and triggers the Odoo ERP synchronization event.
-  7. The system sends an order confirmation email/SMS to the customer.
-- **Alternative Flows / Exceptions:**
-  - *Payment Gateway Failure:* The system prompts the user to retry payment or select an alternative payment method without clearing the cart.
-  - *Out of Stock during Checkout:* The system alerts the user regarding stock unavailability and prompts cart adjustment.
-- **Postconditions:** Order is successfully logged, confirmation is dispatched, and order state is set to `Pending Payment` or `Payment Confirmed`.
+## UC-03 — Establish customer identity
 
----
+**Primary flows:** supported password flow, phone OTP, or Google/Apple identity flow establishes/links an application identity and persisted session.  
+**Phone controls:** hashed/expiring OTP state, resend cooldown and abuse/rate limits; real delivery depends on enabled target provider configuration.  
+**Social controls:** provider identity is verified through the implemented backend flow and linked without trusting arbitrary browser profile claims.  
+**Failure outcome:** invalid/expired credentials or unsafe provider configuration fail without creating a trusted session.
 
-### UC-04: Hybrid Stock & Dropshipping Fulfillment Routing
-- **ID:** UC-04
-- **Primary Actor:** System / Odoo ERP Middleware
-- **Preconditions:** Order has been confirmed and paid or authorized for fulfillment.
-- **Trigger:** Order lifecycle transitions to `Processing / Packing`.
-- **Main Flow:**
-  1. The system evaluates item availability across local physical warehouse stock and dropshipping supplier feeds.
-  2. For items in **Local Stock**, the system routes a picking list to the warehouse operator's dashboard.
-  3. For items designated as **Dropshipping**, the system automatically generates a digital Purchase Order (PO) and transmits fulfillment instructions to the verified supplier via API or automated email.
-  4. Warehouse operator picks and packs local items, printing shipping labels.
-  5. Tracking numbers from local courier and dropship suppliers are updated in the system.
-- **Alternative Flows / Exceptions:**
-  - *Supplier Out of Stock:* System alerts procurement team and flags order item for customer service intervention.
-- **Postconditions:** Fulfillment workflow is initialized across local and dropship channels.
+## UC-04 — Manage account and addresses
 
----
+Authenticated customer manages profile/address information, views order history, and resumes commerce flows. Object ownership must be enforced by backend queries/services rather than by accepting arbitrary object IDs from the browser.
 
-### UC-05: Warranty & RMA (Return Merchandise Authorization) Request
-- **ID:** UC-05
-- **Primary Actor:** Customer & Support Agent
-- **Preconditions:** Customer has a delivered order within the active warranty period.
-- **Trigger:** Customer navigates to "My Orders" and selects "Request Return / Warranty".
-- **Main Flow:**
-  1. Customer selects the item, specifies the return reason (Defective, Wrong Item, Damaged), and uploads photo/video evidence.
-  2. The system validates warranty eligibility based on purchase date and category rules (Level 1 Automation).
-  3. The system creates an RMA ticket and assigns a unique RMA tracking code.
-  4. A Customer Support Agent or Technical Inspector reviews the claim details in the admin dashboard (Level 2 Audit).
-  5. Agent approves or rejects the RMA request and issues pickup instructions or replacement status.
-- **Alternative Flows / Exceptions:**
-  - *Warranty Expired:* System automatically rejects the RMA request and displays policy terms.
-- **Postconditions:** RMA ticket is logged and lifecycle status is updated.
+## UC-05 — Checkout and initiate Paymob payment
 
----
+**Preconditions:** valid cart, customer/order context, shipping/address requirements satisfied, Paymob enabled for the target payment method when used.  
+**Primary flow:** backend computes authoritative commercial state, creates/persists order/payment attempt state, and initiates Paymob hosted/unified checkout.  
+**Authority rule:** browser redirection does not mark payment successful. Verified backend/provider callback processing is authoritative.  
+**Failure outcome:** failed/cancelled/pending provider states remain explicit and retry/reconciliation behavior does not duplicate business effects.
 
-### UC-06: B2B Bulk Quotation Request (RFQ)
-- **ID:** UC-06
-- **Primary Actor:** B2B Client & Sales Officer
-- **Preconditions:** User is logged in with a verified B2B account role.
-- **Trigger:** B2B client navigates to the institutional portal and clicks "Request Custom Quote".
-- **Main Flow:**
-  1. Client adds bulk quantities of hardware/equipment to a quotation list.
-  2. Client submits project details, notes, and requested delivery timeline.
-  3. The system generates an RFQ record and notifies the sales and finance teams.
-  4. Sales officer reviews the request, applies tiered corporate pricing, and issues an official quotation proposal.
-  5. Client reviews the proposal on their dashboard and accepts or negotiates terms.
-  6. Upon acceptance, the system converts the quote into a confirmed B2B sales order linked to Odoo ERP.
-- **Alternative Flows / Exceptions:**
-  - *Quote Rejected/Expired:* Quote status transitions to closed.
-- **Postconditions:** B2B quotation is processed and converted or archived.
+## UC-06 — Receive a Paymob callback
 
----
-**End of Document**
+Paymob calls the dedicated backend webhook boundary. The backend verifies authenticity, resolves the target attempt/order, applies idempotency, and advances state only through valid transitions. Duplicate delivery returns a safe repeat result rather than repeating fulfillment/payment side effects.
+
+## UC-07 — Fulfill an order and synchronize Odoo
+
+Application/Odoo integration exchanges catalogue/inventory/order/shipment events using signed/idempotent/retry-safe boundaries. Staff/system advances valid fulfillment/shipment states while ERP delivery failure remains observable/retryable rather than being treated as silent success.
+
+## UC-08 — Request and process a refund
+
+Authorized workflow validates the payment/order/refund state, creates or advances refund state, calls the relevant provider path, and keeps audit/provider identifiers needed for reconciliation. Repeated requests must not produce duplicate provider refunds.
+
+## UC-09 — Submit and process warranty/RMA
+
+Customer with eligible owned order/product context submits a service/warranty request and supporting information. Backend eligibility/ownership rules determine whether the claim can proceed. Staff advances only allowed service/RMA transitions; future external intake adapters must preserve the same domain authority.
+
+## UC-10 — Administer catalogue/content/media
+
+Authorized staff manages product/category/content/publication/media state through admin APIs/UI. Backend permission checks remain authoritative. Media upload validates supported type/size/dimensions/content and coordinates storage/database lifecycle safely.
+
+## UC-11 — Administer access and audit activity
+
+Authorized staff reviews/manages roles/permissions according to the implemented RBAC model. Staff MFA is enforced where configured. Security-sensitive administrative actions produce audit information; manipulating frontend visibility cannot grant a backend permission.
+
+## UC-12 — Operate payments, integrations, and fulfillment
+
+Authorized staff inspects payment/refund state, integration readiness, fulfillment/service information, and provider/ERP operational status through the control/admin surfaces. Provider credentials remain secret and are never returned as raw configuration values to the browser.
+
+## UC-13 — Approve a release for launch
+
+**Precondition:** immutable release reference and target environment selected.  
+**Primary flow:** backend control plane evaluates automatic deployment/security/provider gates; operator completes required manual gates and records evidence.  
+**Evidence controls:** a passed manual gate requires evidence; a waived gate requires rationale; verifier/time are recorded.  
+**Isolation:** evidence is queried by release reference and environment, so another release's UAT/provider/recovery pass does not carry automatically.  
+**Outcome:** release remains blocked while required blockers exist.
+
+## UC-14 — Detect and respond to degraded runtime
+
+Operator uses liveness/readiness, logs, metrics/tracing where configured, worker/provider/ERP signals, and runbooks to identify degradation. Interventions should be scoped/reversible and preserve data/payment/order correctness; destructive reset/restore actions require explicit recovery context.
+
+## Source of truth
+
+- `elitedom-store/frontend/src/app/`
+- `elitedom-store/backend/app/modules/`
+- `elitedom-store/backend/app/integrations/`
+- `elitedom-store/backend/app/modules/admin/control_service.py`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+
+## Verification
+
+Use backend/frontend/integration tests for executable behavior and release-level UAT for provider/environment/customer experience. Requirements/user stories should trace to these use cases where they represent the same business outcome.
+
+## Maintenance rule
+
+Update this page when an actor, critical journey, authority boundary, or release acceptance outcome changes. Do not duplicate every screen or endpoint here.

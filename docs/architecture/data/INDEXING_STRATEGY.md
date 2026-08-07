@@ -1,83 +1,39 @@
-# Indexing Strategy & Performance Optimization Document (INDEXING_STRATEGY.md)
-
-**Document Classification:** Internal  
-**Version:** 1.0  
-**Status:** Approved / Production Ready  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration (PostgreSQL 15 & Algolia Search)  
-
+---
+title: "Indexing Strategy"
+status: current
+owner: architecture
+document_type: database
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Indexing Strategy behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Objectives
-This document outlines the multi-tier indexing strategy for the **Elitedom Store** platform. As an e-commerce platform integrating real-time hardware catalogs, high-frequency checkout transactions, and Odoo 17 ERP backbones, maintaining low query latency and high search responsiveness is critical. 
+# Indexing Strategy
 
-The strategy covers:
-* **Relational Database Indexing (PostgreSQL):** Optimizing foreign keys, transactional lookups, and full-text search fields.
-* **Search Engine Indexing (Algolia):** Powering sub-100ms product catalog discovery and dynamic faceted filtering for hardware components.
-* **Cache & Memory Indexing (Redis / Application Layer):** Accelerating shopping carts, user sessions, and frequent configuration queries.
+## Purpose
 
----
+Defines how indexing decisions are made without claiming indexes that are not present in migrations.
 
-## 2. PostgreSQL Database Indexing Strategy (Odoo 17 Core)
+## Current state
 
-To prevent table scans and ensure optimal performance for transactional operations, specific index types are applied across core entities.
+Indexes are created through Alembic with query patterns, uniqueness and operational write cost in mind. Provider/search indexes such as Algolia are secondary derived indexes, not replacements for database constraints.
 
-### 2.1. B-Tree Indexes (Foreign Keys & Lookups)
-Standard B-Tree indexes are applied to high-cardinality foreign keys and unique lookup identifiers to speed up JOIN operations and filtering.
-* `res_partner(email)`: Unique index for fast customer authentication and lookup.
-* `res_partner(phone)`: Index for quick SMS/OTP association via Twilio.
-* `product_product(sku)`: Unique index for barcode and SKU scanning during warehouse picking.
-* `stock_lot(name)`: Unique index on physical Serial Numbers (S/N) for instant warranty and traceability queries.
-* `sale_order(partner_id)` & `sale_order(odoo_order_id)`: Indexes to optimize customer order history retrieval and ERP synchronization.
+## Invariants and controls
 
-### 2.2. Partial Indexes (Active & Filtered Data)
-To reduce index size and memory overhead, partial indexes are applied to frequently filtered active subsets.
-* **Active Sales Orders:** Index on `sale_order(id)` where `state NOT IN ('cancel', 'done')` to optimize active cart and fulfillment dashboard queries.
-* **Dropship Vendors:** Index on `res_partner(id)` where `is_dropship_vendor = TRUE` for rapid procurement routing.
+- Use unique constraints/indexes for provider/event/idempotency keys that must not duplicate.
+- Index common ownership, status, timestamp and external-ID filters only when query evidence justifies them.
+- Prefer compound indexes matching actual filter/order patterns.
+- Do not add redundant indexes hidden inside ORM definitions without migration review.
+- Measure slow queries in the target environment before large speculative indexing changes.
 
-### 2.3. Full-Text Search Indexes (PostgreSQL GIN)
-For internal administrative search fallback, Generalized Inverted Indexes (GIN) are used on textual columns.
-* `product_template(name, description)`: GIN index utilizing `to_tsvector` for robust internal catalog searching.
+## Source of truth
 
----
+- `elitedom-store/backend/alembic/versions/`
+- `elitedom-store/backend/app/modules/`
 
-## 3. Algolia Search Indexing Strategy (Storefront & Mobile App)
+## Verification
 
-As defined in `ADR-007`, Algolia handles client-facing product discovery to offload compute load from PostgreSQL.
+Migration CI proves schema creation/replay; query plans/load evidence justify performance changes.
 
-### 3.1. Record Structure & Attributes
-Each hardware product record pushed to Algolia includes structured facets and attributes to support the future PC Builder engine:
-* `objectID`: Unique Odoo product variant ID.
-* `name`: Product display title.
-* `list_price_egp`: Current computed retail price in EGP (used for numerical price filtering/sorting).
-* `socket_type`: Facet attribute (e.g., `LGA1700`, `AM5`).
-* `ram_type`: Facet attribute (e.g., `DDR4`, `DDR5`).
-* `form_factor`: Facet attribute (e.g., `ATX`, `ITX`).
-* `power_wattage_draw`: Integer attribute for power supply compatibility checks.
-* `in_stock`: Boolean attribute reflecting real-time inventory availability from Odoo multi-warehouse routing.
+## Change policy
 
-### 3.2. Ranking & Relevance Configuration
-* **Custom Ranking:** Prioritize products with active stock (`in_stock: true`) and high conversion metrics.
-* **Typo Tolerance:** Enabled with strict prefix searching on part numbers and model names (e.g., searching "i7-147" instantly returns "Intel Core i7-14700K").
-
-### 3.3. Real-Time Synchronization Pipeline
-* **Webhook / Middleware Trigger:** Whenever product stock levels change in Odoo 17 or prices are updated via currency rate shifts, FastAPI background workers push incremental index updates to Algolia via REST API.
-
----
-
-## 4. Cache & Memory Indexing Strategy (Redis)
-
-Redis is deployed as an in-memory data store for transient operational data:
-* **User Sessions & JWT Blacklists:** Stored with automatic TTL (Time-To-Live) expiration to manage secure customer and staff sessions.
-* **Cart Persistence:** Temporary guest and user shopping carts are indexed by session tokens for sub-millisecond retrieval before checkout conversion.
-* **Currency Exchange Rate Cache:** Daily USD/EGP rates fetched from the financial ledger are cached in Redis to avoid redundant database reads during storefront price calculations.
-
----
-
-## 5. Maintenance, Monitoring & Optimization
-
-* **Index Bloat Monitoring:** Regular execution of PostgreSQL statistics queries (`pg_stat_user_indexes`) to identify unused or bloated indexes.
-* **Vacuum and Analyze:** Automated nightly vacuum schedules to maintain optimal B-Tree index health.
-* **Query Performance Logging:** Slow query logging enabled in PostgreSQL (threshold > 200ms) to detect unindexed analytical queries from the admin reporting dashboard.
-
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

@@ -1,28 +1,41 @@
-# Distributed Tracing Standards (TRACING.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Distributed Tracing"
+status: reference
+owner: operations
+document_type: observability-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Distributed Tracing scope or referenced implementation sources change."
 ---
 
-## 1. Overview
-Distributed tracing allows us to track the lifecycle of a single request as it propagates across multiple services (e.g., from the FastAPI storefront API, through background workers, to the Odoo 17 ERP backend and PostgreSQL database).
+# Distributed Tracing
 
-## 2. Core Concepts
-* Trace: Represents the complete end-to-end journey of a request, composed of multiple spans.
-* Span: A single timed operation within a trace, containing a name, start time, duration, attributes, and events.
-* Context Propagation: The mechanism of passing trace identifiers (`traceparent` header) across HTTP boundaries between FastAPI and Odoo 17.
+## Purpose
 
-## 3. Implementation Standards (OpenTelemetry)
-* SDK Integration: All microservices must initialize the OpenTelemetry SDK on startup.
-* W3C Trace Context: Mandatory use of W3C standard headers (`traceparent`) for propagating trace state across HTTP requests via `httpx`.
-* Database Tracing: Automatically instrument SQLAlchemy and async PostgreSQL drivers to capture SQL query durations and execution plans within traces.
+Documents optional OpenTelemetry trace export and safe usage.
 
-## 4. Sampling Strategies
-* Production Environment: Use a probabilistic sampler (e.g., 10% to 20% sample rate) for normal traffic to balance storage costs and visibility.
-* Error Tracing: Force 100% sampling for any request that results in an HTTP 5xx error, database deadlock, or unhandled exception.
+## Reference
 
----
-End of Document
+### Configuration
+
+`OTEL_SERVICE_NAME`, exporter endpoint and trace sample ratio configure optional export.
+
+### Safety
+
+Exporter URL must be HTTPS or an allowed internal service URL. Spans must not include secrets/payment/auth material.
+
+### Scope
+
+Tracing helps correlate FastAPI requests and integration latency but does not replace provider receipts, audit logs or database state.
+
+### Sampling
+
+Production sampling is an operational trade-off; a trace sample ratio is not an SLO.
+
+## Source of truth
+
+- `elitedom-store/backend/app/observability.py`
+- `elitedom-store/backend/app/config.py`
+
+## Maintenance rule
+
+This page is a curated reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.

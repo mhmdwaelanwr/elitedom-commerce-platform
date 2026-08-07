@@ -1,57 +1,133 @@
-# Elitedom Store — Go-Live Readiness Checklist
+---
+title: "Go-Live Checklist"
+status: operational
+owner: operations
+document_type: runbook-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Go-live gates, deployment topology, provider requirements, UAT matrix, recovery evidence, or launch-control behavior changes."
+---
 
-This checklist separates what is implemented in the repository from the operational work required before accepting real customer money.
+# Go-Live Checklist
 
-## Implemented in the platform
+## Purpose
 
-- Odoo 17 addon with signed, idempotent outbox delivery and retry/dead-letter handling.
-- Odoo product, inventory, and order-status webhooks into FastAPI.
-- PostgreSQL-backed catalogue, orders, customers, warranty, suppliers, and reporting.
-- Staff catalogue CRUD, product image upload, gallery management, publish/archive controls, and reasoned stock adjustment.
-- Persistent Docker media volume and a live API-driven storefront without silent production demo fallback.
-- Stripe webhook reconciliation boundary, background workers, CI, real PostgreSQL migration replay, Odoo addon installation tests, and production Compose separation.
+Provides the compact operator gate list used immediately before production launch. The detailed procedure, failure semantics, and evidence guidance are in `GO_LIVE_RUNBOOK.md`.
 
-## Blocking work before public launch
+## Release identity
 
-### Commercial and legal
+- [ ] Exact immutable `release_ref` recorded.
+- [ ] Target environment recorded as production.
+- [ ] Release owner and rollback owner identified.
+- [ ] Previous known-good application ref identified.
 
-- Register the selling entity, tax profile, invoicing process, and any Egyptian e-invoicing obligations with qualified accounting/legal advisers.
-- Publish reviewed Terms of Sale, Privacy Policy, Cookie Policy, shipping policy, warranty terms, and refund/return policy.
-- Define chargeback, fraud review, damaged-delivery, cancellation, and RMA operating procedures.
+## Repository qualification
 
-### Payments and finance
+- [ ] Backend lint/tests green on the release candidate.
+- [ ] Frontend lint/type/design/build checks green.
+- [ ] PostgreSQL fresh upgrade and downgrade/replay checks green.
+- [ ] Odoo 17 clean addon install/tests green.
+- [ ] Development/production Docker Compose validation green.
+- [ ] Launch acceptance asset validation green.
+- [ ] Repository and documentation hygiene green.
 
-- Complete Stripe or chosen payment-provider KYC and switch from test credentials only after a controlled live-payment rehearsal.
-- Configure production webhook endpoints, reconciliation reports, settlement accounts, refund permissions, and finance-owner alerts.
-- Verify VAT and invoice calculations against the actual product/tax model.
+## Production configuration
 
-### Fulfilment and suppliers
+- [ ] `DEBUG=false`.
+- [ ] Allowed hosts are explicit and contain no wildcard.
+- [ ] CORS origins are explicit production HTTPS origins.
+- [ ] `STAFF_MFA_REQUIRED=true`.
+- [ ] `RATE_LIMIT_BACKEND=redis`.
+- [ ] Core application/JWT/database/Redis secrets are generated, strong, and appropriately distinct.
+- [ ] Metrics are disabled or protected with the required strong bearer token.
+- [ ] Public storefront/API URLs are correct and HTTPS.
+- [ ] Proxy/TLS/DNS configuration is verified for the target domains.
 
-- Load the real SKU catalogue, supplier contracts, landed costs, lead times, verified stock, warranty terms, and approved product media.
-- Sign courier contracts and implement or document booking, label, tracking, failed-delivery, and cash-on-delivery reconciliation flows.
-- Run warehouse receiving, picking, packing, serial capture, stock-count, and returns drills in Odoo.
+## Data and migrations
 
-### Production infrastructure
+- [ ] Expected Alembic head confirmed for the deployed code.
+- [ ] Application database backup created.
+- [ ] Odoo database backup created.
+- [ ] Restore drill completed in an isolated target and evidence captured.
+- [ ] Migration/rollback compatibility reviewed for data that may be written after launch.
+- [ ] No destructive cleanup/reset command is part of normal deployment.
 
-- Provision a production domain, TLS, DNS, reverse-proxy routes, firewall rules, and protected admin access.
-- Replace the single-host media volume with S3/R2-compatible object storage and CDN before horizontal scaling.
-- Configure encrypted off-site PostgreSQL/Odoo/media backups and complete a restore drill.
-- Add paging alerts for API errors, queue backlog, Odoo dead letters, payment webhook failures, disk capacity, backup age, and certificate expiry.
-- Store secrets in a managed secret store and rotate all template/development credentials.
+## Runtime readiness
 
-### Quality, security, and performance
+- [ ] Storefront reachable over public HTTPS.
+- [ ] API `/health/live` succeeds.
+- [ ] API `/health/ready` succeeds with dependencies ready.
+- [ ] Celery worker/beat are healthy for configured workloads.
+- [ ] Odoo integration endpoint is reachable and authenticated.
+- [ ] No unexplained critical/error storm exists in logs.
+- [ ] Metrics/tracing are functioning as configured without secret/PII leakage.
 
-- Complete staging UAT for browse → cart → checkout → payment → Odoo order → shipment → delivery → return/refund.
-- Run load tests with the expected launch catalogue and traffic profile.
-- Perform dependency, container, OWASP, permission, rate-limit, and penetration reviews.
-- Verify accessibility, responsive behavior, Arabic/RTL requirements, and representative devices/browsers.
+## Provider acceptance
 
-### Growth and discoverability
+- [ ] Paymob card/wallet methods configured for the intended launch path.
+- [ ] Paymob payment initiation completed against the target merchant environment.
+- [ ] Paymob verified callback processed correctly and duplicate callback remained idempotent.
+- [ ] Paymob refund/reconciliation path accepted.
+- [ ] Google Sign-In accepted in the target environment.
+- [ ] Apple Sign-In accepted in the target environment.
+- [ ] Twilio OTP send/verify/resend/abuse behavior accepted.
+- [ ] Odoo catalogue/inventory/order/shipment round trip accepted.
+- [ ] Optional providers are either tested when enabled or explicitly recorded as disabled.
 
-- Add production SEO metadata, sitemap, robots rules, canonical URLs, product structured data, social cards, and analytics consent.
-- Configure transactional email/SMS sender verification, templates, bounce handling, and support mailbox ownership.
-- Define launch dashboards for conversion, payment failures, stock-outs, fulfilment time, returns, and customer support.
+## Customer and staff UAT
 
-## Release decision
+- [ ] English storefront critical journeys accepted.
+- [ ] Arabic/RTL storefront critical journeys accepted.
+- [ ] Light/dark/system themes accepted on critical screens.
+- [ ] Mobile/tablet/desktop responsive smoke accepted.
+- [ ] Keyboard/focus/accessibility smoke accepted.
+- [ ] Authentication/session/account/address journeys accepted.
+- [ ] Catalogue/search/product/cart journeys accepted.
+- [ ] Checkout/payment success/failure/pending/retry behavior accepted.
+- [ ] Order history/fulfillment/shipping accepted.
+- [ ] Return/refund/warranty/RMA journeys accepted.
+- [ ] Admin RBAC/MFA/audit/catalogue/payment/integration/launch-control journeys accepted for representative roles.
 
-The repository is suitable for a controlled staging pilot after the catalogue/Odoo package is deployed. It is not production-ready until every launch blocker above has an accountable owner, evidence, and rollback procedure.
+## External smoke and observability
+
+- [ ] Public launch smoke executed using `.github/workflows/launch-smoke.yml` or equivalent `live_smoke.py` invocation.
+- [ ] `robots.txt` and `sitemap.xml` verified.
+- [ ] Defensive security headers verified by the smoke path.
+- [ ] Logs available to the operating team.
+- [ ] Metrics scrape verified through the protected boundary when enabled.
+- [ ] Tracing export verified when enabled.
+- [ ] Alert routing reaches the intended operator/on-call path.
+
+## Rollback readiness
+
+- [ ] Previous image/ref can be redeployed.
+- [ ] Traffic/DNS/proxy reversal procedure is known.
+- [ ] Database compatibility with the previous version is understood.
+- [ ] Provider/webhook configuration reversal requirements are documented.
+- [ ] Stop conditions for rollback vs forward-fix are agreed.
+- [ ] Rollback drill/evidence recorded for the release.
+
+## Launch-control approval
+
+- [ ] Automatic launch blockers are clear for the target environment.
+- [ ] Required manual gates are recorded for the exact release/environment.
+- [ ] Every `passed` gate has a non-secret evidence reference.
+- [ ] Every `waived` gate has explicit rationale and an accepted risk owner.
+- [ ] Final sign-off is recorded before opening traffic.
+- [ ] Post-cutover observation ownership remains active after traffic opens.
+
+## Source of truth
+
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/launch-smoke.yml`
+- `elitedom-store/scripts/live_smoke.py`
+- `elitedom-store/backend/app/modules/admin/control_service.py`
+- `elitedom-store/backend/app/tests/integration/test_stage10_launch_acceptance.py`
+
+## Verification
+
+This checklist is complete only when its items are backed by the exact release candidate's CI and target-environment evidence. A checked box without evidence where the launch control requires evidence is not equivalent to a passed gate.
+
+## Maintenance rule
+
+Keep this checklist synchronized with `GO_LIVE_RUNBOOK.md` and the backend launch-control gate definitions. Add/remove checklist items in the same change that changes required release evidence.

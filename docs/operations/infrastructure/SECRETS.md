@@ -1,57 +1,41 @@
-# Secrets Management & Credential Security Specification (SECRETS.md)
-
-**Document Classification:** Internal / Security & Infrastructure  
-**Version:** 1.0  
-**Status:** Approved / Production Ready  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration (FastAPI Backend, Docker, Linux Environment)  
-
+---
+title: "Secrets Management"
+status: current
+owner: operations
+document_type: operations
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Secrets Management behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Security Philosophy
-This document defines the policies, storage mechanisms, and lifecycle management rules for all sensitive credentials, private keys, and API tokens utilized within the **Elitedom Store** platform. Adhering to a strict zero-trust security posture, secrets must never reside in plain text within source code repositories, container images, or unsecured configuration files.
+# Secrets Management
 
----
+## Purpose
 
-## 2. Classification of Sensitive Assets
+Defines handling, rotation and repository boundaries for credentials and sensitive configuration.
 
-Secrets managed within the platform are categorized into five primary tiers:
+## Current state
 
-| Asset Category | Specific Secrets | Storage / Injection Method |
-| :--- | :--- | :--- |
-| **Database Credentials** | PostgreSQL master password, connection strings | Docker Compose Environment File (`.env.production`) |
-| **Cryptographic Keys** | FastAPI `SECRET_KEY`, JWT signing keys, Hedera Operator Private Key | Secure Volume Mount / Environment Variables |
-| **ERP Integration Tokens** | Odoo XML-RPC admin integration keys | Encrypted Secret Store |
-| **Third-Party APIs** | ZeptoMail API tokens, Stripe/Payment keys, Twilio credentials | Environment Variables (`.env.production`) |
-| **Cache & Broker Secrets** | Redis master AUTH password | Docker Secret / Environment Variable |
+The repository contains variable names/placeholders only. Core production secrets include application/JWT/database/Redis/metrics credentials plus enabled-provider keys, OAuth/provider secrets and webhook verification material.
 
----
+## Invariants and controls
 
-## 3. Storage & Access Control Policies
+- Generate high-entropy values; production validation rejects known placeholders/weak core secrets.
+- Keep `SECRET_KEY` and `JWT_SECRET_KEY` distinct.
+- Rotate compromised secrets at the provider/runtime first; Git history cleanup alone is not remediation.
+- Scope provider credentials to least privilege and separate staging/production.
+- Do not place secrets in PR text, screenshots, logs, test fixtures or Markdown.
+- Document rotation procedures by secret category without recording actual secret values.
 
-1. **Strict File Permissions:** On production Ubuntu Linux hosts, all `.env` files containing production secrets must enforce restricted POSIX file permissions:
-   ```bash
-   chmod 600 .env.production
-   chown root:root .env.production
-   ```
-2. **Container Isolation:** Secrets are injected into containers at runtime via Docker environment files or secure volumes. They are strictly inaccessible from outside the isolated Docker bridge network (`elitedom-net`).
-3. **Repository Exclusion:** All secret files (`.env`, `.env.production`, private key files `.pem`, `.key`) are explicitly listed in `.gitignore` to prevent accidental commits to version control.
+## Source of truth
 
----
+- `elitedom-store/.env.example`
+- `elitedom-store/backend/app/config.py`
+- `SECURITY.md`
 
-## 4. Credential Rotation & Lifecycle Management
+## Verification
 
-* **Rotation Schedule:** Critical secrets (such as database passwords, JWT signing keys, and payment gateway tokens) must be rotated semi-annually or immediately upon any suspected security perimeter breach.
-* **Audit Logs:** Administrative access and secret retrieval operations are tracked through centralized system logs. Integration actions with the Hedera Consensus Service (HCS) maintain a cryptographic audit trail of critical transactions.
+Secret-manager/runtime inspection and provider rotation tests are operational evidence; repository hygiene checks prevent tracked `.env` files.
 
----
+## Change policy
 
-## 5. Incident Response for Compromised Secrets
-
-In the event of a credential leak:
-1. **Immediate Revocation:** Revoke the compromised API token or database user privileges instantly via the respective provider dashboard or database console.
-2. **Key Regeneration:** Generate replacement credentials and update the production environment variables securely.
-3. **Container Restart:** Restart affected container services (`elitedom-backend`, `elitedom-celery`, `elitedom-odoo`) to purge old memory state.
-4. **Post-Incident Review:** Conduct a security audit to determine the vector of exposure.
-
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

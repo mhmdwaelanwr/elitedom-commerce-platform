@@ -1,40 +1,42 @@
-# Typeform Integration Specification
-
-**Document Classification:** Internal / Integration
-**Version:** 1.0
-**Status:** Planned / Production Readiness
-**Target System:** Elitedom Storefront, FastAPI Backend
-
+---
+title: "Typeform Intake Plan"
+status: planned
+owner: architecture
+document_type: integration
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Typeform Intake Plan behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Purpose
+# Typeform Intake Plan
 
-Typeform is used for customer-facing warranty registration,
-RMA (Return Merchandise Authorization) submissions, and
-customer satisfaction surveys.
+## Purpose
 
-## 2. Use Cases
+Documents the Typeform Intake Plan boundary, implementation status, security controls and operational enablement requirements.
 
-- Warranty registration
-- RMA claim submission
-- Customer satisfaction surveys
+## Current state
 
-## 3. Integration Flow
+Typeform is a planned intake adapter for customer-facing warranty/RMA workflows. The current warranty service explicitly keeps domain rules reusable by a future Typeform/Odoo intake adapter; there is no trusted Typeform runtime adapter that may bypass order ownership, serial or warranty validation.
 
-Customer
-→ Typeform
-→ FastAPI webhook/API
-→ Elitedom RMA/Warranty module
-→ PostgreSQL
-→ Odoo / Zoho where applicable
+## Invariants and controls
 
-## 4. Security
+- Typeform submissions must enter through the same domain validation as first-party requests.
+- External form data is untrusted and may contain PII/support evidence.
+- Future webhook/API ingestion requires authenticity/idempotency and mapping tests.
+- Do not claim Typeform is an implemented core dependency today.
 
-- Validate incoming webhook signatures where supported.
-- Never trust client-submitted identifiers without server-side validation.
-- Do not store unnecessary sensitive information from form submissions.
+## Enablement and failure mode
 
-## 5. Status
+Future enablement requires an implemented adapter plus security/privacy review and UAT.
 
-Typeform is a production dependency for the documented
-warranty/RMA workflows, subject to final integration validation.
+## Source of truth
+
+- `elitedom-store/backend/app/modules/warranty/service.py`
+- `elitedom-store/backend/app/modules/warranty/router.py`
+
+## Verification
+
+Run relevant unit/integration tests and configuration validation. Future enablement requires an implemented adapter plus security/privacy review and UAT.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

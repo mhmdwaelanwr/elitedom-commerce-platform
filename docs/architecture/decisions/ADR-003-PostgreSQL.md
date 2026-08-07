@@ -1,37 +1,38 @@
-# ADR-003: Selection of PostgreSQL as Primary Database Management System
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-003 — PostgreSQL 15"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted
 ---
 
-## 1. Context and Problem Statement
-The Elitedom Store platform requires a powerful, reliable, and fully ACID-compliant relational database management system to handle complex business domains, including customer profiles, multi-level product catalogs, inventory tracking, multi-currency ledgers, and sales orders. Furthermore, since our core enterprise backend is powered by Odoo 17 ERP, we need to select a database engine that ensures seamless integration, strict traceability, and optimal performance for both e-commerce operations and enterprise management.
+# ADR-003 — PostgreSQL 15
 
-## 2. Decision Drivers
-* Native database requirement and deep integration compatibility with Odoo 17 ERP.
-* Strict ACID compliance and data integrity guarantees for financial accounting and inventory transactions.
-* Robust support for complex relational schemas, foreign keys, constraints, and audit logs.
-* Proven capability to support strict traceability, hardware compatibility engines, and dynamic multi-currency pricing.
+## Status
 
-## 3. Considered Options
-* **Option 1:** NoSQL Document Stores (e.g., MongoDB) for flexible schema design.
-* **Option 2:** Alternative Relational Databases (e.g., MySQL / MariaDB).
-* **Option 3:** PostgreSQL relational database management system.
+Accepted
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (PostgreSQL)**. PostgreSQL shall serve as the primary database management system running via Odoo 17 ERP, supporting strict traceability, hardware compatibility engines, and dynamic multi-currency pricing.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Flawless native compatibility with Odoo 17 ERP, eliminating middleware translation layers for database queries within the ERP boundary.
-* Superior handling of complex transactions, relational data structures (`res_partner`, `product_product`, `stock_lot`, `sale_order`), and data integrity enforcement.
-* Extensive community tooling, backup mechanisms, and robust indexing strategies.
+Commerce requires transactional consistency, constraints, relational queries and mature operational tooling.
 
-### Negative Consequences / Trade-offs
-* Requires careful resource planning and connection pooling to handle concurrent heavy traffic from both the reactive web/mobile storefronts and internal ERP operations.
+## Decision
 
----
-**End of Document**
+Use PostgreSQL 15 for application persistence and for Odoo's database server, with distinct database names for the application and ERP.
+
+## Consequences
+
+- Alembic governs application schema evolution.
+- Fresh/latest/full migration replay is a CI gate.
+- Application and Odoo schemas must not be conflated.
+
+## Implementation evidence
+
+- `elitedom-store/infrastructure/docker-compose.yml`
+- `elitedom-store/backend/alembic/`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

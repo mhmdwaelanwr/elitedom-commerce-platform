@@ -1,195 +1,67 @@
-# Elitedom Store - Database ERD & Schema Specification
-
-**Document Classification:** Internal  
-**Version:** 3.0  
-**Status:** Approved / Production Ready  
-**Owner:** Mohamed Anwar  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration (PostgreSQL 15)
-
+---
+title: "Database Relationship Map"
+status: reference
+owner: architecture
+document_type: database-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Aggregate relationships, ORM ownership, migration constraints, or launch-evidence persistence changes."
 ---
 
-## 1. Executive Summary & Schema Philosophy
-The relational database architecture for Elitedom Store running on PostgreSQL via Odoo 17 ERP is built to support:
-* **Strict Traceability:** Full unique Serial Number (S/N) tracking per high-value unit for warranty validation.
-* **Hardware Compatibility Engine:** Dedicated specification attributes to power future PC Builder algorithms and mobile applications.
-* **Dynamic Multi-Currency & Margin Rules:** Live USD exchange rate integration with automated EGP retail recalculations to protect profit margins.
-* **Multi-Tier B2B Pricing:** Automated quantity-break pricelists for corporate and educational clients.
-* **API & Mobile Readiness:** Decoupled design ensuring smooth REST/GraphQL API consumption for web and future native mobile apps.
+# Database Relationship Map
 
----
+## Purpose
 
-## 2. Entity Relationship Matrix & Cardinalities
+Summarizes the most important persisted aggregate relationships in the FastAPI application database. This is a navigational ERD-level view; Alembic migrations and SQLAlchemy models remain authoritative for exact columns, foreign keys, indexes, nullability, and constraint names.
 
-| Source Entity | Cardinality | Target Entity | Relationship Context |
-| :--- | :---: | :--- | :--- |
-| `product_product` | **1 : N** | `stock_lot` | One product variant has many unique individual Serial Numbers. |
-| `res_partner` | **1 : N** | `product_pricelist` | Partners (B2B/B2C) are assigned specific pricing tiers. |
-| `sale_order` | **1 : N** | `stock_lot` | An order assigns specific Serial Numbers to a customer. |
-| `sale_order` | **1 : 1** | `purchase_order` | A dropshipped sale auto-triggers one supplier purchase order. |
-| `res_currency` | **1 : N** | `res_currency_rate` | One currency tracks historical exchange rates over time. |
+## Core relationship map
 
----
+### Identity and access
 
-## 3. Detailed Data Models & Schema Definitions
+A user/customer identity is related to persisted authentication sessions and identity-verification state. Staff authorization adds database-backed role/permission assignments and audit records. Staff MFA credentials and session MFA verification are separate persisted security concerns rather than frontend-only state.
 
-### 3.1. Users, Partners & App Tokens (`res.partner`)
-Represents all system actors including retail customers, B2B institutional buyers, warehouse staff, and suppliers.
+### Customer → address/cart/order
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the partner record. |
-| `name` | Varchar(128) | Not Null | Full name or company legal name. |
-| `company_type` | Varchar(32) | Default: 'person' | Entity type (`person` for B2C, `company` for B2B). |
-| `email` | Varchar(128) | Unique, Index, Not Null | Primary email address used for login and notifications. |
-| `phone` | Varchar(20) | Not Null, Index | Egyptian mobile number formatted for SMS notifications (Twilio). |
-| `pricelist_id` | Integer | Foreign Key (`product.pricelist.id`), Nullable | Assigned price tier (Standard Retail vs. B2B Corporate). |
-| `is_dropship_vendor` | Boolean | Default: False | Flag for third-party dropship suppliers. |
-| `mobile_fcm_token` | Varchar(255) | Nullable | Push notification token for future Mobile App integration. |
-| `governorate` | Varchar(64) | Nullable | Egyptian delivery governorate for shipping calculation. |
-| `street_address` | Text | Nullable | Detailed residential or corporate street address. |
-| `created_at` | Timestamp | Default: CURRENT_TIMESTAMP | Timestamp when the user account was created. |
+Customer identity owns account-scoped commerce objects such as addresses, persisted carts, and orders. Anonymous cart state can exist before authentication and is reconciled through application rules rather than by trusting browser ownership claims.
 
-### 3.2. Hardware Product Catalog & Compatibility Matrix (`product.template` & `product.product`)
-Stores product master data along with technical hardware compatibility parameters for future PC Builder engines.
+### Order → order lines → product
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the product template. |
-| `name` | Varchar(255) | Not Null, Index | Hardware display name (e.g., Intel Core i7-14700K, ASUS RTX 4070). |
-| `sku` | Varchar(64) | Unique, Not Null, Index | Stock Keeping Unit code synchronized with Odoo ERP. |
-| `tracking` | Varchar(32) | Default: 'serial' | Inventory tracking mode (`serial` for S/N tracking, `barcode` for standard items). |
-| `base_cost_usd` | Decimal(10,2) | Not Null | Sourcing cost in foreign currency. |
-| `target_margin_percent` | Decimal(5,2) | Not Null | Profit margin applied to cost. |
-| `list_price` | Decimal(10,2) | Not Null | Final computed retail selling price in EGP. |
-| `category_id` | Integer | Foreign Key (`product.public.category.id`) | Associated public category in the multi-level tree. |
-| `is_dropship_enabled`| Boolean | Default: False | Flag indicating if out-of-stock items route to automated dropship POs. |
-| **Compatibility Matrix:** | | | |
-| `socket_type` | Varchar(32) | Nullable | Motherboard/CPU socket type (e.g., `LGA1700`, `AM5`). |
-| `ram_type` | Varchar(32) | Nullable | Supported RAM memory type (e.g., `DDR4`, `DDR5`). |
-| `form_factor` | Varchar(32) | Nullable | Case/Motherboard form factor (e.g., `ATX`, `Micro-ATX`, `ITX`). |
-| `power_wattage_draw`| Integer | Default: 0 | Power consumption requirement in Watts. |
-| `pcie_gen` | Varchar(32) | Nullable | PCI Express generation slot (e.g., `PCIe 4.0 x16`, `PCIe 5.0`). |
+An order owns line snapshots for the commercial transaction. Product catalogue state can change later, so historical order totals/line values are not reconstructed blindly from current product pricing. Inventory and fulfillment references connect operational state to the order lifecycle.
 
-### 3.3. Unique Serial Number Tracking (`stock.lot`)
-Ensures full auditability and handles item-level warranty claims for high-value hardware.
+### Order → payment attempt → refund
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the serial lot record. |
-| `name` | Varchar(128) | Unique, Index, Not Null | Physical Serial Number (S/N) scanned at intake. |
-| `product_id` | Integer | Foreign Key (`product.product.id`), Not Null | Associated hardware item variant. |
-| `sale_order_id` | Integer | Foreign Key (`sale.order.id`), Nullable | Sales order through which the serial was sold to the customer. |
-| `warranty_expiration_date`| Date | Nullable | Expiration timeline calculated automatically upon sale date. |
+Payment attempts/results belong to an order while retaining provider-specific identifiers and state. Refund records/requests are related to payment/order state but follow explicit refund transitions instead of mutating the original payment record as an unstructured flag.
 
-### 3.4. Multi-Currency & Rate Ledger (`res.currency` & `res.currency.rate`)
-Controls dynamic pricing based on foreign currency fluctuations against EGP.
+### Product → category/media/inventory/supplier mapping
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique currency record identifier. |
-| `name` | Varchar(8) | Unique, Not Null | Currency code (`EGP`, `USD`). |
-| `rate` | Decimal(12,6) | Not Null | Exchange rate relative to the base company currency. |
-| `date` | Timestamp | Default: CURRENT_TIMESTAMP | Timestamp of the rate update. |
+Product records connect catalogue representation to categories/content, media, inventory/serial information, supplier relationships, and ERP identifiers. Media metadata and storage objects are coordinated through application lifecycle rules rather than represented as arbitrary filesystem paths.
 
-### 3.5. B2B Tiered Pricelists (`product.pricelist` & `product.pricelist.item`)
-Manages bulk purchase rules, corporate discounts, and educational pricing tiers.
+### Order/product → warranty/RMA
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the pricelist rule. |
-| `pricelist_id` | Integer | Foreign Key (`product.pricelist.id`), Not Null | Parent pricelist name (e.g., "Educational Tier", "SME Wholesale"). |
-| `min_quantity` | Integer | Default: 1 | Minimum quantity threshold to trigger discount (e.g., 10+ units). |
-| `discount_percent` | Decimal(5,2) | Not Null | Automated discount percentage applied to base price. |
+Warranty/RMA eligibility relates claims to owned commerce history and product/serial information where applicable. Eligibility is evaluated through service rules; persistence alone is not authorization.
 
-### 3.6. Sales & Checkout Orders (`sale.order` & `sale.order.line`)
-Manages shopping carts, persistent sessions, checkout transactions, and order states synced with Odoo.
+### External event → receipt/outbox/delivery state
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique internal identifier for the order. |
-| `name` | Varchar(64) | Unique, Not Null | Public Order Number (e.g., SO2026-00142). |
-| `partner_id` | Integer | Foreign Key (`res.partner.id`), Not Null | Customer who placed the order. |
-| `state` | Varchar(32) | Not Null, Default: 'draft' | Order lifecycle state (`draft`, `sent`, `sale`, `done`, `cancel`). |
-| `payment_method` | Varchar(32) | Not Null | Selected payment mode (`credit_card`, `mobile_wallet`, `cod`). |
-| `payment_status` | Varchar(32) | Not Null, Default: 'pending' | Gateway settlement status (`pending`, `paid`, `failed`, `refunded`). |
-| `amount_total` | Decimal(10,2) | Not Null | Total order amount inclusive of shipping and taxes. |
-| `odoo_order_id` | Integer | Nullable, Index | Corresponding order ID inside the Odoo ERP database. |
-| `shipping_address` | Text | Not Null | Snapshot of the delivery address at checkout time. |
+Inbound provider/ERP messages use receipt/idempotency data to prevent repeated business effects. Outbound integration work can use transactional outbox/delivery state so durable application changes and asynchronous external delivery are coordinated without cross-system transactions.
 
-### 3.7. Inventory & Fulfillment (`stock.picking` & `stock.move`)
-Handles warehouse picking slips, delivery dispatch, and dropshipping fulfillment routing.
+### Release/environment/gate → launch acceptance
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the picking operation. |
-| `name` | Varchar(64) | Unique, Not Null | Reference code for the warehouse transfer or picking slip. |
-| `sale_id` | Integer | Foreign Key (`sale.order.id`) | Associated customer sales order. |
-| `picking_type` | Varchar(32) | Not Null | Operation type (`incoming`, `outgoing`, `internal`, `dropship`). |
-| `state` | Varchar(32) | Not Null, Default: 'draft' | Fulfillment status (`draft`, `waiting`, `confirmed`, `assigned`, `done`). |
-| `courier_tracking_ref`| Varchar(128)| Nullable | External shipping courier tracking number. |
-| `supplier_po_ref` | Varchar(64) | Nullable | Associated Purchase Order number sent to dropship suppliers. |
+Manual launch evidence is scoped by `release_ref`, environment, and gate key. This uniqueness is what prevents a passed UAT/provider/recovery gate from a previous release from being inherited silently by a different release candidate.
 
-### 3.8. Warranty & RMA Management (`elitedom.rma.ticket`)
-Tracks customer return merchandise authorization and hardware warranty claims.
+## Database boundaries
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the RMA ticket. |
-| `ticket_number` | Varchar(64) | Unique, Not Null | Public RMA reference code (e.g., RMA-2026-891). |
-| `partner_id` | Integer | Foreign Key (`res.partner.id`), Not Null | Customer requesting the warranty service. |
-| `order_id` | Integer | Foreign Key (`sale.order.id`), Not Null | Original sales order containing the defective item. |
-| `reason` | Text | Not Null | Detailed description of the hardware defect or return reason. |
-| `evidence_media_url`| Varchar(512)| Nullable | Secure storage URL for attached photo/video proof. |
-| `status` | Varchar(32) | Default: 'pending_review' | Workflow status (`pending_review`, `approved`, `rejected`, `completed`). |
+The FastAPI application database and Odoo database are separate. No relationship in this document implies a cross-database foreign key. Cross-system identity is represented through provider/ERP identifiers and integration contracts.
 
-### 3.9. B2B Quotations & RFQ (`elitedom.b2b.rfq`)
-Manages institutional and bulk hardware purchase requests.
+## Source of truth
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique identifier for the B2B RFQ. |
-| `rfq_code` | Varchar(64) | Unique, Not Null | Reference number for the bulk quotation request. |
-| `partner_id` | Integer | Foreign Key (`res.partner.id`), Not Null | Verified B2B institutional client. |
-| `items_payload` | JSON | Not Null | Structured JSON payload of requested bulk items and quantities. |
-| `status` | Varchar(32) | Default: 'submitted' | RFQ status (`submitted`, `under_review`, `quoted`, `accepted`, `declined`). |
-| `validity_date` | Date | Nullable | Expiration date for custom corporate pricing proposals. |
+- `elitedom-store/backend/alembic/versions/`
+- `elitedom-store/backend/app/models.py`
+- `elitedom-store/backend/app/modules/`
+- `elitedom-store/backend/app/modules/admin/models.py`
 
-### 3.10. Loyalty Program Ledger (`elitedom.loyalty.ledger`)
-Tracks reward points accumulation and redemption for loyal customers.
+## Verification
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique ledger entry identifier. |
-| `partner_id` | Integer | Foreign Key (`res.partner.id`), Not Null | Customer owning the loyalty points. |
-| `points_delta` | Integer | Not Null | Number of points earned (positive) or redeemed (negative). |
-| `transaction_type` | Varchar(32) | Not Null | Action type (`purchase_earn`, `order_redemption`, `admin_adjustment`). |
-| `reference_order_id`| Integer | Foreign Key (`sale.order.id`), Nullable | Associated sales order tied to the points movement. |
+Use the Alembic migration graph, ORM models, database integration tests, and migration replay CI. For a generated physical ERD, generate it from the migrated schema rather than copying this narrative into a second schema definition.
 
-### 3.11. Web3 Audit & Hedera Immutable Ledger (`elitedom.hedera.audit`)
-Hashes payment transaction records onto the Hedera network for tamper-proof verification.
+## Maintenance rule
 
-| Field Name | Data Type | Constraints / Attributes | Description |
-| :--- | :--- | :--- | :--- |
-| `id` | Integer | Primary Key, Auto-increment | Unique audit log entry ID. |
-| `transaction_ref` | Varchar(128) | Not Null, Index | Internal payment transaction reference. |
-| `payload_hash` | Varchar(256) | Not Null | SHA-256 cryptographic hash of the receipt and payment details. |
-| `hedera_tx_id` | Varchar(128) | Unique, Not Null | Immutable transaction ID returned by the Hedera Consensus Service. |
-| `timestamp` | Timestamp | Default: CURRENT_TIMESTAMP | Exact time the hash was anchored to the blockchain. |
-
----
-
-## 4. Extended Draw.io ERD Diagram Rules
-
-When constructing the visual ERD in Draw.io, adhere to the following mapping logic:
-
-1. **Color Coding:**
-   * **Core Commerce:** Blue tables (`sale_order`, `res_partner`).
-   * **Inventory & Serials:** Green tables (`product_template`, `stock_lot`).
-   * **FinOps & Currency:** Yellow tables (`res_currency`, `product_pricelist`).
-2. **Serial Number Flow:** 
-   * Draw a **1:N** connection from `product_product` to `stock_lot`.
-   * Draw a **1:N** optional relation from `stock_lot` to `sale_order` to visually demonstrate how individual S/Ns attach to customer invoices.
-3. **Compatibility Hub:** 
-   * Group all hardware attributes inside `product_template` to indicate how the future PC Builder engine will query the schema efficiently.
----
-
+Update this map with changes to aggregate ownership, durable integration/reliability records, authentication/authorization persistence, payment/refund relationships, or launch acceptance. Do not copy every schema column into Markdown; that creates a competing source of truth.

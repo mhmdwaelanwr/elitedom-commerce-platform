@@ -1,67 +1,38 @@
-# C1 System Context - Elitedom Store
-
-Document Classification: Internal  
-Version: 1.0  
-Status: Approved  
-Owner: Solution Architecture  
-Target System: Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "C4 Level 1 — System Context"
+status: current
+owner: architecture
+document_type: c4
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "C4 Level 1 — System Context behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Introduction & Purpose
-This document defines the Level 1 System Context (C1) diagram and narrative for the Elitedom Store platform using the C4 architectural model. It establishes the high-level boundary of the system, identifying the key human users (actors) who interact with it, and the external software systems it integrates with to deliver a complete e-commerce and enterprise resource planning solution.
+# C4 Level 1 — System Context
 
----
+## Purpose
 
-## 2. System Context Diagram (Mermaid)
+Shows Elitedom in relation to people and external systems. This is a logical context view, not proof that every optional provider is enabled in production.
 
-```mermaid
-C4Context
-    title System Context diagram for Elitedom Store Platform
+## Current state
 
-    Person(customer, "Customer", "A user who browses products, searches the catalog, places online orders, and tracks shipments via Web or Mobile app.")
-    Person(admin, "Store Administrator", "Manages product catalog, pricing, user roles, security, and reviews financial and inventory reports.")
-    Person(warehouse, "Warehouse Staff", "Manages physical stock movements, picking, packing, and order fulfillment via mobile app and ERP interface.")
-    Person(supplier, "Supplier / Vendor", "Provides external dropshipping product feeds and supplier fulfillment updates.")
+Primary actors are customers, staff and release/operators. Core external systems are Odoo and Paymob. Twilio, SendGrid, ZeptoMail and Algolia have optional adapter implementations. Google/Apple provide external identity. Stripe remains a legacy payment boundary. Hedera is a disabled scaffold; Zoho and Typeform are not current runtime-critical integrations.
 
-    System_Boundary(elitedom_boundary, "Elitedom Store Platform") {
-        System(elitedom_platform, "Elitedom Platform", "Modular monolith e-commerce storefront, mobile app backend, middleware, and Odoo 17 ERP backbone handling core business logic, inventory, and accounting.")
-    }
+## Invariants and controls
 
-    System_Ext(stripe, "Stripe Payment Gateway", "Processes secure online credit card transactions and checkout sessions.")
-    System_Ext(twilio, "Twilio CPaaS", "Dispatches transactional SMS alerts and OTP verification codes.")
-    System_Ext(algolia, "Algolia Search", "Provides ultra-low latency product catalog search and faceted filtering.")
-    System_Ext(sendgrid, "SendGrid Email", "Sends transactional emails, order receipts, and shipping notifications.")
-    System_Ext(oci, "Oracle Cloud Infrastructure", "Provides cloud compute, container orchestration (Kubernetes), PostgreSQL database hosting, and secure backup storage.")
+- External systems are untrusted boundaries and require authentication/signature/provider validation as applicable.
+- Provider availability must not grant authorization or directly set trusted commerce state from the browser.
+- Optional integrations may be disabled without invalidating core local development.
 
-    Rel(customer, elitedom_platform, "Browses catalog, searches, purchases, and tracks orders using", "HTTPS / JSON API")
-    Rel(admin, elitedom_platform, "Configures business rules, catalogs, and ERP operations via", "HTTPS / Admin UI")
-    Rel(warehouse, elitedom_platform, "Updates stock levels, verifies serial numbers, and processes fulfillment via", "HTTPS / Mobile App")
-    Rel(supplier, elitedom_platform, "Sends dropship inventory data and updates via", "Webhooks / REST API")
+## Source of truth
 
-    Rel(elitedom_platform, stripe, "Authorizes payments, captures charges, and receives webhooks via", "REST API")
-    Rel(elitedom_platform, twilio, "Sends SMS and OTP verification messages via", "REST API")
-    Rel(elitedom_platform, algolia, "Synchronizes product indices and queries search filters via", "REST API")
-    Rel(elitedom_platform, sendgrid, "Dispatches transactional emails via", "REST API")
-    Rel(elitedom_platform, oci, "Runs containerized workloads and archives database backups on", "OCI Cloud Services")
-```
+- `elitedom-store/backend/app/main.py`
+- `elitedom-store/backend/app/integrations/`
+- `elitedom-store/backend/app/config.py`
 
----
+## Verification
 
-## 3. Scope and Boundaries
+Compare context actors/systems with imported provider adapters, configuration flags and current launch gates.
 
-### 3.1 In Scope (The Elitedom Platform)
-* Reactive Web Storefront & Mobile App: Client-facing applications allowing users to discover products, manage shopping carts, and execute secure checkouts.
-* Middleware & Modular Monolith Backend: Custom Python application modules managing business domains, authentication, order processing, and event-driven communication.
-* Odoo 17 ERP Backbone: The master system of record owning inventory management, procurement, sales orders, warehouse routing, and financial accounting.
-* PostgreSQL Database: Primary relational data store managing all transactional records and audit logs.
+## Change policy
 
-### 3.2 Out of Scope (External Systems)
-* Payment Processing (Stripe): Handling card tokenization, fraud detection, and banking transaction clearing.
-* SMS & Communications (Twilio): Global carrier delivery of text messages and verification codes.
-* Search Indexing (Algolia): External cloud-managed search index engine.
-* Email Delivery (SendGrid): SMTP and API-based email dispatch infrastructure.
-* Cloud Infrastructure (OCI): Virtual cloud networks, physical server hardware, and managed infrastructure services.
-
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

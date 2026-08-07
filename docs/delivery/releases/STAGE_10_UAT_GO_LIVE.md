@@ -1,93 +1,154 @@
-# Stage 10 — Tests, UAT, Go-Live & Launch Acceptance
+---
+title: "Stage 10 — UAT, Go-Live and Launch Acceptance"
+status: historical
+owner: delivery
+document_type: release-record
+verified_against: "release-history"
+review_trigger: "Historical release records are immutable except for factual corrections with an explicit audit note."
+---
 
-Stage 10 turns the merged Stage 0–9 platform into a release candidate with an explicit, auditable launch decision. It does **not** claim that third-party production credentials or merchant accounts have been accepted until an operator records evidence from the real provider environment.
+# Stage 10 — UAT, Go-Live and Launch Acceptance
 
-## Goals
+## Record status
 
-- preserve the five mandatory CI checks established in earlier stages;
-- add a dedicated launch-acceptance CI gate;
-- expose a safe Launch Control Plane to authorized staff;
-- persist manual UAT and operational sign-off with evidence references;
-- isolate every sign-off by immutable release reference and runtime environment;
-- provide a public external smoke runner for staging/production;
-- document deployment, backup/restore, provider acceptance, monitoring, and rollback;
-- make the release decision fail closed while blockers remain.
+This document is a historical delivery record for Stage 10. It records what the stage added and the acceptance model that existed at completion. Current launch behavior belongs to living operations/architecture documentation and executable code.
+
+## Objective
+
+Convert production readiness from an informal checklist into an auditable, release-specific decision that distinguishes repository/CI evidence from target-environment UAT, provider, recovery, monitoring, and rollback evidence.
+
+## Outcome
+
+Stage 10 added a backend **Launch Control Plane**, staff admin launch UI, release-scoped persistence, external public smoke workflow, launch-asset validation, and an executable go-live/rollback runbook. The stage deliberately did **not** treat green CI as proof that a public production environment or merchant/provider account was live-ready.
 
 ## Launch Control Plane
 
-The admin API exposes `GET /api/v1/admin/launch-readiness?release_ref=<sha-or-tag>` under `config.view` and `PATCH /api/v1/admin/launch-readiness/{gate_key}?release_ref=<sha-or-tag>` under `config.manage`.
+The control plane introduced two evidence classes:
 
-The `release_ref` is mandatory and must identify the exact release candidate, preferably the immutable Git commit SHA planned for deployment. Operator evidence is keyed by `(release_ref, environment, gate)` so a successful UAT, backup drill, provider acceptance, or rollback drill from an older build cannot silently satisfy a newer release.
+1. **Automatic gates** derived from runtime configuration and production safety invariants.
+2. **Manual operator gates** whose state is stored with verifier, time, notes, and evidence reference.
 
-Automatic gates are derived from safe runtime facts only. They never return secret values. They cover release scoping, production mode, debug state, staff MFA, distributed rate limiting, metrics protection, allowed hosts, HTTPS CORS, required provider configuration, media/CDN readiness, and tracing export.
+Manual gate state supports `pending`, `passed`, `failed`, and `waived`. A passed gate requires an evidence reference. A waiver requires rationale and remains a risk decision rather than being semantically equivalent to a successful test.
 
-Operator gates are stored in `elitedom_launch_acceptance` and support `pending`, `passed`, `failed`, and `waived`. A passed gate requires an evidence reference. A waiver requires explanatory notes. Every write is recorded in the Stage 7 administrative audit trail with the release/environment scope.
+The backend remains the authority for launch status; the admin UI only presents and records allowed operations through backend permissions.
 
-Overall states:
+## Release evidence isolation
 
-- `blocked`: at least one required gate is pending, failed, or automatically unsafe;
-- `conditional`: no blockers remain, but one or more warnings/waivers remain;
-- `ready`: all required gates pass and no warnings remain.
+A critical Stage 10 hardening change scoped launch evidence by **release reference + environment + gate**. This prevents a UAT/provider/recovery pass recorded for Release A from being inherited silently by Release B.
 
-The UI is available at `/admin/launch` and requires the operator to select the release reference before reading or writing launch evidence. It preserves EN/AR, RTL/LTR, responsive layouts, permission-aware read-only mode, loading, empty, and error states.
+The persistence model and integration test explicitly prove that evidence does not carry between release references. This rule is fundamental to current release acceptance semantics.
+
+## Automatic readiness gates
+
+The stage evaluated production-readiness configuration such as:
+
+- production/staging environment mode;
+- debug disabled;
+- staff MFA required;
+- Redis-backed rate limiting;
+- metrics protection when enabled;
+- safe hosts/CORS;
+- provider configuration requirements when a provider is enabled;
+- production media/CDN/object-storage configuration;
+- other fail-closed settings already implemented by configuration validation.
+
+Automatic gates do not prove that an external account works; they prove that the repository/runtime configuration satisfies the machine-verifiable contract.
 
 ## UAT matrix
 
-The following operator gates must be supported with evidence from the target staging/production environment for the exact release candidate being approved:
+The Stage 10 manual acceptance design covered:
 
-| Gate | Acceptance evidence |
-| --- | --- |
-| English storefront UAT | Recorded walkthrough covering search/catalog, product, cart, checkout, account, admin-visible order |
-| Arabic + RTL storefront UAT | Same flow in Arabic with RTL, locale formatting, no clipped or reversed controls |
-| Responsive + accessibility smoke | Mobile/tablet/desktop checks, keyboard navigation, visible focus, labels, contrast spot-check |
-| Paymob live flow | Sandbox or approved merchant environment payment + signed webhook + refund result |
-| Google Sign-In | Real configured client flow and callback |
-| Apple Sign-In | Real configured client flow and callback |
-| Twilio OTP | Real Egyptian phone delivery, verification, retry/rate-limit behavior |
-| Odoo round trip | Product/order/stock integration round trip with signed webhook behavior |
-| Fulfillment/refund | Reserve, fulfill, ship/deliver, return/refund path with idempotent retries |
-| Backup/restore | Fresh PostgreSQL restore and application readiness verification |
-| Monitoring/alerts | Metrics/logs/traces accessible to operators and alert delivery tested |
-| Rollback drill | Previous release restored with database compatibility and health checks |
+- English storefront critical journeys;
+- Arabic/RTL storefront critical journeys;
+- responsive and accessibility smoke;
+- Paymob payment/callback/refund acceptance;
+- Google Sign-In acceptance;
+- Apple Sign-In acceptance;
+- Twilio OTP acceptance;
+- Odoo catalogue/inventory/order/shipment round trip;
+- fulfillment, delivery, return and refund flows;
+- PostgreSQL backup and restore drill;
+- monitoring/alert-routing validation;
+- rollback drill.
 
-Evidence references may be GitHub run URLs, ticket IDs, runbook records, provider transaction references with sensitive values redacted, or internal test-report references. Do not paste secrets into the evidence or notes fields.
+These gates are environment-specific and require operator/provider evidence for the exact release candidate.
 
 ## External smoke
 
-`.github/workflows/launch-smoke.yml` is a manually dispatched workflow that runs `elitedom-store/scripts/live_smoke.py` against explicit storefront and API origins.
+Stage 10 added `.github/workflows/launch-smoke.yml` and `elitedom-store/scripts/live_smoke.py` for manual external verification of a deployed public environment.
 
-The runner verifies:
+The smoke path verifies public storefront/API behavior including storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, and defensive security headers. It is hardened to reject unsafe/private/internal targets and fail closed on redirects so the CI runner cannot be repurposed as an internal-network fetcher.
 
-1. storefront HTTP 200;
-2. `robots.txt` is present and advertises a sitemap;
-3. `sitemap.xml` is present;
-4. `/health/live` reports healthy and carries expected security headers;
-5. `/health/ready` reports PostgreSQL and Redis ready and carries expected security headers.
-
-Remote workflow execution accepts public HTTPS origins only. The script resolves DNS immediately before each request and rejects private, loopback, link-local, multicast, reserved, or unspecified addresses. HTTP redirects are disabled so a validated public target cannot redirect the runner to an unvalidated destination. `--allow-local` exists only for an explicitly developer-operated local smoke test and is prohibited by repository launch-asset validation in the remote workflow.
-
-The workflow saves `launch-smoke.json` as a 30-day artifact so its run URL/artifact can be referenced by a launch gate for the matching release candidate.
-
-## Dedicated CI launch gate
-
-The main CI keeps the existing five jobs and adds **Launch acceptance**. This job validates that the launch control-plane code, migration, UI, external smoke workflow, Stage 10 documentation, release scoping, redirect guard, and go-live runbook remain wired into the repository.
-
-The backend job also executes `test_stage10_launch_acceptance.py` as part of the complete test suite. That coverage explicitly proves that passing a gate for Release A leaves the same gate pending for Release B. The migration job exercises `0014_launch_acceptance` through fresh upgrade, latest downgrade/replay, and full downgrade/replay.
+Smoke execution emits machine-readable evidence/artifacts for the selected deployment without embedding production secrets in the repository.
 
 ## Known live-provider gates
 
-Repository CI cannot truthfully prove merchant/provider acceptance for Paymob, Google, Apple, Twilio, a production Odoo instance, DNS/TLS, SMTP delivery, CDN behavior, or alert routing. These remain explicit operator gates and must not be marked passed until tested with the real target configuration for the exact release reference.
+At Stage 10 completion, several launch requirements necessarily remained outside repository CI and required real target-account/environment acceptance:
 
-Production secrets stay deployment-managed. They are never committed, returned by the launch API, stored in launch notes, or embedded in smoke artifacts.
+- Paymob merchant credentials, payment-method IDs, public HTTPS callback/redirection URLs, payment/callback/refund execution;
+- Google OAuth production configuration and browser acceptance;
+- Apple Sign-In production configuration and browser acceptance;
+- Twilio production sender/messaging configuration and OTP delivery acceptance;
+- Odoo target deployment credentials/connectivity and round-trip operational acceptance;
+- DNS/TLS/public routing for storefront and API;
+- backup storage and successful restore evidence;
+- real monitoring/alert routing;
+- environment-specific UAT and rollback evidence.
 
-## Release decision
+The stage recorded these as explicit launch gates rather than marking them delivered merely because provider adapters existed in code.
 
-A merge of Stage 10 means the codebase contains the release-control mechanisms and automated tests. It is **not** equivalent to a live production launch. Actual go-live requires:
+## Go-live and rollback runbook
 
-- production/staging environment variables and generated secrets;
-- public HTTPS DNS/TLS endpoints;
-- provider credentials and callbacks provisioned;
-- the deployed candidate matching the release reference used for sign-off;
-- successful external smoke run;
-- required operator gates passed with evidence for that release;
-- release owner sign-off according to `elitedom-store/docs/GO_LIVE_RUNBOOK.md`.
+The stage added/updated an executable runbook covering:
+
+- pre-deployment release identity and ownership;
+- migration graph review;
+- application/Odoo backup and restore proof;
+- deployment and runtime readiness;
+- provider acceptance;
+- EN/AR/RTL/responsive/accessibility UAT;
+- public smoke execution;
+- monitoring/alerting;
+- rollback planning and stop conditions;
+- final release sign-off.
+
+Rollback planning explicitly distinguishes application rollback from destructive database downgrade/restore. Schema/data compatibility must be evaluated before choosing a recovery action.
+
+## Security and authorization controls
+
+Launch-control read/write operations reuse backend permission boundaries. Release evidence is audited; frontend visibility does not grant authority. The external smoke guard and provider/config fail-closed behavior preserve the project's existing security posture.
+
+## Persistence and migration
+
+Stage 10 added migration `0014_launch_acceptance` extending the Stage 9 MFA/session migration chain. The migration stores launch acceptance with release/environment scope and remains part of the repository's required fresh/latest/full migration replay tests.
+
+## Verification evidence
+
+Stage completion required:
+
+- backend integration coverage for launch acceptance permissions/evidence/release isolation;
+- migration 0014 fresh/latest/full replay;
+- frontend lint/type/production build;
+- Odoo clean install/module tests;
+- Docker Compose development/production validation;
+- Launch acceptance asset validation;
+- final PR CI on the exact Stage 10 head;
+- post-merge CI on `main`.
+
+## Limitations at completion
+
+Stage 10 completed the **software and process controls for launch acceptance**. It did not and could not create production merchant/OAuth/SMS/ERP accounts, issue production secrets, configure the final public infrastructure, or manufacture genuine UAT/recovery/provider evidence. Those remain release- and environment-specific operational responsibilities.
+
+## Current references
+
+For current behavior, use:
+
+- `../../architecture/README.md`
+- `../../operations/README.md`
+- `../../../elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+- `../../../elitedom-store/docs/GO_LIVE_CHECKLIST.md`
+- `../../../elitedom-store/docs/IMPLEMENTATION_STATUS.md`
+
+## Historical maintenance rule
+
+Do not rewrite this record to describe later implementation changes. Make only factual corrections to the Stage 10 record, and document subsequent changes in living documentation, a newer release record, or an ADR as appropriate.
