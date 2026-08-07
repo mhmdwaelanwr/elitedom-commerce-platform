@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.models import Partner
 from app.modules.admin.access import STAFF_ROLES
 from app.modules.auth.errors import InvalidMfaError, MfaRequiredError
@@ -27,7 +28,13 @@ from app.modules.auth.schemas import (
     MfaEnrollmentResponse,
     MfaStatusResponse,
 )
-from app.shared.exceptions import InsufficientPermissionsError, InvalidCredentialsError, ResourceConflictError
+from app.shared.exceptions import (
+    InsufficientPermissionsError,
+    InvalidCredentialsError,
+    ResourceConflictError,
+)
+
+settings = get_settings()
 
 
 def _now() -> datetime:
@@ -61,7 +68,12 @@ class AdminMfaService:
             raise InvalidCredentialsError()
         return session
 
-    async def status(self, *, partner_id: int, session_id: str | None) -> MfaStatusResponse:
+    async def status(
+        self,
+        *,
+        partner_id: int,
+        session_id: str | None,
+    ) -> MfaStatusResponse:
         partner = await self.db.scalar(select(Partner).where(Partner.id == partner_id))
         if partner is None or not partner.is_active:
             raise InvalidCredentialsError()
@@ -86,13 +98,18 @@ class AdminMfaService:
             except (TypeError, ValueError, json.JSONDecodeError):
                 remaining = 0
         return MfaStatusResponse(
-            required=partner.role in STAFF_ROLES,
+            required=settings.staff_mfa_required and partner.role in STAFF_ROLES,
             enrolled=enrolled,
             verified=bool(session and session.mfa_verified_at),
             remaining_recovery_codes=remaining,
         )
 
-    async def begin_enrollment(self, *, partner_id: int, session_id: str | None) -> MfaEnrollmentResponse:
+    async def begin_enrollment(
+        self,
+        *,
+        partner_id: int,
+        session_id: str | None,
+    ) -> MfaEnrollmentResponse:
         partner = await self._staff_partner(partner_id)
         await self._session(partner_id, session_id)
         credential = await self.db.scalar(
@@ -119,7 +136,11 @@ class AdminMfaService:
         )
 
     async def confirm_enrollment(
-        self, *, partner_id: int, session_id: str | None, code: str
+        self,
+        *,
+        partner_id: int,
+        session_id: str | None,
+        code: str,
     ) -> MfaEnrollmentConfirmResponse:
         await self._staff_partner(partner_id)
         session = await self._session(partner_id, session_id)
@@ -137,7 +158,7 @@ class AdminMfaService:
         await self.db.flush()
         return MfaEnrollmentConfirmResponse(
             status=MfaStatusResponse(
-                required=True,
+                required=settings.staff_mfa_required,
                 enrolled=True,
                 verified=True,
                 remaining_recovery_codes=len(recovery_codes),
@@ -145,7 +166,13 @@ class AdminMfaService:
             recovery_codes=recovery_codes,
         )
 
-    async def verify(self, *, partner_id: int, session_id: str | None, code: str) -> MfaStatusResponse:
+    async def verify(
+        self,
+        *,
+        partner_id: int,
+        session_id: str | None,
+        code: str,
+    ) -> MfaStatusResponse:
         await self._staff_partner(partner_id)
         session = await self._session(partner_id, session_id)
         credential = await self.db.scalar(
@@ -158,7 +185,10 @@ class AdminMfaService:
             raise MfaRequiredError()
         accepted = verify_totp(decrypt_totp_secret(credential.secret_ciphertext), code)
         if not accepted:
-            accepted, remaining = consume_recovery_code(credential.recovery_code_hashes, code)
+            accepted, remaining = consume_recovery_code(
+                credential.recovery_code_hashes,
+                code,
+            )
             if accepted:
                 credential.recovery_code_hashes = remaining
         if not accepted:
@@ -167,7 +197,12 @@ class AdminMfaService:
         await self.db.flush()
         return await self.status(partner_id=partner_id, session_id=session_id)
 
-    async def require_verified_staff_session(self, *, partner_id: int, session_id: str | None) -> None:
+    async def require_verified_staff_session(
+        self,
+        *,
+        partner_id: int,
+        session_id: str | None,
+    ) -> None:
         await self._staff_partner(partner_id)
         session = await self._session(partner_id, session_id)
         credential_id = await self.db.scalar(
