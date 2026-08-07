@@ -21,10 +21,14 @@ CONSUMED_PENDING_SOURCE = "consumed_pending_source"
 CONSUMED = "consumed"
 
 
+def _utc(value: datetime) -> datetime:
+    return value.astimezone(UTC) if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 class InventoryReservationService:
     """Own every local reservation/release/consume mutation.
 
-    ``ProductTemplate.stock_qty`` is available-to-sell.  Checkout subtracts it
+    ``ProductTemplate.stock_qty`` is available-to-sell. Checkout subtracts it
     exactly once, release restores it exactly once, and physical shipment does
     not subtract it again because those units were already withheld.
     """
@@ -35,7 +39,7 @@ class InventoryReservationService:
     async def adopt_checkout_reservations(self, order_id: int) -> int:
         """Record reservations already atomically deducted by the legacy checkout.
 
-        Stage 5's checkout decrement is intentionally retained.  This method is
+        Stage 5's checkout decrement is intentionally retained. This method is
         called in the same request transaction immediately after checkout, so
         it adds durable reservation semantics without double-mutating stock.
         """
@@ -236,7 +240,12 @@ class InventoryReservationService:
         await self.db.flush()
         return reserved
 
-    async def mark_order_consumed(self, order_id: int) -> int:
+    async def mark_order_consumed(
+        self,
+        order_id: int,
+        *,
+        occurred_at: datetime | None = None,
+    ) -> int:
         """Mark shipped reservations without subtracting available stock twice."""
         reservations = (
             (
@@ -252,11 +261,11 @@ class InventoryReservationService:
             .scalars()
             .all()
         )
-        now = datetime.now(UTC)
+        consumed_at = _utc(occurred_at or datetime.now(UTC))
         consumed = 0
         for reservation in reservations:
             reservation.status = CONSUMED_PENDING_SOURCE
-            reservation.consumed_at = now
+            reservation.consumed_at = consumed_at
             consumed += reservation.quantity
         await self.db.flush()
         return consumed
@@ -269,87 +278,91 @@ class InventoryReservationService:
         source: str,
         occurred_at: datetime | None = None,
     ) -> tuple[int, int]:
-        """Apply an absolute physical-stock snapshot without losing reservations.
+        """Project one absolute physical-stock snapshot into available-to-sell.
 
-        Returns ``(previous_available, new_available)``.  A source-side stock
-        decrease first reconciles units already shipped from a local
-        reservation; only the remaining decrease changes available-to-sell.
+        Odoo is authoritative for physical/on-hand stock. Active checkout
+        reservations are subtracted from that snapshot. A shipped reservation
+        stays withheld only when the snapshot predates its shipment timestamp;
+        the first snapshot at or after shipment reconciles it. Stale source
+        snapshots never move availability backwards.
         """
         if source_quantity < 0:
             raise ValueError("source_quantity must be non-negative")
 
+        snapshot_at = _utc(occurred_at or datetime.now(UTC))
         balance = await self.db.scalar(
             select(InventorySourceBalance)
             .where(InventorySourceBalance.product_id == product.id)
             .with_for_update()
         )
         previous_available = product.stock_qty
-        now = occurred_at or datetime.now(UTC)
+        if (
+            balance is not None
+            and balance.source_updated_at is not None
+            and snapshot_at < _utc(balance.source_updated_at)
+        ):
+            return previous_available, previous_available
 
-        if balance is None:
-            withheld = int(
-                (
-                    await self.db.scalar(
-                        select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
-                            InventoryReservation.product_id == product.id,
-                            InventoryReservation.status.in_(
-                                {RESERVED, CONSUMED_PENDING_SOURCE}
-                            ),
-                        )
+        reserved_quantity = int(
+            (
+                await self.db.scalar(
+                    select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
+                        InventoryReservation.product_id == product.id,
+                        InventoryReservation.status == RESERVED,
                     )
                 )
-                or 0
             )
-            product.stock_qty = max(source_quantity - withheld, 0)
+            or 0
+        )
+        pending = (
+            (
+                await self.db.execute(
+                    select(InventoryReservation)
+                    .where(
+                        InventoryReservation.product_id == product.id,
+                        InventoryReservation.status == CONSUMED_PENDING_SOURCE,
+                    )
+                    .order_by(InventoryReservation.consumed_at, InventoryReservation.id)
+                    .with_for_update()
+                )
+            )
+            .scalars()
+            .all()
+        )
+        pending_withheld = 0
+        for reservation in pending:
+            consumed_at = (
+                _utc(reservation.consumed_at)
+                if reservation.consumed_at is not None
+                else snapshot_at
+            )
+            if snapshot_at >= consumed_at:
+                reservation.status = CONSUMED
+                reservation.source_reconciled_quantity = reservation.quantity
+                reservation.source_reconciled_at = snapshot_at
+            else:
+                pending_withheld += max(
+                    reservation.quantity - reservation.source_reconciled_quantity,
+                    0,
+                )
+
+        product.stock_qty = max(
+            source_quantity - reserved_quantity - pending_withheld,
+            0,
+        )
+        if balance is None:
             self.db.add(
                 InventorySourceBalance(
                     product_id=product.id,
                     source_on_hand_qty=source_quantity,
                     source=source,
-                    source_updated_at=now,
+                    source_updated_at=snapshot_at,
                 )
             )
-            await self.db.flush()
-            return previous_available, product.stock_qty
-
-        delta = source_quantity - balance.source_on_hand_qty
-        if delta < 0:
-            remaining_decrease = -delta
-            pending = (
-                (
-                    await self.db.execute(
-                        select(InventoryReservation)
-                        .where(
-                            InventoryReservation.product_id == product.id,
-                            InventoryReservation.status == CONSUMED_PENDING_SOURCE,
-                        )
-                        .order_by(InventoryReservation.consumed_at, InventoryReservation.id)
-                        .with_for_update()
-                    )
-                )
-                .scalars()
-                .all()
-            )
-            for reservation in pending:
-                unreconciled = reservation.quantity - reservation.source_reconciled_quantity
-                if unreconciled <= 0:
-                    continue
-                applied = min(unreconciled, remaining_decrease)
-                reservation.source_reconciled_quantity += applied
-                remaining_decrease -= applied
-                if reservation.source_reconciled_quantity >= reservation.quantity:
-                    reservation.status = CONSUMED
-                    reservation.source_reconciled_at = now
-                if remaining_decrease == 0:
-                    break
-            if remaining_decrease:
-                product.stock_qty = max(product.stock_qty - remaining_decrease, 0)
-        elif delta > 0:
-            product.stock_qty += delta
-
-        balance.source_on_hand_qty = source_quantity
-        balance.source = source
-        balance.source_updated_at = now
+        else:
+            balance.source_on_hand_qty = source_quantity
+            balance.source = source
+            balance.source_updated_at = snapshot_at
         await self.db.flush()
         return previous_available, product.stock_qty
 
