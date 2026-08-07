@@ -5,7 +5,7 @@ Shopping cart, checkout, cancellation, and legacy order-state management.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,8 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Cart, SaleOrder
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.fulfillment.cancellation import OrderCancellationService
 from app.modules.fulfillment.service import CONFIRMED, FulfillmentLifecycleService
 from app.modules.inventory.reservations import InventoryReservationService
@@ -28,23 +30,24 @@ from app.shared.exceptions import (
     InvalidCredentialsError,
     ResourceNotFoundError,
 )
-from app.shared.schemas import OrderState, PaymentMethod, UserRole
+from app.shared.schemas import OrderState, PaymentMethod
 from app.shared.security import (
     decode_token,
     get_current_user,
-    require_role,
+    require_permission,
     security_scheme,
 )
 
 router = APIRouter()
 
 
-def _is_adminish(role: str) -> bool:
-    return role in {
-        UserRole.SYSTEM_ADMIN.value,
-        UserRole.WAREHOUSE_OPERATOR.value,
-        UserRole.FINANCE_OFFICER.value,
-    }
+async def _has_order_permission(
+    db: AsyncSession,
+    current_user: dict,
+    permission: AdminPermission,
+) -> bool:
+    _, permissions = await AdminAccessService(db).resolve_permissions(current_user["user_id"])
+    return permission.value in permissions
 
 
 async def _get_optional_current_user(
@@ -225,18 +228,19 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
+    may_view_all = await _has_order_permission(db, current_user, AdminPermission.ORDERS_VIEW)
     query = (
         select(SaleOrder)
         .options(selectinload(SaleOrder.order_lines))
         .order_by(SaleOrder.created_at.desc())
     )
-    if not _is_adminish(current_user["role"]):
+    if not may_view_all:
         query = query.where(SaleOrder.partner_id == current_user["user_id"])
     if status:
         query = query.where(SaleOrder.state == status)
 
     count_query = select(SaleOrder.id)
-    if not _is_adminish(current_user["role"]):
+    if not may_view_all:
         count_query = count_query.where(SaleOrder.partner_id == current_user["user_id"])
     if status:
         count_query = count_query.where(SaleOrder.state == status)
@@ -266,7 +270,8 @@ async def get_order(
     ).scalar_one_or_none()
     if not order:
         raise ResourceNotFoundError("SaleOrder", order_id)
-    if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
+    may_view_all = await _has_order_permission(db, current_user, AdminPermission.ORDERS_VIEW)
+    if not may_view_all and order.partner_id != current_user["user_id"]:
         raise InsufficientPermissionsError()
     return SaleOrderResponse.model_validate(order)
 
@@ -274,17 +279,33 @@ async def get_order(
 @router.put("/{order_id}/status")
 async def update_order_status(
     order_id: int,
+    request: Request,
     target_state: OrderState = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_permission(AdminPermission.ORDERS_MANAGE.value)),
 ):
-    """Update the legacy Odoo-compatible state for controlled warehouse work."""
-    return await OrderService(db).update_order_state(order_id, target_state)
+    """Update the legacy Odoo-compatible state for controlled operations work."""
+    order = await db.scalar(select(SaleOrder).where(SaleOrder.id == order_id))
+    if order is None:
+        raise ResourceNotFoundError("SaleOrder", order_id)
+    before = {"state": order.state, "payment_status": order.payment_status}
+    result = await OrderService(db).update_order_state(order_id, target_state)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="order.state.update",
+        entity_type="order",
+        entity_id=order_id,
+        before=before,
+        after={"state": target_state.value},
+        request=request,
+    )
+    return result
 
 
 @router.post("/{order_id}/cancel")
 async def cancel_order(
     order_id: int,
+    request: Request,
     reason: str = Query(default="customer_request", min_length=3, max_length=255),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
@@ -293,6 +314,22 @@ async def cancel_order(
     order = await db.scalar(select(SaleOrder).where(SaleOrder.id == order_id))
     if order is None:
         raise ResourceNotFoundError("SaleOrder", order_id)
-    if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
-        raise InsufficientPermissionsError()
-    return await OrderCancellationService(db).cancel(order_id, reason=reason)
+    before = {"state": order.state, "payment_status": order.payment_status}
+    privileged = order.partner_id != current_user["user_id"]
+    if privileged:
+        role, permissions = await AdminAccessService(db).require(
+            current_user["user_id"], AdminPermission.ORDERS_MANAGE.value
+        )
+        current_user = {**current_user, "role": role, "permissions": sorted(permissions)}
+    result = await OrderCancellationService(db).cancel(order_id, reason=reason)
+    if privileged:
+        await AdminAccessService(db).record_audit(
+            actor=current_user,
+            action="order.cancel",
+            entity_type="order",
+            entity_id=order_id,
+            before=before,
+            after={"reason": reason, "result": result},
+            request=request,
+        )
+    return result

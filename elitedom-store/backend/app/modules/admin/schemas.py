@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -231,6 +232,79 @@ class AdminShipmentSummary(BaseModel):
 
 class AdminShipmentListResponse(BaseModel):
     shipments: list[AdminShipmentSummary]
+    total_count: int
+    page: int
+    limit: int
+
+
+class AdminAccessResponse(BaseModel):
+    role: str
+    permissions: list[str]
+
+
+class AdminPermissionDefinition(BaseModel):
+    key: str
+    area: str
+    action: str
+
+
+class AdminPermissionCatalogResponse(BaseModel):
+    permissions: list[AdminPermissionDefinition]
+
+
+class AdminPermissionOverrideInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    permission: str = Field(..., min_length=3, max_length=64)
+    effect: Literal["allow", "deny"]
+
+
+class AdminPermissionOverrideResponse(BaseModel):
+    permission: str
+    effect: Literal["allow", "deny"]
+
+
+class AdminStaffAccessUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    role: str = Field(..., min_length=3, max_length=32)
+    overrides: list[AdminPermissionOverrideInput] = Field(default_factory=list, max_length=100)
+
+
+class AdminStaffAccessItem(BaseModel):
+    id: int
+    name: str
+    email: str
+    role: str
+    is_active: bool
+    permissions: list[str]
+    overrides: list[AdminPermissionOverrideResponse]
+
+
+class AdminStaffListResponse(BaseModel):
+    staff: list[AdminStaffAccessItem]
+
+
+class AdminAuditLogItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    actor_partner_id: int | None = None
+    actor_role: str | None = None
+    action: str
+    entity_type: str
+    entity_id: str | None = None
+    before_summary: dict[str, Any] | None = None
+    after_summary: dict[str, Any] | None = None
+    ip_address: str | None = None
+    session_id: str | None = None
+    request_method: str | None = None
+    request_path: str | None = None
+    created_at: datetime
+
+
+class AdminAuditListResponse(BaseModel):
+    logs: list[AdminAuditLogItem]
     total_count: int
     page: int
     limit: int

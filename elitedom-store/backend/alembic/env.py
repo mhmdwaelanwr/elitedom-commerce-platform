@@ -11,6 +11,7 @@ from alembic import context
 from app.config import get_settings
 from app.database import Base
 from app.models import *  # noqa: F401,F403 — Import all core models for autogenerate
+from app.modules.admin.models import *  # noqa: F401,F403 — Stage 7 admin access/audit models
 from app.modules.auth.models import *  # noqa: F401,F403 — Import auth persistence models
 from app.modules.fulfillment.models import *  # noqa: F401,F403 — Stage 6 fulfillment models
 from app.modules.payments.models import *  # noqa: F401,F403 — Import payment persistence models

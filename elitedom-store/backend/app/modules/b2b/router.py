@@ -1,9 +1,13 @@
 """HTTP endpoints for institutional RFQs, quotations, and B2B order conversion."""
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Depends, Header, Query, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models import Partner
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.b2b.schemas import (
     B2BRFQListResponse,
     B2BRFQResponse,
@@ -13,25 +17,57 @@ from app.modules.b2b.schemas import (
     SubmitRFQRequest,
 )
 from app.modules.b2b.service import B2BService
+from app.shared.exceptions import InsufficientPermissionsError
 from app.shared.schemas import RFQStatus, UserRole
-from app.shared.security import require_role
+from app.shared.security import get_current_user
 
 router = APIRouter()
 
 
+def require_b2b_or_permission(permission: AdminPermission):
+    """Allow a current B2B client or staff with a current database-backed permission."""
+
+    async def checker(
+        current_user: dict = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> dict:
+        persisted_role = await db.scalar(
+            select(Partner.role).where(
+                Partner.id == current_user["user_id"],
+                Partner.is_active.is_(True),
+            )
+        )
+        if persisted_role == UserRole.B2B_CLIENT.value:
+            return {**current_user, "role": persisted_role}
+        try:
+            role, permissions = await AdminAccessService(db).require(
+                current_user["user_id"], permission.value
+            )
+        except InsufficientPermissionsError:
+            raise
+        return {**current_user, "role": role, "permissions": sorted(permissions)}
+
+    return checker
+
+
 @router.post("/rfq", response_model=B2BRFQResponse, status_code=201)
 async def submit_rfq(
-    request: SubmitRFQRequest,
+    payload: SubmitRFQRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.B2B_CLIENT, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_QUOTE)),
 ):
-    """
-    Submit a bulk quotation request.
-
-    FR-B2B-001: only active B2B partner records may own an RFQ. Administrators
-    may submit on behalf of a B2B partner by supplying ``partner_id``.
-    """
-    return await B2BService(db).submit_rfq(request, current_user)
+    result = await B2BService(db).submit_rfq(payload, current_user)
+    if current_user.get("role") != UserRole.B2B_CLIENT.value:
+        await AdminAccessService(db).record_audit(
+            actor=current_user,
+            action="rfq.submit_on_behalf",
+            entity_type="rfq",
+            entity_id=result.rfq_code,
+            after=result,
+            request=request,
+        )
+    return result
 
 
 @router.get("/rfq", response_model=B2BRFQListResponse)
@@ -40,15 +76,8 @@ async def list_rfqs(
     limit: int = Query(default=20, ge=1, le=100),
     status_filter: RFQStatus | None = Query(default=None, alias="status"),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(
-        require_role(
-            UserRole.B2B_CLIENT,
-            UserRole.FINANCE_OFFICER,
-            UserRole.SYSTEM_ADMIN,
-        )
-    ),
+    current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_VIEW)),
 ):
-    """List the caller's RFQs, or all RFQs for Finance/Admin users."""
     return await B2BService(db).list_rfqs(
         current_user,
         page=page,
@@ -61,62 +90,59 @@ async def list_rfqs(
 async def get_rfq(
     rfq_code: str,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(
-        require_role(
-            UserRole.B2B_CLIENT,
-            UserRole.FINANCE_OFFICER,
-            UserRole.SYSTEM_ADMIN,
-        )
-    ),
+    current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_VIEW)),
 ):
-    """Get RFQ details and the issued pricing proposal when authorized."""
     return await B2BService(db).get_rfq(rfq_code, current_user)
 
 
 @router.put("/rfq/{rfq_code}/quote", response_model=B2BRFQResponse)
 async def issue_quote(
     rfq_code: str,
-    request: IssueQuoteRequest,
+    payload: IssueQuoteRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.FINANCE_OFFICER, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_QUOTE)),
 ):
-    """
-    Issue a tiered pricing proposal for an RFQ.
-
-    FR-B2B-002: Finance/Admin users can use the partner's tiered pricelist or
-    safely override individual product prices/discounts.
-    """
-    return await B2BService(db).issue_quote(rfq_code, request, current_user)
+    if current_user.get("role") == UserRole.B2B_CLIENT.value:
+        raise InsufficientPermissionsError()
+    result = await B2BService(db).issue_quote(rfq_code, payload, current_user)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="rfq.quote.issue",
+        entity_type="rfq",
+        entity_id=rfq_code,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.post("/rfq/{rfq_code}/convert", response_model=RFQConversionResponse)
 async def convert_rfq_to_order(
     rfq_code: str,
-    request: ConvertRFQRequest | None = None,
+    request: Request,
+    payload: ConvertRFQRequest | None = None,
     idempotency_key: str | None = Header(
         default=None,
         alias="Idempotency-Key",
         max_length=128,
     ),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(
-        require_role(
-            UserRole.B2B_CLIENT,
-            UserRole.FINANCE_OFFICER,
-            UserRole.SYSTEM_ADMIN,
-        )
-    ),
+    current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_QUOTE)),
 ):
-    """
-    Convert one accepted B2B quote to an order exactly once.
-
-    The RFQ owner may accept their own quote; Finance/Admin users may convert
-    any quote. Repeated calls return the original order instead of duplicating
-    order lines or decrementing stock a second time.
-    """
-    return await B2BService(db).convert_rfq_to_order(
+    result = await B2BService(db).convert_rfq_to_order(
         rfq_code,
-        request or ConvertRFQRequest(),
+        payload or ConvertRFQRequest(),
         current_user,
         header_idempotency_key=idempotency_key,
     )
+    if current_user.get("role") != UserRole.B2B_CLIENT.value:
+        await AdminAccessService(db).record_audit(
+            actor=current_user,
+            action="rfq.convert",
+            entity_type="rfq",
+            entity_id=rfq_code,
+            after=result,
+            request=request,
+        )
+    return result

@@ -6,10 +6,41 @@ const API_BASE_URL = (
 
 export type AdminRole =
   | "system_admin"
+  | "operations_manager"
   | "finance_officer"
   | "inventory_manager"
   | "warehouse_operator"
-  | "customer_support";
+  | "customer_support"
+  | "content_catalog";
+
+export type AdminPermission =
+  | "dashboard.view"
+  | "orders.view"
+  | "orders.manage"
+  | "catalog.view"
+  | "catalog.manage"
+  | "catalog.archive"
+  | "inventory.view"
+  | "inventory.adjust"
+  | "customers.view"
+  | "support.view"
+  | "support.manage"
+  | "rfq.view"
+  | "rfq.quote"
+  | "shipments.view"
+  | "shipments.dispatch"
+  | "suppliers.view"
+  | "suppliers.manage"
+  | "payments.view"
+  | "payments.refund"
+  | "reports.view"
+  | "staff.view"
+  | "staff.manage"
+  | "audit.view"
+  | "integrations.view"
+  | "integrations.manage"
+  | "config.view"
+  | "config.manage";
 
 export type AdminSection =
   | "dashboard"
@@ -18,35 +49,56 @@ export type AdminSection =
   | "customers"
   | "rma"
   | "rfqs"
-  | "shipments";
+  | "shipments"
+  | "staff"
+  | "audit";
 
-export const ADMIN_SECTION_ROLES: Record<AdminSection, AdminRole[]> = {
-  dashboard: [
-    "system_admin",
-    "finance_officer",
-    "inventory_manager",
-    "warehouse_operator",
-    "customer_support",
-  ],
-  orders: ["system_admin", "finance_officer", "warehouse_operator", "customer_support"],
-  products: ["system_admin", "inventory_manager", "warehouse_operator"],
-  customers: ["system_admin", "finance_officer", "customer_support"],
-  rma: ["system_admin", "customer_support"],
-  rfqs: ["system_admin", "finance_officer"],
-  shipments: ["system_admin", "warehouse_operator"],
+export const ADMIN_SECTION_PERMISSIONS: Record<AdminSection, AdminPermission> = {
+  dashboard: "dashboard.view",
+  orders: "orders.view",
+  products: "catalog.view",
+  customers: "customers.view",
+  rma: "support.view",
+  rfqs: "rfq.view",
+  shipments: "shipments.view",
+  staff: "staff.view",
+  audit: "audit.view",
+};
+
+const STAFF_ROLES: AdminRole[] = [
+  "system_admin",
+  "operations_manager",
+  "finance_officer",
+  "inventory_manager",
+  "warehouse_operator",
+  "customer_support",
+  "content_catalog",
+];
+
+const ROLE_SECTION_FALLBACK: Record<AdminRole, AdminSection[]> = {
+  system_admin: ["dashboard", "orders", "products", "customers", "rma", "rfqs", "shipments", "staff", "audit"],
+  operations_manager: ["dashboard", "orders", "products", "customers", "rma", "shipments"],
+  finance_officer: ["dashboard", "orders", "customers", "rfqs", "audit"],
+  inventory_manager: ["dashboard", "products", "shipments"],
+  warehouse_operator: ["dashboard", "orders", "products", "shipments"],
+  customer_support: ["dashboard", "orders", "customers", "rma", "shipments"],
+  content_catalog: ["dashboard", "products"],
 };
 
 export function isStaffRole(role: string | undefined | null): role is AdminRole {
-  return Object.values(ADMIN_SECTION_ROLES).some((roles) =>
-    roles.includes(role as AdminRole),
-  );
+  return Boolean(role && STAFF_ROLES.includes(role as AdminRole));
 }
 
 export function canAccessAdminSection(
-  role: string | undefined | null,
+  access: readonly string[] | Set<string> | string | undefined | null,
   section: AdminSection,
 ) {
-  return Boolean(role && ADMIN_SECTION_ROLES[section].includes(role as AdminRole));
+  if (!access) return false;
+  if (typeof access === "string") {
+    return isStaffRole(access) && ROLE_SECTION_FALLBACK[access].includes(section);
+  }
+  const permission = ADMIN_SECTION_PERMISSIONS[section];
+  return access instanceof Set ? access.has(permission) : access.includes(permission);
 }
 
 export class AdminApiError extends Error {
@@ -58,6 +110,48 @@ export class AdminApiError extends Error {
     this.status = status;
   }
 }
+
+export type AdminAccess = {
+  role: string;
+  permissions: AdminPermission[];
+};
+
+export type AdminPermissionDefinition = {
+  key: AdminPermission;
+  area: string;
+  action: string;
+};
+
+export type AdminPermissionOverride = {
+  permission: AdminPermission;
+  effect: "allow" | "deny";
+};
+
+export type AdminStaffAccess = {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  permissions: AdminPermission[];
+  overrides: AdminPermissionOverride[];
+};
+
+export type AdminAuditLog = {
+  id: number;
+  actor_partner_id?: number | null;
+  actor_role?: string | null;
+  action: string;
+  entity_type: string;
+  entity_id?: string | null;
+  before_summary?: Record<string, unknown> | null;
+  after_summary?: Record<string, unknown> | null;
+  ip_address?: string | null;
+  session_id?: string | null;
+  request_method?: string | null;
+  request_path?: string | null;
+  created_at: string;
+};
 
 export type AdminOrder = {
   id: number;
@@ -230,9 +324,7 @@ async function adminRequest<T>(
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   headers.set("Authorization", `Bearer ${session.accessToken}`);
-  if (options.body && !headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
+  if (options.body && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
 
   let response: Response;
   try {
@@ -267,12 +359,43 @@ async function adminRequest<T>(
 function queryString(values: Record<string, string | number | boolean | undefined | null>) {
   const params = new URLSearchParams();
   Object.entries(values).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      params.set(key, String(value));
-    }
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
   });
   const encoded = params.toString();
   return encoded ? `?${encoded}` : "";
+}
+
+export function fetchAdminAccess(session: CustomerSession) {
+  return adminRequest<AdminAccess>("/access/me", session);
+}
+
+export function fetchAdminPermissionCatalog(session: CustomerSession) {
+  return adminRequest<{ permissions: AdminPermissionDefinition[] }>("/access/permissions", session);
+}
+
+export function fetchAdminStaff(session: CustomerSession) {
+  return adminRequest<{ staff: AdminStaffAccess[] }>("/staff", session);
+}
+
+export function updateAdminStaffAccess(
+  partnerId: number,
+  input: { role: string; overrides: AdminPermissionOverride[] },
+  session: CustomerSession,
+) {
+  return adminRequest<AdminStaffAccess>(`/staff/${partnerId}/access`, session, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function fetchAdminAuditLogs(
+  session: CustomerSession,
+  params: { page?: number; action?: string; entity_type?: string; actor_partner_id?: number } = {},
+) {
+  return adminRequest<Paginated<AdminAuditLog, "logs">>(
+    `/audit-logs${queryString({ page: 1, limit: 50, ...params })}`,
+    session,
+  );
 }
 
 export function fetchAdminDashboard(session: CustomerSession) {
@@ -293,11 +416,7 @@ export function fetchAdminOrder(orderId: number, session: CustomerSession) {
   return adminRequest<AdminOrderDetail>(`/orders/${orderId}`, session);
 }
 
-export function updateAdminOrderState(
-  orderId: number,
-  state: string,
-  session: CustomerSession,
-) {
+export function updateAdminOrderState(orderId: number, state: string, session: CustomerSession) {
   return adminRequest<AdminOrderDetail>(`/orders/${orderId}/state`, session, {
     method: "PUT",
     body: JSON.stringify({ state }),

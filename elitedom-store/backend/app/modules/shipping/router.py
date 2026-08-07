@@ -1,11 +1,13 @@
-"""Customer tracking and controlled local/dropship shipment endpoints."""
+"""Customer tracking and permission-controlled local/dropship shipment endpoints."""
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.shipping.service import (
     DispatchOrderRequest,
     DispatchOrderResponse,
@@ -13,23 +15,17 @@ from app.modules.shipping.service import (
     ShippingTrackingResponse,
     SupplierShipmentRequest,
 )
-from app.shared.schemas import UserRole
-from app.shared.security import get_current_user, require_role
+from app.shared.security import get_current_user, require_permission
 
 router = APIRouter()
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[dict, Depends(get_current_user)]
 WarehouseUser = Annotated[
-    dict, Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN))
+    dict, Depends(require_permission(AdminPermission.SHIPMENTS_DISPATCH.value))
 ]
 SupplierOperationsUser = Annotated[
-    dict, Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN))
+    dict, Depends(require_permission(AdminPermission.SUPPLIERS_MANAGE.value))
 ]
-
-
-def _may_view_all_tracking(role: str | None) -> bool:
-    """Only a system administrator can inspect another customer's shipment."""
-    return role == UserRole.SYSTEM_ADMIN.value
 
 
 @router.get("/rates")
@@ -61,41 +57,72 @@ async def get_tracking(
     db: DatabaseSession,
     current_user: CurrentUser,
 ) -> ShippingTrackingResponse:
-    """Get tracking for the calling customer's order, or any order for an admin."""
+    """Get customer-owned tracking or all tracking for authorised operations staff."""
+    _, permissions = await AdminAccessService(db).resolve_permissions(current_user["user_id"])
     return await ShippingService(db).get_tracking(
         order_id,
         current_user["user_id"],
-        include_all=_may_view_all_tracking(current_user.get("role")),
+        include_all=AdminPermission.SHIPMENTS_VIEW.value in permissions,
     )
 
 
 @router.post("/{order_id}/dispatch", response_model=DispatchOrderResponse)
 async def dispatch_order(
     order_id: int,
-    request: DispatchOrderRequest,
+    payload: DispatchOrderRequest,
+    request: Request,
     db: DatabaseSession,
     current_user: WarehouseUser,
 ) -> DispatchOrderResponse:
     """Record a warehouse dispatch while keeping delivery as a separate state."""
-    return await ShippingService(db).dispatch_order(order_id, request)
+    result = await ShippingService(db).dispatch_order(order_id, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="shipment.dispatch",
+        entity_type="order",
+        entity_id=order_id,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.post("/{order_id}/deliver", response_model=ShippingTrackingResponse)
 async def mark_order_delivered(
     order_id: int,
+    request: Request,
     db: DatabaseSession,
     current_user: WarehouseUser,
 ) -> ShippingTrackingResponse:
     """Confirm delivery only after a shipment has already been dispatched."""
-    return await ShippingService(db).mark_delivered(order_id)
+    result = await ShippingService(db).mark_delivered(order_id)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="shipment.deliver",
+        entity_type="order",
+        entity_id=order_id,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.post("/{order_id}/dropship", response_model=ShippingTrackingResponse)
 async def update_dropship_shipment(
     order_id: int,
-    request: SupplierShipmentRequest,
+    payload: SupplierShipmentRequest,
+    request: Request,
     db: DatabaseSession,
     current_user: SupplierOperationsUser,
 ) -> ShippingTrackingResponse:
     """Record supplier-provided tracking/status for a vetted dropship PO."""
-    return await ShippingService(db).update_supplier_shipment(order_id, request)
+    result = await ShippingService(db).update_supplier_shipment(order_id, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="shipment.dropship.update",
+        entity_type="order",
+        entity_id=order_id,
+        after=result,
+        request=request,
+    )
+    return result

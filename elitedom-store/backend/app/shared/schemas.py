@@ -88,6 +88,8 @@ class UserRole(str, Enum):
     WAREHOUSE_OPERATOR = "warehouse_operator"
     INVENTORY_MANAGER = "inventory_manager"
     FINANCE_OFFICER = "finance_officer"
+    OPERATIONS_MANAGER = "operations_manager"
+    CONTENT_CATALOG = "content_catalog"
     SYSTEM_ADMIN = "system_admin"
 
 
@@ -102,7 +104,7 @@ class Money(BaseModel):
 
 
 class Address(BaseModel):
-    """Address value object per Shared Kernel."""
+    """Address value object."""
 
     street: str
     city: str

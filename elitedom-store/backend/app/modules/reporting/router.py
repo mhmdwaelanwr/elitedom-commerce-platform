@@ -1,4 +1,4 @@
-"""Authorized reporting, analytics, and CSV export endpoints."""
+"""Permission-protected reporting, analytics, CSV, and PDF export endpoints."""
 
 import csv
 import io
@@ -13,6 +13,7 @@ from reportlab.pdfgen import canvas
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
 from app.modules.reporting.schemas import (
     DashboardResponse,
     InventoryReportResponse,
@@ -21,22 +22,21 @@ from app.modules.reporting.schemas import (
     SupplierReportResponse,
 )
 from app.modules.reporting.service import ReportingService
-from app.shared.schemas import UserRole
-from app.shared.security import require_role
+from app.shared.security import require_permission
 
 router = APIRouter()
 
-FinanceUser = Depends(require_role(UserRole.FINANCE_OFFICER, UserRole.SYSTEM_ADMIN))
-InventoryUser = Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN))
+ReportViewer = Depends(require_permission(AdminPermission.REPORTS_VIEW.value))
+InventoryViewer = Depends(require_permission(AdminPermission.INVENTORY_VIEW.value))
+SupplierViewer = Depends(require_permission(AdminPermission.SUPPLIERS_VIEW.value))
 
 
 @router.get("/dashboard", response_model=DashboardResponse)
 async def get_dashboard(
     days: int = Query(default=30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = FinanceUser,
+    current_user: dict = ReportViewer,
 ) -> DashboardResponse:
-    """Revenue, customer, stock, and sales KPIs based on persisted records."""
     return await ReportingService(db).dashboard(days=days)
 
 
@@ -46,9 +46,8 @@ async def sales_report(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = FinanceUser,
+    current_user: dict = ReportViewer,
 ) -> SalesReportResponse:
-    """Return a series of settled sales without exposing customer personal data."""
     return await ReportingService(db).sales_report(period=period, start_at=start_at, end_at=end_at)
 
 
@@ -57,9 +56,8 @@ async def export_sales_csv(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = FinanceUser,
+    current_user: dict = ReportViewer,
 ) -> StreamingResponse:
-    """Export settled sales as UTF-8 CSV for finance systems and auditors."""
     rows = await ReportingService(db).sales_rows_for_csv(start_at=start_at, end_at=end_at)
     output = io.StringIO(newline="")
     writer = csv.writer(output)
@@ -77,9 +75,8 @@ async def export_sales_pdf(
     start_at: datetime | None = None,
     end_at: datetime | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = FinanceUser,
+    current_user: dict = ReportViewer,
 ) -> StreamingResponse:
-    """Export settled sales to a compact, non-PII PDF suitable for finance."""
     service = ReportingService(db)
     rows = await service.sales_rows_for_csv(start_at=start_at, end_at=end_at)
     report = await service.sales_report(period="monthly", start_at=start_at, end_at=end_at)
@@ -95,7 +92,7 @@ async def export_sales_pdf(
 async def inventory_report(
     low_stock_threshold: int = Query(default=5, ge=0, le=10_000),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = InventoryViewer,
 ) -> InventoryReportResponse:
     return await ReportingService(db).inventory_report(low_stock_threshold=low_stock_threshold)
 
@@ -104,22 +101,20 @@ async def inventory_report(
 async def rma_report(
     days: int = Query(default=90, ge=1, le=3650),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = FinanceUser,
+    current_user: dict = ReportViewer,
 ) -> RmaTrendResponse:
-    """Report warranty/RMA volume and state distribution for support leadership."""
     return await ReportingService(db).rma_trends(days=days)
 
 
 @router.get("/suppliers", response_model=SupplierReportResponse)
 async def supplier_performance_report(
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> SupplierReportResponse:
     return await ReportingService(db).supplier_report()
 
 
 def _sales_pdf(rows: list[tuple[str, str, str, str, str]], *, total_revenue: str) -> bytes:
-    """Render a deliberately small PDF without customer PII or line details."""
     output = io.BytesIO()
     pdf = canvas.Canvas(output, pagesize=A4, pageCompression=1)
     page_width, page_height = A4

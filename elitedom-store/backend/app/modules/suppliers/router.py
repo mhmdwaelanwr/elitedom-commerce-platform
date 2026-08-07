@@ -2,10 +2,12 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.suppliers.dropship import ProductSupplierService
 from app.modules.suppliers.schemas import (
     ProductSupplierListResponse,
@@ -22,13 +24,12 @@ from app.modules.suppliers.schemas import (
     SupplierUpdateRequest,
 )
 from app.modules.suppliers.service import SupplierService
-from app.shared.schemas import UserRole
-from app.shared.security import require_role
+from app.shared.security import require_permission
 
 router = APIRouter()
 
-InventoryUser = Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN))
-AdminUser = Depends(require_role(UserRole.SYSTEM_ADMIN))
+SupplierViewer = Depends(require_permission(AdminPermission.SUPPLIERS_VIEW.value))
+SupplierManager = Depends(require_permission(AdminPermission.SUPPLIERS_MANAGE.value))
 
 
 @router.get("", response_model=SupplierListResponse)
@@ -37,9 +38,8 @@ async def list_suppliers(
     limit: int = Query(default=20, ge=1, le=100),
     include_inactive: bool = Query(default=False),
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> SupplierListResponse:
-    """List verified suppliers for inventory/procurement staff."""
     return await SupplierService(db).list_suppliers(
         page=page, limit=limit, include_inactive=include_inactive
     )
@@ -47,12 +47,21 @@ async def list_suppliers(
 
 @router.post("", response_model=SupplierResponse, status_code=201)
 async def create_supplier(
-    request: SupplierCreateRequest,
+    payload: SupplierCreateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = AdminUser,
+    current_user: dict = SupplierManager,
 ) -> SupplierResponse:
-    """Register a supplier under an administrator-controlled workflow."""
-    return await SupplierService(db).create_supplier(request)
+    result = await SupplierService(db).create_supplier(payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="supplier.create",
+        entity_type="supplier",
+        entity_id=result.id,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.get("/purchase-orders", response_model=PurchaseOrderListResponse)
@@ -62,9 +71,8 @@ async def list_purchase_orders(
     supplier_id: int | None = Query(default=None, ge=1),
     status: Literal["draft", "sent", "partial", "received", "cancelled"] | None = None,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> PurchaseOrderListResponse:
-    """List procurement records with supplier/status filters."""
     return await SupplierService(db).list_purchase_orders(
         page=page,
         limit=limit,
@@ -75,32 +83,50 @@ async def list_purchase_orders(
 
 @router.post("/purchase-orders", response_model=PurchaseOrderResponse, status_code=201)
 async def create_purchase_order(
-    request: PurchaseOrderCreateRequest,
+    payload: PurchaseOrderCreateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierManager,
 ) -> PurchaseOrderResponse:
-    """Create a priced PO using server-side product costs."""
-    return await SupplierService(db).create_purchase_order(request)
+    result = await SupplierService(db).create_purchase_order(payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="supplier.purchase_order.create",
+        entity_type="purchase_order",
+        entity_id=result.po_number,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.patch("/purchase-orders/{po_number}", response_model=PurchaseOrderResponse)
 async def update_purchase_order(
     po_number: str,
-    request: PurchaseOrderUpdateRequest,
+    payload: PurchaseOrderUpdateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierManager,
 ) -> PurchaseOrderResponse:
-    """Advance a PO and receive stock exactly once at the received transition."""
-    return await SupplierService(db).update_purchase_order(po_number, request)
+    result = await SupplierService(db).update_purchase_order(po_number, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="supplier.purchase_order.update",
+        entity_type="purchase_order",
+        entity_id=po_number,
+        before={"po_number": po_number},
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.get("/products/{product_id}/supplier-links", response_model=ProductSupplierListResponse)
 async def list_product_supplier_links(
     product_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> ProductSupplierListResponse:
-    """Show the configured supplier catalogue links for a product."""
     return await ProductSupplierService(db).list_product_suppliers(product_id)
 
 
@@ -111,25 +137,33 @@ async def list_product_supplier_links(
 async def upsert_product_supplier_link(
     supplier_id: int,
     product_id: int,
-    request: ProductSupplierUpsertRequest,
+    payload: ProductSupplierUpsertRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = AdminUser,
+    current_user: dict = SupplierManager,
 ) -> ProductSupplierResponse:
-    """Configure a vetted supplier SKU and optionally make it dropship-primary."""
-    return await ProductSupplierService(db).upsert_product_supplier(
+    result = await ProductSupplierService(db).upsert_product_supplier(
         supplier_id=supplier_id,
         product_id=product_id,
+        request=payload,
+    )
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="supplier.product_link.upsert",
+        entity_type="product_supplier",
+        entity_id=f"{supplier_id}:{product_id}",
+        after=result,
         request=request,
     )
+    return result
 
 
 @router.get("/{supplier_id}/performance", response_model=SupplierPerformanceResponse)
 async def get_supplier_performance(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> SupplierPerformanceResponse:
-    """Calculate real procurement and delivery performance metrics."""
     return await SupplierService(db).supplier_performance(supplier_id)
 
 
@@ -137,7 +171,7 @@ async def get_supplier_performance(
 async def get_supplier(
     supplier_id: int,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = InventoryUser,
+    current_user: dict = SupplierViewer,
 ) -> SupplierResponse:
     return await SupplierService(db).get_supplier(supplier_id)
 
@@ -145,9 +179,21 @@ async def get_supplier(
 @router.put("/{supplier_id}", response_model=SupplierResponse)
 async def update_supplier(
     supplier_id: int,
-    request: SupplierUpdateRequest,
+    payload: SupplierUpdateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = AdminUser,
+    current_user: dict = SupplierManager,
 ) -> SupplierResponse:
-    """Update or deactivate a supplier without losing its procurement history."""
-    return await SupplierService(db).update_supplier(supplier_id, request)
+    service = SupplierService(db)
+    before = await service.get_supplier(supplier_id)
+    result = await service.update_supplier(supplier_id, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="supplier.update",
+        entity_type="supplier",
+        entity_id=supplier_id,
+        before=before,
+        after=result,
+        request=request,
+    )
+    return result

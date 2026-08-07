@@ -1,6 +1,6 @@
 """
 Elitedom Store — Security Utilities
-JWT token management, password hashing, and RBAC helpers.
+JWT token management, password hashing, and authorization helpers.
 Per API_SECURITY.md and SECURITY_REQUIREMENTS.md.
 """
 
@@ -135,7 +135,7 @@ async def get_current_user(
 
 
 def require_role(*allowed_roles: UserRole):
-    """Dependency factory restricting an endpoint to selected RBAC roles."""
+    """Compatibility dependency for non-admin domains still using coarse roles."""
 
     async def role_checker(
         current_user: dict = Depends(get_current_user),
@@ -146,6 +146,33 @@ def require_role(*allowed_roles: UserRole):
         return current_user
 
     return role_checker
+
+
+def require_permission(permission: str):
+    """Resolve a privileged permission from current persisted staff access.
+
+    The JWT role is intentionally not trusted for authorization. The user ID is
+    authenticated by the token/session, then the current Partner role and any
+    permission overrides are read from the database for every privileged call.
+    """
+
+    async def permission_checker(
+        current_user: dict = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> dict:
+        # Local import avoids coupling the shared auth primitive to admin models
+        # during module import while still enforcing database-backed access.
+        from app.modules.admin.access_service import AdminAccessService
+
+        role, permissions = await AdminAccessService(db).require(
+            int(current_user["user_id"]), permission
+        )
+        resolved = dict(current_user)
+        resolved["role"] = role
+        resolved["permissions"] = sorted(permissions)
+        return resolved
+
+    return permission_checker
 
 
 # ── HMAC Webhook Signature Validation ────────────────────────────────────────

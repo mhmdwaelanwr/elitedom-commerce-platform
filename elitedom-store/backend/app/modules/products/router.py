@@ -1,11 +1,13 @@
-"""Public catalogue and compatibility CRUD routes."""
+"""Public catalogue and permission-protected catalogue mutation routes."""
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.products.schemas import (
     ProductCreateRequest,
     ProductDetailResponse,
@@ -13,8 +15,7 @@ from app.modules.products.schemas import (
     ProductUpdateRequest,
 )
 from app.modules.products.service import ProductService
-from app.shared.schemas import UserRole
-from app.shared.security import require_role
+from app.shared.security import require_permission
 
 router = APIRouter()
 
@@ -63,28 +64,63 @@ async def get_product(product_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=ProductDetailResponse, status_code=201)
 async def create_product(
-    request: ProductCreateRequest,
+    payload: ProductCreateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_permission(AdminPermission.CATALOG_MANAGE.value)),
 ):
-    return await ProductService(db).create_product(request)
+    result = await ProductService(db).create_product(payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="catalog.product.create",
+        entity_type="product",
+        entity_id=result.id,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.put("/{product_id}", response_model=ProductDetailResponse)
 async def update_product(
     product_id: int,
-    request: ProductUpdateRequest,
+    payload: ProductUpdateRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_permission(AdminPermission.CATALOG_MANAGE.value)),
 ):
-    return await ProductService(db).update_product(product_id, request)
+    service = ProductService(db)
+    before = await service.get_product_detail(product_id, include_inactive=True)
+    result = await service.update_product(product_id, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="catalog.product.update",
+        entity_type="product",
+        entity_id=product_id,
+        before=before,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.delete("/{product_id}", status_code=204)
 async def delete_product(
     product_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_permission(AdminPermission.CATALOG_ARCHIVE.value)),
 ):
-    await ProductService(db).delete_product(product_id)
+    service = ProductService(db)
+    before = await service.get_product_detail(product_id, include_inactive=True)
+    await service.delete_product(product_id)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="catalog.product.archive",
+        entity_type="product",
+        entity_id=product_id,
+        before=before,
+        after={"is_active": False},
+        request=request,
+    )
     return None

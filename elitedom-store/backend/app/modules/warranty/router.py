@@ -1,9 +1,11 @@
 """Warranty and RMA HTTP endpoints (FR-RMA-001 to FR-RMA-004)."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.warranty.service import (
     RMAListResponse,
     RMAReviewRequest,
@@ -13,26 +15,15 @@ from app.modules.warranty.service import (
     WarrantyCheckResponse,
     WarrantyService,
 )
-from app.shared.schemas import RMAStatus, UserRole
-from app.shared.security import get_current_user, require_role
+from app.shared.schemas import RMAStatus
+from app.shared.security import get_current_user, require_permission
 
 router = APIRouter()
 
 
-def _can_manage_claims(role: str | None) -> bool:
-    return role in {
-        UserRole.CUSTOMER_SUPPORT.value,
-        UserRole.SYSTEM_ADMIN.value,
-    }
-
-
-def _can_check_any_warranty(role: str | None) -> bool:
-    return role in {
-        UserRole.CUSTOMER_SUPPORT.value,
-        UserRole.WAREHOUSE_OPERATOR.value,
-        UserRole.INVENTORY_MANAGER.value,
-        UserRole.SYSTEM_ADMIN.value,
-    }
+async def _permissions(db: AsyncSession, user_id: int) -> frozenset[str]:
+    _, permissions = await AdminAccessService(db).resolve_permissions(user_id)
+    return permissions
 
 
 @router.post("/claims", response_model=RMASubmitResponse, status_code=201)
@@ -41,7 +32,6 @@ async def submit_rma_claim(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Submit a customer-owned RMA claim and run automated eligibility checks."""
     service = WarrantyService(db)
     return await service.submit_claim(current_user["user_id"], request)
 
@@ -54,11 +44,10 @@ async def list_rma_claims(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """List the caller's claims, or all tickets for support/admin staff."""
-    service = WarrantyService(db)
-    return await service.list_claims(
+    permissions = await _permissions(db, current_user["user_id"])
+    return await WarrantyService(db).list_claims(
         current_user["user_id"],
-        include_all=_can_manage_claims(current_user.get("role")),
+        include_all=AdminPermission.SUPPORT_VIEW.value in permissions,
         page=page,
         limit=limit,
         status=status,
@@ -71,25 +60,34 @@ async def get_rma_claim(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get an RMA ticket, subject to customer ownership or staff RBAC."""
-    service = WarrantyService(db)
-    return await service.get_claim(
+    permissions = await _permissions(db, current_user["user_id"])
+    return await WarrantyService(db).get_claim(
         ticket_number,
         current_user["user_id"],
-        include_all=_can_manage_claims(current_user.get("role")),
+        include_all=AdminPermission.SUPPORT_VIEW.value in permissions,
     )
 
 
 @router.put("/claims/{ticket_number}/review", response_model=RMATicketResponse)
 async def review_rma_claim(
     ticket_number: str,
-    request: RMAReviewRequest,
+    payload: RMAReviewRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(require_role(UserRole.CUSTOMER_SUPPORT, UserRole.SYSTEM_ADMIN)),
+    current_user: dict = Depends(require_permission(AdminPermission.SUPPORT_MANAGE.value)),
 ):
-    """Approve, reject, or complete an RMA through the support state machine."""
-    service = WarrantyService(db)
-    return await service.review_claim(ticket_number, current_user["user_id"], request)
+    result = await WarrantyService(db).review_claim(
+        ticket_number, current_user["user_id"], payload
+    )
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="support.rma.review",
+        entity_type="rma",
+        entity_id=ticket_number,
+        after=result,
+        request=request,
+    )
+    return result
 
 
 @router.get("/check/{serial_number}", response_model=WarrantyCheckResponse)
@@ -98,10 +96,16 @@ async def check_warranty(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Check a serial's warranty without exposing another customer's asset."""
-    service = WarrantyService(db)
-    return await service.check_warranty(
+    permissions = await _permissions(db, current_user["user_id"])
+    include_all = bool(
+        {
+            AdminPermission.SUPPORT_VIEW.value,
+            AdminPermission.INVENTORY_VIEW.value,
+        }
+        & set(permissions)
+    )
+    return await WarrantyService(db).check_warranty(
         serial_number,
         current_user["user_id"],
-        include_all=_can_check_any_warranty(current_user.get("role")),
+        include_all=include_all,
     )
