@@ -134,9 +134,10 @@ def require_role(*allowed_roles: UserRole):
 def require_permission(permission: str):
     """Resolve a privileged permission from persisted staff state plus MFA.
 
-    The JWT role is never authoritative for staff authorization. After the
-    persisted role/overrides grant the requested permission, the same tracked
-    device session must have completed an enabled staff MFA credential.
+    The JWT role is never authoritative for staff authorization. In deployments
+    where STAFF_MFA_REQUIRED is enabled, the tracked device session must also
+    have completed an enabled staff MFA credential before any permission is
+    returned. Staging and production configuration force this policy on.
     """
 
     async def permission_checker(
@@ -149,10 +150,11 @@ def require_permission(permission: str):
         role, permissions = await AdminAccessService(db).require(
             int(current_user["user_id"]), permission
         )
-        await AdminMfaService(db).require_verified_staff_session(
-            partner_id=int(current_user["user_id"]),
-            session_id=current_user.get("session_id"),
-        )
+        if settings.staff_mfa_required:
+            await AdminMfaService(db).require_verified_staff_session(
+                partner_id=int(current_user["user_id"]),
+                session_id=current_user.get("session_id"),
+            )
         resolved = dict(current_user)
         resolved["role"] = role
         resolved["permissions"] = sorted(permissions)
