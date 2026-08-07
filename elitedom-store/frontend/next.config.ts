@@ -2,20 +2,20 @@ import type { NextConfig } from "next";
 
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const mediaUrl = process.env.NEXT_PUBLIC_MEDIA_URL ?? "";
 
-function mediaPattern() {
-  try {
-    const parsed = new URL(apiUrl);
-    return {
-      protocol: parsed.protocol.replace(":", "") as "http" | "https",
-      hostname: parsed.hostname,
-      port: parsed.port,
-      pathname: "/media/**",
-    };
-  } catch {
-    return { protocol: "http" as const, hostname: "localhost", port: "8000", pathname: "/media/**" };
-  }
+function remotePattern(value: string, pathname: string) {
+  const parsed = new URL(value);
+  return {
+    protocol: parsed.protocol.replace(":", "") as "http" | "https",
+    hostname: parsed.hostname,
+    port: parsed.port,
+    pathname,
+  };
 }
+
+const remotePatterns = [remotePattern(apiUrl, "/media/**")];
+if (mediaUrl) remotePatterns.push(remotePattern(mediaUrl, "/**"));
 
 const securityHeaders = [
   { key: "X-Content-Type-Options", value: "nosniff" },
@@ -42,7 +42,7 @@ const nextConfig: NextConfig = {
   compress: true,
   images: {
     formats: ["image/avif", "image/webp"],
-    remotePatterns: [mediaPattern()],
+    remotePatterns,
   },
   turbopack: { root: process.cwd() },
   async headers() {
