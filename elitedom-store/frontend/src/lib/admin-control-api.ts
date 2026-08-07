@@ -99,6 +99,32 @@ export type AdminIntegrationStatusResponse = {
   };
 };
 
+export type LaunchAcceptanceStatus = "pending" | "passed" | "failed" | "waived";
+export type LaunchGateResult = "pass" | "warn" | "block";
+
+export type AdminLaunchGate = {
+  key: string;
+  label: string;
+  category: string;
+  source: "configuration" | "operator";
+  required: boolean;
+  status: LaunchAcceptanceStatus | "automatic";
+  result: LaunchGateResult;
+  detail: string;
+  evidence_ref?: string | null;
+  notes?: string | null;
+  verified_by?: number | null;
+  verified_at?: string | null;
+};
+
+export type AdminLaunchReadinessResponse = {
+  overall_status: "ready" | "conditional" | "blocked";
+  blocker_count: number;
+  warning_count: number;
+  generated_at: string;
+  gates: AdminLaunchGate[];
+};
+
 type Paginated<T, Key extends string> = {
   total_count: number;
   page: number;
@@ -220,4 +246,27 @@ export function fetchControlPurchaseOrders(
 
 export function fetchControlIntegrations(session: CustomerSession) {
   return request<AdminIntegrationStatusResponse>("/integrations", session);
+}
+
+export function fetchLaunchReadiness(session: CustomerSession) {
+  return request<AdminLaunchReadinessResponse>("/launch-readiness", session);
+}
+
+export function updateLaunchGate(
+  gateKey: string,
+  payload: {
+    status: LaunchAcceptanceStatus;
+    evidence_ref?: string | null;
+    notes?: string | null;
+  },
+  session: CustomerSession,
+) {
+  return request<AdminLaunchReadinessResponse>(
+    `/launch-readiness/${encodeURIComponent(gateKey)}`,
+    session,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
 }
