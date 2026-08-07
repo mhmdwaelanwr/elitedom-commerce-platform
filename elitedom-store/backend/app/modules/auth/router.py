@@ -42,6 +42,11 @@ def _service(db: AsyncSession, request: Request) -> AuthService:
     )
 
 
+def _no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+
 def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
     """Keep refresh credentials out of JSON and JavaScript-readable storage."""
     response.set_cookie(
@@ -53,7 +58,7 @@ def _set_refresh_cookie(response: Response, refresh_token: str) -> None:
         max_age=settings.jwt_refresh_token_expire_days * 24 * 60 * 60,
         path="/api/v1/auth",
     )
-    response.headers["Cache-Control"] = "no-store"
+    _no_store(response)
 
 
 def _clear_refresh_cookie(response: Response) -> None:
@@ -63,7 +68,7 @@ def _clear_refresh_cookie(response: Response) -> None:
         secure=settings.environment != "development",
         samesite="strict",
     )
-    response.headers["Cache-Control"] = "no-store"
+    _no_store(response)
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
@@ -87,9 +92,12 @@ async def login(
 async def request_phone_otp(
     payload: OtpRequest,
     request: Request,
+    response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    return await _service(db, request).request_phone_otp(payload)
+    result = await _service(db, request).request_phone_otp(payload)
+    _no_store(response)
+    return result
 
 
 @router.post("/otp/verify", response_model=LoginResponse)
@@ -132,50 +140,62 @@ async def refresh_token(
 
 @router.get("/mfa/status", response_model=MfaStatusResponse)
 async def mfa_status(
+    response: Response,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await AdminMfaService(db).status(
+    result = await AdminMfaService(db).status(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
     )
+    _no_store(response)
+    return result
 
 
 @router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
 async def begin_mfa_enrollment(
+    response: Response,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await AdminMfaService(db).begin_enrollment(
+    result = await AdminMfaService(db).begin_enrollment(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
     )
+    _no_store(response)
+    return result
 
 
 @router.post("/mfa/confirm", response_model=MfaEnrollmentConfirmResponse)
 async def confirm_mfa_enrollment(
     payload: MfaCodeRequest,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await AdminMfaService(db).confirm_enrollment(
+    result = await AdminMfaService(db).confirm_enrollment(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
         code=payload.code,
     )
+    _no_store(response)
+    return result
 
 
 @router.post("/mfa/verify", response_model=MfaStatusResponse)
 async def verify_mfa(
     payload: MfaCodeRequest,
+    response: Response,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await AdminMfaService(db).verify(
+    result = await AdminMfaService(db).verify(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
         code=payload.code,
     )
+    _no_store(response)
+    return result
 
 
 @router.get("/sessions", response_model=SessionListResponse)
