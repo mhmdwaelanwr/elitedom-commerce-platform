@@ -9,14 +9,17 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
+from app.health import readiness_snapshot
 from app.integrations.odoo.catalog_webhooks import router as odoo_catalog_webhook_router
 from app.integrations.odoo.webhooks import router as odoo_webhook_router
 from app.integrations.paymob.webhooks import router as paymob_webhook_router
 from app.integrations.stripe.webhooks import router as stripe_webhook_router
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.middleware.security_headers import MetricsAuthMiddleware, SecurityHeadersMiddleware
 from app.modules.admin.control_router import router as admin_control_router
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
@@ -43,14 +46,7 @@ settings = get_settings()
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     register_default_outbox_routes()
     Path(settings.media_root).mkdir(parents=True, exist_ok=True)
-    print(f"🚀 Starting {settings.app_name} v{settings.app_version}")
-    print(f"📦 Environment: {settings.environment}")
-    print(
-        f"🗄️  Database: {settings.postgres_host}:{settings.postgres_port}/"
-        f"{settings.app_postgres_db}"
-    )
     yield
-    print(f"👋 Shutting down {settings.app_name}")
 
 
 def create_app() -> FastAPI:
@@ -75,9 +71,11 @@ def create_app() -> FastAPI:
     if settings.environment != "development":
         application.add_middleware(
             TrustedHostMiddleware,
-            allowed_hosts=settings.allowed_hosts.split(","),
+            allowed_hosts=[host.strip() for host in settings.allowed_hosts.split(",") if host.strip()],
         )
     application.add_middleware(RateLimitMiddleware)
+    application.add_middleware(MetricsAuthMiddleware)
+    application.add_middleware(SecurityHeadersMiddleware)
     application.add_middleware(RequestContextMiddleware)
 
     api_prefix = "/api/v1"
@@ -134,13 +132,20 @@ def create_app() -> FastAPI:
     )
 
     @application.get("/health", tags=["Health"])
-    async def health_check():
+    @application.get("/health/live", tags=["Health"])
+    async def liveness_check():
         return {
             "status": "healthy",
             "service": settings.app_name,
             "version": settings.app_version,
-            "environment": settings.environment,
         }
+
+    @application.get("/health/ready", tags=["Health"])
+    async def readiness_check():
+        snapshot = await readiness_snapshot()
+        if not snapshot["ready"]:
+            return JSONResponse(status_code=503, content=snapshot)
+        return snapshot
 
     configure_observability(application, settings)
     return application

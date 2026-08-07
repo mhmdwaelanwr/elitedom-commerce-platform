@@ -30,28 +30,19 @@ settings = get_settings()
 security_scheme = HTTPBearer(auto_error=False)
 
 
-# ── Password Hashing (bcrypt) ────────────────────────────────────────────────
-
-
 def hash_password(password: str) -> str:
-    """Hash a plain-text password using bcrypt."""
     salt = bcrypt.gensalt(rounds=12)
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plain-text password against a bcrypt hash."""
     return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
-
-
-# ── JWT Token Management ─────────────────────────────────────────────────────
 
 
 def create_access_token(
     data: dict,
     expires_delta: Optional[timedelta] = None,
 ) -> str:
-    """Create a JWT access token with configurable expiry."""
     to_encode = data.copy()
     expire = datetime.now(UTC) + (
         expires_delta or timedelta(minutes=settings.jwt_access_token_expire_minutes)
@@ -65,7 +56,6 @@ def create_access_token(
 
 
 def create_refresh_token(data: dict) -> str:
-    """Create a JWT refresh token with longer expiry."""
     to_encode = data.copy()
     expire = datetime.now(UTC) + timedelta(days=settings.jwt_refresh_token_expire_days)
     to_encode.update({"exp": expire, "type": "refresh"})
@@ -77,7 +67,6 @@ def create_refresh_token(data: dict) -> str:
 
 
 def decode_token(token: str) -> dict:
-    """Decode and validate a JWT token. Raises on expiry or invalid signature."""
     try:
         payload = jwt.decode(
             token,
@@ -89,9 +78,6 @@ def decode_token(token: str) -> dict:
         if "expired" in str(error).lower():
             raise TokenExpiredError() from None
         raise InvalidCredentialsError() from None
-
-
-# ── FastAPI Dependencies ─────────────────────────────────────────────────────
 
 
 async def get_current_user(
@@ -123,9 +109,6 @@ async def get_current_user(
         if active_session is None:
             raise InvalidCredentialsError()
 
-    # Tokens created before stateful sessions were introduced remain accepted
-    # until their short access-token expiry. Every new login/refresh includes a
-    # sid and therefore receives immediate revocation checks.
     return {
         "user_id": int(user_id),
         "email": payload.get("email"),
@@ -149,24 +132,29 @@ def require_role(*allowed_roles: UserRole):
 
 
 def require_permission(permission: str):
-    """Resolve a privileged permission from current persisted staff access.
+    """Resolve a privileged permission from persisted staff state plus MFA.
 
-    The JWT role is intentionally not trusted for authorization. The user ID is
-    authenticated by the token/session, then the current Partner role and any
-    permission overrides are read from the database for every privileged call.
+    The JWT role is never authoritative for staff authorization. In deployments
+    where STAFF_MFA_REQUIRED is enabled, the tracked device session must also
+    have completed an enabled staff MFA credential before any permission is
+    returned. Staging and production configuration force this policy on.
     """
 
     async def permission_checker(
         current_user: dict = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> dict:
-        # Local import avoids coupling the shared auth primitive to admin models
-        # during module import while still enforcing database-backed access.
         from app.modules.admin.access_service import AdminAccessService
+        from app.modules.auth.mfa_service import AdminMfaService
 
         role, permissions = await AdminAccessService(db).require(
             int(current_user["user_id"]), permission
         )
+        if settings.staff_mfa_required:
+            await AdminMfaService(db).require_verified_staff_session(
+                partner_id=int(current_user["user_id"]),
+                session_id=current_user.get("session_id"),
+            )
         resolved = dict(current_user)
         resolved["role"] = role
         resolved["permissions"] = sorted(permissions)
@@ -175,15 +163,11 @@ def require_permission(permission: str):
     return permission_checker
 
 
-# ── HMAC Webhook Signature Validation ────────────────────────────────────────
-
-
 def verify_hmac_signature(
     payload: bytes,
     signature: str,
     secret: str,
 ) -> bool:
-    """Verify an HMAC-SHA256 webhook signature."""
     expected = hmac.new(
         secret.encode("utf-8"),
         payload,
