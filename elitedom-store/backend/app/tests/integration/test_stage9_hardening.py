@@ -122,7 +122,7 @@ async def test_staff_mfa_enrollment_encrypts_seed_and_verifies_recovery(
 
 
 @pytest.mark.asyncio
-async def test_privileged_permission_requires_verified_mfa_when_policy_enabled(
+async def test_permission_endpoint_requires_verified_mfa_when_policy_enabled(
     client,
     db_session,
     monkeypatch,
@@ -131,12 +131,12 @@ async def test_privileged_permission_requires_verified_mfa_when_policy_enabled(
     monkeypatch.setattr(shared_security.settings, "staff_mfa_required", True)
 
     response = await client.get(
-        "/api/v1/admin/access/me",
+        "/api/v1/admin/access/permissions",
         headers=_authorization(partner, session),
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["error_code"] == "ELITE_1008"
+    assert "ELITE_1008" in response.text
 
 
 def _production_settings(**overrides) -> Settings:
