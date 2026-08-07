@@ -26,6 +26,8 @@ from app.modules.inventory.router import router as inventory_router
 from app.modules.loyalty.router import router as loyalty_router
 from app.modules.orders.router import router as orders_router
 from app.modules.payments.router import router as payments_router
+from app.modules.products.catalog_admin_router import router as catalog_admin_router
+from app.modules.products.catalog_router import router as catalog_router
 from app.modules.products.router import router as products_router
 from app.modules.reporting.router import router as reporting_router
 from app.modules.shipping.router import router as shipping_router
@@ -81,6 +83,7 @@ def create_app() -> FastAPI:
     api_prefix = "/api/v1"
     application.include_router(auth_router, prefix=f"{api_prefix}/auth", tags=["Authentication"])
     application.include_router(products_router, prefix=f"{api_prefix}/products", tags=["Products"])
+    application.include_router(catalog_router, prefix=f"{api_prefix}/catalog", tags=["Catalogue"])
     application.include_router(orders_router, prefix=f"{api_prefix}/orders", tags=["Orders"])
     application.include_router(customers_router, prefix=f"{api_prefix}/customers", tags=["Customers"])
     application.include_router(inventory_router, prefix=f"{api_prefix}/inventory", tags=["Inventory"])
@@ -96,6 +99,11 @@ def create_app() -> FastAPI:
         admin_control_router,
         prefix=f"{api_prefix}/admin",
         tags=["Staff Control Plane"],
+    )
+    application.include_router(
+        catalog_admin_router,
+        prefix=f"{api_prefix}/admin/catalog",
+        tags=["Catalogue Administration"],
     )
     application.include_router(
         stripe_webhook_router,
