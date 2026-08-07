@@ -5,10 +5,9 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, type ReactNode, useEffect, useMemo, useState } from "react";
 import { StoreProductCard } from "@/components/store/StoreProductCard";
 import { Drawer } from "@/components/ui/Overlay";
-import { fetchCatalog } from "@/lib/api";
-import { CATEGORIES } from "@/lib/catalog";
+import { fetchRichCatalog, fetchRichCategories } from "@/lib/catalog-api";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
-import type { CategorySlug, Product } from "@/types/store";
+import type { Category, CategorySlug, Product } from "@/types/store";
 
 type SortOption = "featured" | "price-low" | "price-high" | "stock";
 type ViewMode = "grid" | "list";
@@ -32,6 +31,7 @@ function ShopContent() {
   const requestedCategory = searchParams.get("category") as CategorySlug | null;
   const [query, setQuery] = useState(requestedQuery);
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
@@ -45,77 +45,89 @@ function ShopContent() {
   const [isFiltersOpen, setIsFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
 
-  const categoryNames: Record<string, string> = {
-    gaming: t("storefront", "categoryGaming"),
-    computers: t("storefront", "categoryComputers"),
-    peripherals: t("storefront", "categoryPeripherals"),
-    audio: t("storefront", "categoryAudio"),
-    networking: t("storefront", "categoryNetworking"),
-    mobile: t("storefront", "categoryMobile"),
-  };
-
   useEffect(() => {
-    let live = true;
+    let active = true;
     const timer = window.setTimeout(() => {
       setQuery(requestedQuery);
       setIsLoading(true);
       setError(null);
-
-      void fetchCatalog(requestedQuery)
-        .then((nextProducts) => {
-          if (live) setProducts(nextProducts);
+      Promise.all([
+        fetchRichCatalog({
+          locale,
+          query: requestedQuery || undefined,
+          category: requestedCategory || undefined,
+          limit: 100,
+        }),
+        fetchRichCategories(locale),
+      ])
+        .then(([nextProducts, nextCategories]) => {
+          if (!active) return;
+          setProducts(nextProducts);
+          setCategories(nextCategories);
         })
         .catch((requestError: unknown) => {
-          if (!live) return;
+          if (!active) return;
           setProducts([]);
-          setError(requestError instanceof Error ? requestError.message : t("storefront", "catalogueLoadError"));
+          setCategories([]);
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : t("storefront", "catalogueLoadError"),
+          );
         })
         .finally(() => {
-          if (live) setIsLoading(false);
+          if (active) setIsLoading(false);
         });
     }, 0);
 
     return () => {
-      live = false;
+      active = false;
       window.clearTimeout(timer);
     };
-  }, [reloadToken, requestedQuery, t]);
+  }, [locale, reloadToken, requestedCategory, requestedQuery, t]);
 
+  const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
+  const categoryNames = useMemo(
+    () => Object.fromEntries(flatCategories.map((category) => [category.slug, category.name])),
+    [flatCategories],
+  );
   const availableBrands = useMemo(
     () => [...new Set(products.map((product) => product.brand).filter(Boolean))].sort(),
     [products],
   );
-
   const availableSpecifications = useMemo(() => {
-    const uniqueSpecifications = new Map<string, SpecificationFilter>();
-    products.forEach((product) => {
-      product.specs.forEach((specification) => {
-        const key = `${specification.label}:${specification.value}`;
-        uniqueSpecifications.set(key, { key, label: `${specification.label}: ${specification.value}` });
-      });
-    });
-    return [...uniqueSpecifications.values()]
+    const unique = new Map<string, SpecificationFilter>();
+    for (const product of products) {
+      for (const specification of product.specs) {
+        if (specification.filterable === false) continue;
+        const key = `${specification.code ?? specification.label}:${specification.value}`;
+        unique.set(key, { key, label: `${specification.label}: ${specification.value}` });
+      }
+    }
+    return [...unique.values()]
       .sort((first, second) => first.label.localeCompare(second.label, locale))
-      .slice(0, 16);
+      .slice(0, 30);
   }, [locale, products]);
 
   const visibleProducts = useMemo(() => {
     const minimum = toPrice(minimumPrice);
     const maximum = toPrice(maximumPrice);
-    const nextProducts = products
-      .filter((product) => !requestedCategory || product.category === requestedCategory)
+    const filtered = products
       .filter((product) => !onlyAvailable || product.stockQty > 0 || product.dropshipEnabled)
       .filter((product) => selectedBrands.length === 0 || selectedBrands.includes(product.brand))
       .filter((product) =>
         selectedSpecifications.length === 0 ||
-        selectedSpecifications.every((selectedSpecification) =>
-          product.specs.some((specification) => `${specification.label}:${specification.value}` === selectedSpecification),
+        selectedSpecifications.every((selected) =>
+          product.specs.some(
+            (specification) =>
+              `${specification.code ?? specification.label}:${specification.value}` === selected,
+          ),
         ),
       )
       .filter((product) => minimum === null || product.priceEgp >= minimum)
       .filter((product) => maximum === null || product.priceEgp <= maximum);
 
-    return [...nextProducts].sort((first, second) => {
+    return [...filtered].sort((first, second) => {
       if (sort === "price-low") return first.priceEgp - second.priceEgp;
       if (sort === "price-high") return second.priceEgp - first.priceEgp;
       if (sort === "stock") {
@@ -123,8 +135,15 @@ function ShopContent() {
       }
       return Number(Boolean(second.featured)) - Number(Boolean(first.featured));
     });
-  }, [maximumPrice, minimumPrice, onlyAvailable, products, requestedCategory, selectedBrands, selectedSpecifications, sort]);
+  }, [maximumPrice, minimumPrice, onlyAvailable, products, selectedBrands, selectedSpecifications, sort]);
 
+  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, pageCount);
+  const paginatedProducts = visibleProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const requestedCategoryName = requestedCategory ? categoryNames[requestedCategory] : null;
+  const pageTitle = requestedQuery
+    ? `${t("storefront", "resultsFor")} “${requestedQuery}”`
+    : requestedCategoryName ?? t("storefront", "everythingWeStock");
   const activeFilterCount =
     Number(Boolean(requestedQuery)) +
     Number(Boolean(requestedCategory)) +
@@ -134,40 +153,17 @@ function ShopContent() {
     Number(Boolean(minimumPrice)) +
     Number(Boolean(maximumPrice));
 
-  const pageCount = Math.max(1, Math.ceil(visibleProducts.length / PAGE_SIZE));
-  const safePage = Math.min(currentPage, pageCount);
-  const paginatedProducts = visibleProducts.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
-
-  function updateFilters(next: { category?: CategorySlug | null; query?: string }) {
+  function updateUrl(next: { category?: string | null; query?: string }) {
     const parameters = new URLSearchParams(searchParams.toString());
     const nextCategory = next.category === undefined ? requestedCategory : next.category;
     const nextQuery = next.query === undefined ? requestedQuery : next.query;
-
     if (nextCategory) parameters.set("category", nextCategory);
     else parameters.delete("category");
-
     if (nextQuery?.trim()) parameters.set("q", nextQuery.trim());
     else parameters.delete("q");
-
+    setCurrentPage(1);
     const serialized = parameters.toString();
-    setCurrentPage(1);
     router.push(`/shop${serialized ? `?${serialized}` : ""}`);
-  }
-
-  function toggleBrand(brand: string) {
-    setCurrentPage(1);
-    setSelectedBrands((current) =>
-      current.includes(brand) ? current.filter((item) => item !== brand) : [...current, brand],
-    );
-  }
-
-  function toggleSpecification(specification: string) {
-    setCurrentPage(1);
-    setSelectedSpecifications((current) =>
-      current.includes(specification)
-        ? current.filter((item) => item !== specification)
-        : [...current, specification],
-    );
   }
 
   function resetLocalFilters() {
@@ -189,36 +185,49 @@ function ShopContent() {
   const filterProps: Omit<CatalogFilterControlsProps, "idPrefix"> = {
     availableBrands,
     availableSpecifications,
-    categoryNames,
+    categories: flatCategories,
     maximumPrice,
     minimumPrice,
     onlyAvailable,
-    onCategoryChange: (category) => updateFilters({ category }),
-    onMaximumPriceChange: (value) => { setMaximumPrice(value); setCurrentPage(1); },
-    onMinimumPriceChange: (value) => { setMinimumPrice(value); setCurrentPage(1); },
-    onOnlyAvailableChange: (value) => { setOnlyAvailable(value); setCurrentPage(1); },
+    onCategoryChange: (category) => updateUrl({ category }),
+    onMaximumPriceChange: (value) => {
+      setMaximumPrice(value);
+      setCurrentPage(1);
+    },
+    onMinimumPriceChange: (value) => {
+      setMinimumPrice(value);
+      setCurrentPage(1);
+    },
+    onOnlyAvailableChange: (value) => {
+      setOnlyAvailable(value);
+      setCurrentPage(1);
+    },
     onReset: resetLocalFilters,
-    onToggleBrand: toggleBrand,
-    onToggleSpecification: toggleSpecification,
+    onToggleBrand: (brand) => {
+      setCurrentPage(1);
+      setSelectedBrands((current) =>
+        current.includes(brand) ? current.filter((item) => item !== brand) : [...current, brand],
+      );
+    },
+    onToggleSpecification: (specification) => {
+      setCurrentPage(1);
+      setSelectedSpecifications((current) =>
+        current.includes(specification)
+          ? current.filter((item) => item !== specification)
+          : [...current, specification],
+      );
+    },
     requestedCategory,
     selectedBrands,
     selectedSpecifications,
   };
 
-  const requestedCategoryName = requestedCategory
-    ? categoryNames[requestedCategory] ?? CATEGORIES.find((category) => category.slug === requestedCategory)?.name
-    : null;
-  const pageTitle = requestedQuery
-    ? `${t("storefront", "resultsFor")} “${requestedQuery}”`
-    : requestedCategoryName ?? t("storefront", "everythingWeStock");
-  const productsCountLabel = visibleProducts.length === 1
-    ? t("storefront", "productShown")
-    : t("storefront", "productsShown");
-
   return (
     <div className="site-container py-8 sm:py-12">
       <nav aria-label="Breadcrumb" className="text-sm text-muted">
-        <Link className="focus-ring rounded-md hover:text-foreground" href="/">{t("storefront", "home")}</Link>
+        <Link className="focus-ring rounded-md hover:text-foreground" href="/">
+          {t("storefront", "home")}
+        </Link>
         <span aria-hidden="true"> / </span>
         <span className="text-foreground">{t("storefront", "shop")}</span>
       </nav>
@@ -234,8 +243,17 @@ function ShopContent() {
               {t("storefront", "shopHeroDescription")}
             </p>
           </div>
-          <form className="flex gap-2" onSubmit={(event) => { event.preventDefault(); updateFilters({ query }); }} role="search">
-            <label className="sr-only" htmlFor="catalogue-page-search">{t("storefront", "searchCatalogue")}</label>
+          <form
+            className="flex gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              updateUrl({ query });
+            }}
+            role="search"
+          >
+            <label className="sr-only" htmlFor="catalogue-page-search">
+              {t("storefront", "searchCatalogue")}
+            </label>
             <input
               className="form-input min-w-0 flex-1"
               id="catalogue-page-search"
@@ -243,21 +261,23 @@ function ShopContent() {
               placeholder={t("storefront", "trySearch")}
               value={query}
             />
-            <button className="button-primary shrink-0 px-4 py-2" type="submit">{t("storefront", "search")}</button>
+            <button className="button-primary shrink-0 px-4 py-2" type="submit">
+              {t("storefront", "search")}
+            </button>
           </form>
         </div>
         <div className="mt-6 flex gap-2 overflow-x-auto pb-1">
           <CategoryChip
             active={!requestedCategory}
             label={t("storefront", "allDepartments")}
-            onClick={() => updateFilters({ category: null })}
+            onClick={() => updateUrl({ category: null })}
           />
-          {CATEGORIES.map((category) => (
+          {flatCategories.map((category) => (
             <CategoryChip
               active={requestedCategory === category.slug}
               key={category.slug}
-              label={categoryNames[category.slug] ?? category.name}
-              onClick={() => updateFilters({ category: category.slug })}
+              label={category.name}
+              onClick={() => updateUrl({ category: category.slug })}
             />
           ))}
         </div>
@@ -276,7 +296,7 @@ function ShopContent() {
               <p className="mt-3 text-sm text-muted">
                 {isLoading
                   ? t("storefront", "checkingAvailability")
-                  : `${visibleProducts.length} ${productsCountLabel} · ${t("storefront", "pricesIncludeVat")}`}
+                  : `${visibleProducts.length} ${visibleProducts.length === 1 ? t("storefront", "productShown") : t("storefront", "productsShown")} · ${t("storefront", "pricesIncludeVat")}`}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -286,96 +306,88 @@ function ShopContent() {
                 onClick={() => setIsFiltersOpen(true)}
                 type="button"
               >
-                {t("storefront", "filters")}{activeFilterCount > 0 ? ` (${activeFilterCount})` : ""}
+                {t("storefront", "filters")}{activeFilterCount ? ` (${activeFilterCount})` : ""}
               </button>
-              <div aria-label={t("storefront", "sortProducts")} className="inline-flex rounded-lg border border-border bg-surface p-1">
+              <div className="inline-flex rounded-lg border border-border bg-surface p-1">
                 <button
                   aria-label={t("storefront", "gridView")}
                   aria-pressed={viewMode === "grid"}
-                  className={`focus-ring grid h-8 w-8 place-items-center rounded-md ${viewMode === "grid" ? "bg-primary text-primary-contrast" : "text-muted hover:text-foreground"}`}
+                  className={`focus-ring rounded-md px-2.5 py-1.5 text-xs font-black ${viewMode === "grid" ? "bg-primary text-primary-contrast" : "text-muted"}`}
                   onClick={() => setViewMode("grid")}
                   type="button"
                 >
-                  <GridIcon />
+                  ▦
                 </button>
                 <button
                   aria-label={t("storefront", "listView")}
                   aria-pressed={viewMode === "list"}
-                  className={`focus-ring grid h-8 w-8 place-items-center rounded-md ${viewMode === "list" ? "bg-primary text-primary-contrast" : "text-muted hover:text-foreground"}`}
+                  className={`focus-ring rounded-md px-2.5 py-1.5 text-xs font-black ${viewMode === "list" ? "bg-primary text-primary-contrast" : "text-muted"}`}
                   onClick={() => setViewMode("list")}
                   type="button"
                 >
-                  <ListIcon />
+                  ☰
                 </button>
               </div>
-              <label className="text-sm text-muted">
-                <span className="sr-only">{t("storefront", "sortProducts")}</span>
-                <select
-                  className="form-input min-h-10 py-2"
-                  onChange={(event) => { setSort(event.target.value as SortOption); setCurrentPage(1); }}
-                  value={sort}
-                >
-                  <option value="featured">{t("storefront", "featured")}</option>
-                  <option value="price-low">{t("storefront", "priceLowHigh")}</option>
-                  <option value="price-high">{t("storefront", "priceHighLow")}</option>
-                  <option value="stock">{t("storefront", "localStockFirst")}</option>
-                </select>
-              </label>
+              <select
+                aria-label={t("storefront", "sortProducts")}
+                className="form-input min-h-10 py-2 text-sm"
+                onChange={(event) => {
+                  setSort(event.target.value as SortOption);
+                  setCurrentPage(1);
+                }}
+                value={sort}
+              >
+                <option value="featured">{t("storefront", "featured")}</option>
+                <option value="price-low">{t("storefront", "priceLowHigh")}</option>
+                <option value="price-high">{t("storefront", "priceHighLow")}</option>
+                <option value="stock">{t("storefront", "localStockFirst")}</option>
+              </select>
             </div>
           </div>
 
           <Drawer
             description={t("storefront", "shopHeroDescription")}
-            onClose={() => setIsFiltersOpen(false)}
-            open={isFiltersOpen}
-            title={t("storefront", "filters")}
             footer={
               <button className="button-secondary w-full" onClick={clearAllFilters} type="button">
                 {t("storefront", "clearAll")}
               </button>
             }
+            onClose={() => setIsFiltersOpen(false)}
+            open={isFiltersOpen}
+            title={t("storefront", "filters")}
           >
             <CatalogFilterControls {...filterProps} idPrefix="mobile" />
           </Drawer>
 
-          {activeFilterCount > 0 && (
-            <div className="mt-5 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface p-3 text-sm shadow-sm">
-              <span className="font-semibold text-foreground">{t("storefront", "activeFilters")}: {activeFilterCount}</span>
-              {requestedCategoryName && <FilterTag>{requestedCategoryName}</FilterTag>}
-              {requestedQuery && <FilterTag>“{requestedQuery}”</FilterTag>}
-              {selectedBrands.map((brand) => <FilterTag key={brand}>{brand}</FilterTag>)}
-              {selectedSpecifications.map((specification) => <FilterTag key={specification}>{specification.replace(":", ": ")}</FilterTag>)}
-              {(minimumPrice || maximumPrice) && <FilterTag>{t("storefront", "priceRange")}</FilterTag>}
-              {onlyAvailable && <FilterTag>{t("storefront", "availableNowFilter")}</FilterTag>}
-              <button className="focus-ring ms-auto rounded-md text-xs font-bold text-primary hover:brightness-110" onClick={clearAllFilters} type="button">
-                {t("storefront", "clearAll")}
-              </button>
-            </div>
-          )}
-
-          {error && (
+          {error ? (
             <div className="mt-6 rounded-2xl border border-danger bg-surface p-6 text-center shadow-sm">
               <p className="font-black text-danger">{t("storefront", "liveCatalogueUnavailable")}</p>
               <p className="mt-2 text-sm text-muted">{error}</p>
-              <button className="button-primary mt-5" onClick={() => setReloadToken((value) => value + 1)} type="button">
+              <button
+                className="button-primary mt-5"
+                onClick={() => setReloadToken((value) => value + 1)}
+                type="button"
+              >
                 {t("storefront", "retryCatalogue")}
               </button>
             </div>
-          )}
-
-          {isLoading ? (
+          ) : isLoading ? (
             <ProductSkeletons viewMode={viewMode} />
-          ) : !error && visibleProducts.length > 0 ? (
+          ) : visibleProducts.length > 0 ? (
             <>
-              <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}>
-                {paginatedProducts.map((product) => <StoreProductCard key={product.id} product={product} variant={viewMode} />)}
+              <div
+                className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}
+              >
+                {paginatedProducts.map((product) => (
+                  <StoreProductCard key={product.id} product={product} variant={viewMode} />
+                ))}
               </div>
-              {pageCount > 1 && (
-                <nav aria-label={t("storefront", "shop")} className="mt-8 flex flex-wrap justify-center gap-2">
+              {pageCount > 1 ? (
+                <nav className="mt-8 flex flex-wrap justify-center gap-2">
                   {Array.from({ length: pageCount }, (_, index) => index + 1).map((page) => (
                     <button
                       aria-current={safePage === page ? "page" : undefined}
-                      className={`focus-ring grid h-10 min-w-10 place-items-center rounded-lg border px-3 text-sm font-black ${safePage === page ? "border-primary bg-primary text-primary-contrast" : "border-border bg-surface text-muted hover:border-primary hover:text-foreground"}`}
+                      className={`focus-ring grid h-10 min-w-10 place-items-center rounded-lg border px-3 text-sm font-black ${safePage === page ? "border-primary bg-primary text-primary-contrast" : "border-border bg-surface text-muted"}`}
                       key={page}
                       onClick={() => setCurrentPage(page)}
                       type="button"
@@ -384,20 +396,25 @@ function ShopContent() {
                     </button>
                   ))}
                 </nav>
-              )}
+              ) : null}
             </>
-          ) : !error ? (
+          ) : (
             <div className="mt-8 rounded-3xl border border-border bg-surface p-10 text-center shadow-sm">
-              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-elevated text-primary" aria-hidden="true">⌕</span>
-              <h3 className="mt-4 text-xl font-black text-foreground">{t("storefront", "noResultsTitle")}</h3>
+              <h3 className="text-xl font-black text-foreground">{t("storefront", "noResultsTitle")}</h3>
               <p className="mt-2 text-sm text-muted">{t("storefront", "noResultsText")}</p>
-              <button className="button-primary mt-6" onClick={clearAllFilters} type="button">{t("storefront", "resetFilters")}</button>
+              <button className="button-primary mt-6" onClick={clearAllFilters} type="button">
+                {t("storefront", "resetFilters")}
+              </button>
             </div>
-          ) : null}
+          )}
         </section>
       </div>
     </div>
   );
+}
+
+function flattenCategories(categories: Category[]): Category[] {
+  return categories.flatMap((category) => [category, ...flattenCategories(category.children ?? [])]);
 }
 
 function CategoryChip({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
@@ -413,15 +430,11 @@ function CategoryChip({ active, label, onClick }: { active: boolean; label: stri
   );
 }
 
-function FilterTag({ children }: { children: ReactNode }) {
-  return <span className="rounded-full bg-elevated px-2.5 py-1 text-xs font-bold text-muted">{children}</span>;
-}
-
 type CatalogFilterControlsProps = {
   idPrefix: string;
+  categories: Category[];
   availableBrands: string[];
   availableSpecifications: SpecificationFilter[];
-  categoryNames: Record<string, string>;
   maximumPrice: string;
   minimumPrice: string;
   onlyAvailable: boolean;
@@ -437,121 +450,85 @@ type CatalogFilterControlsProps = {
   selectedSpecifications: string[];
 };
 
-function CatalogFilterControls({
-  idPrefix,
-  availableBrands,
-  availableSpecifications,
-  categoryNames,
-  maximumPrice,
-  minimumPrice,
-  onlyAvailable,
-  onCategoryChange,
-  onMaximumPriceChange,
-  onMinimumPriceChange,
-  onOnlyAvailableChange,
-  onReset,
-  onToggleBrand,
-  onToggleSpecification,
-  requestedCategory,
-  selectedBrands,
-  selectedSpecifications,
-}: CatalogFilterControlsProps) {
+function CatalogFilterControls(props: CatalogFilterControlsProps) {
   const { t } = usePreferences();
-
   return (
     <div className="rounded-2xl border border-border bg-surface p-5 shadow-sm">
       <div className="flex items-center justify-between gap-3">
         <h2 className="font-black text-foreground">{t("storefront", "filters")}</h2>
-        <button className="focus-ring rounded-md text-xs font-bold text-primary hover:brightness-110" onClick={onReset} type="button">
+        <button className="focus-ring text-xs font-bold text-primary" onClick={props.onReset} type="button">
           {t("storefront", "reset")}
         </button>
       </div>
-
       <FilterGroup title={t("storefront", "filterDepartment")}>
         <RadioRow
-          checked={!requestedCategory}
-          id={`${idPrefix}-category-all`}
+          checked={!props.requestedCategory}
+          id={`${props.idPrefix}-category-all`}
           label={t("storefront", "allDepartments")}
-          onChange={() => onCategoryChange(null)}
+          onChange={() => props.onCategoryChange(null)}
         />
-        {CATEGORIES.map((category) => (
+        {props.categories.map((category) => (
           <RadioRow
-            checked={requestedCategory === category.slug}
-            id={`${idPrefix}-category-${category.slug}`}
+            checked={props.requestedCategory === category.slug}
+            id={`${props.idPrefix}-category-${category.slug}`}
             key={category.slug}
-            label={categoryNames[category.slug] ?? category.name}
-            onChange={() => onCategoryChange(category.slug)}
+            label={category.name}
+            onChange={() => props.onCategoryChange(category.slug)}
           />
         ))}
       </FilterGroup>
-
       <FilterGroup title={t("storefront", "filterAvailability")}>
         <CheckboxRow
-          checked={onlyAvailable}
-          id={`${idPrefix}-available`}
+          checked={props.onlyAvailable}
+          id={`${props.idPrefix}-available`}
           label={t("storefront", "localOrDropship")}
-          onChange={onOnlyAvailableChange}
+          onChange={props.onOnlyAvailableChange}
         />
       </FilterGroup>
-
-      {availableBrands.length > 0 && (
+      {props.availableBrands.length ? (
         <FilterGroup title={t("storefront", "filterBrands")}>
-          {availableBrands.map((brand) => (
+          {props.availableBrands.map((brand) => (
             <CheckboxRow
-              checked={selectedBrands.includes(brand)}
-              id={`${idPrefix}-brand-${toSafeId(brand)}`}
+              checked={props.selectedBrands.includes(brand)}
+              id={`${props.idPrefix}-brand-${toSafeId(brand)}`}
               key={brand}
               label={brand}
-              onChange={() => onToggleBrand(brand)}
+              onChange={() => props.onToggleBrand(brand)}
             />
           ))}
         </FilterGroup>
-      )}
-
-      {availableSpecifications.length > 0 && (
+      ) : null}
+      {props.availableSpecifications.length ? (
         <FilterGroup title={t("storefront", "filterSpecifications")}>
           <div className="max-h-64 space-y-2 overflow-y-auto pe-1">
-            {availableSpecifications.map((specification) => (
+            {props.availableSpecifications.map((specification) => (
               <CheckboxRow
-                checked={selectedSpecifications.includes(specification.key)}
-                id={`${idPrefix}-spec-${toSafeId(specification.key)}`}
+                checked={props.selectedSpecifications.includes(specification.key)}
+                id={`${props.idPrefix}-spec-${toSafeId(specification.key)}`}
                 key={specification.key}
                 label={specification.label}
-                onChange={() => onToggleSpecification(specification.key)}
+                onChange={() => props.onToggleSpecification(specification.key)}
               />
             ))}
           </div>
         </FilterGroup>
-      )}
-
+      ) : null}
       <FilterGroup title={t("storefront", "filterPrice")}>
         <div className="grid grid-cols-2 gap-2">
-          <label className="text-xs font-semibold text-muted" htmlFor={`${idPrefix}-minimum-price`}>
-            {t("storefront", "minPrice")}
-            <input
-              className="form-input mt-1 min-h-10 py-2"
-              id={`${idPrefix}-minimum-price`}
-              inputMode="decimal"
-              min="0"
-              onChange={(event) => onMinimumPriceChange(event.target.value)}
-              placeholder="0"
-              type="number"
-              value={minimumPrice}
-            />
-          </label>
-          <label className="text-xs font-semibold text-muted" htmlFor={`${idPrefix}-maximum-price`}>
-            {t("storefront", "maxPrice")}
-            <input
-              className="form-input mt-1 min-h-10 py-2"
-              id={`${idPrefix}-maximum-price`}
-              inputMode="decimal"
-              min="0"
-              onChange={(event) => onMaximumPriceChange(event.target.value)}
-              placeholder="250000"
-              type="number"
-              value={maximumPrice}
-            />
-          </label>
+          <PriceInput
+            id={`${props.idPrefix}-minimum-price`}
+            label={t("storefront", "minPrice")}
+            onChange={props.onMinimumPriceChange}
+            placeholder="0"
+            value={props.minimumPrice}
+          />
+          <PriceInput
+            id={`${props.idPrefix}-maximum-price`}
+            label={t("storefront", "maxPrice")}
+            onChange={props.onMaximumPriceChange}
+            placeholder="250000"
+            value={props.maximumPrice}
+          />
         </div>
       </FilterGroup>
     </div>
@@ -567,68 +544,76 @@ function FilterGroup({ children, title }: { children: ReactNode; title: string }
   );
 }
 
-function CheckboxRow({
-  checked,
-  id,
-  label,
-  onChange,
-}: {
+function RadioRow(props: { checked: boolean; id: string; label: string; onChange: () => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm text-muted" htmlFor={props.id}>
+      <input
+        checked={props.checked}
+        className="accent-primary"
+        id={props.id}
+        name={`${props.id.split("-category-")[0]}-category`}
+        onChange={props.onChange}
+        type="radio"
+      />
+      <span>{props.label}</span>
+    </label>
+  );
+}
+
+function CheckboxRow(props: {
   checked: boolean;
   id: string;
   label: string;
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-2.5 text-sm text-muted hover:text-foreground" htmlFor={id}>
+    <label className="flex cursor-pointer items-start gap-2 text-sm text-muted" htmlFor={props.id}>
       <input
-        checked={checked}
-        className="mt-0.5 h-4 w-4 accent-[var(--ds-primary)]"
-        id={id}
-        onChange={(event) => onChange(event.target.checked)}
+        checked={props.checked}
+        className="mt-0.5 accent-primary"
+        id={props.id}
+        onChange={(event) => props.onChange(event.target.checked)}
         type="checkbox"
       />
-      <span>{label}</span>
+      <span>{props.label}</span>
     </label>
   );
 }
 
-function RadioRow({
-  checked,
-  id,
-  label,
-  onChange,
-}: {
-  checked: boolean;
+function PriceInput(props: {
   id: string;
   label: string;
-  onChange: () => void;
+  onChange: (value: string) => void;
+  placeholder: string;
+  value: string;
 }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5 text-sm text-muted hover:text-foreground" htmlFor={id}>
+    <label className="text-xs font-semibold text-muted" htmlFor={props.id}>
+      {props.label}
       <input
-        checked={checked}
-        className="h-4 w-4 accent-[var(--ds-primary)]"
-        id={id}
-        name={`${id.split("-category-")[0]}-category`}
-        onChange={onChange}
-        type="radio"
+        className="form-input mt-1 min-h-10 py-2"
+        id={props.id}
+        inputMode="decimal"
+        min="0"
+        onChange={(event) => props.onChange(event.target.value)}
+        placeholder={props.placeholder}
+        type="number"
+        value={props.value}
       />
-      <span>{label}</span>
     </label>
   );
 }
 
 function ProductSkeletons({ viewMode }: { viewMode: ViewMode }) {
   return (
-    <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`} aria-hidden="true">
-      {Array.from({ length: viewMode === "grid" ? 6 : 4 }, (_, index) => (
-        <div className={`overflow-hidden rounded-2xl border border-border bg-surface ${viewMode === "list" ? "flex min-h-64" : ""}`} key={index}>
-          <div className={`${viewMode === "list" ? "w-64" : "aspect-square"} animate-pulse bg-elevated`} />
-          <div className="flex-1 space-y-3 p-5">
-            <div className="h-3 w-20 animate-pulse rounded bg-elevated" />
-            <div className="h-5 w-full animate-pulse rounded bg-elevated" />
-            <div className="h-5 w-2/3 animate-pulse rounded bg-elevated" />
-            <div className="h-10 w-full animate-pulse rounded-xl bg-elevated" />
+    <div className={`mt-8 ${viewMode === "grid" ? "grid gap-5 sm:grid-cols-2 xl:grid-cols-3" : "grid gap-4"}`}>
+      {Array.from({ length: 6 }, (_, index) => (
+        <div className="animate-pulse overflow-hidden rounded-2xl border border-border bg-surface" key={index}>
+          <div className="aspect-[4/3] bg-elevated" />
+          <div className="space-y-3 p-5">
+            <div className="h-3 w-1/3 rounded bg-elevated" />
+            <div className="h-5 w-4/5 rounded bg-elevated" />
+            <div className="h-4 w-full rounded bg-elevated" />
           </div>
         </div>
       ))}
@@ -637,15 +622,12 @@ function ProductSkeletons({ viewMode }: { viewMode: ViewMode }) {
 }
 
 function ShopLoadingFallback() {
-  return <div className="site-container py-12"><div className="h-96 animate-pulse rounded-3xl border border-border bg-surface" /></div>;
-}
-
-function GridIcon() {
-  return <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16"><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="3" y="3" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="14" y="3" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="3" y="14" /><rect height="7" rx="1" stroke="currentColor" strokeWidth="1.8" width="7" x="14" y="14" /></svg>;
-}
-
-function ListIcon() {
-  return <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16"><path d="M9 6h12M9 12h12M9 18h12" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /><circle cx="4.5" cy="6" fill="currentColor" r="1.2" /><circle cx="4.5" cy="12" fill="currentColor" r="1.2" /><circle cx="4.5" cy="18" fill="currentColor" r="1.2" /></svg>;
+  return (
+    <div className="site-container py-12">
+      <div className="h-48 animate-pulse rounded-3xl border border-border bg-surface" />
+      <ProductSkeletons viewMode="grid" />
+    </div>
+  );
 }
 
 function toPrice(value: string): number | null {
@@ -654,6 +636,6 @@ function toPrice(value: string): number | null {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
 }
 
-function toSafeId(value: string) {
+function toSafeId(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
