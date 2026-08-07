@@ -2,15 +2,19 @@ export type Currency = "EGP" | "USD";
 export type CategorySlug = string;
 
 export type ProductSpec = {
+  code?: string;
   label: string;
   value: string;
+  filterable?: boolean;
 };
 
 export type Product = {
   id: string;
+  slug?: string;
   sku: string;
   name: string;
   description: string;
+  longDescription?: string;
   category: string;
   categoryName: string;
   brand: string;
@@ -23,13 +27,18 @@ export type Product = {
   warrantyMonths: number;
   rating: number;
   featured?: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
 };
 
 export type Category = {
+  id?: number;
   slug: string;
   name: string;
   description: string;
   image: string;
+  featured?: boolean;
+  children?: Category[];
 };
 
 export type CartItem = {
