@@ -130,6 +130,8 @@ class AdminLaunchGate(BaseModel):
 
 
 class AdminLaunchReadinessResponse(BaseModel):
+    release_ref: str
+    environment: str
     overall_status: LaunchOverallStatus
     blocker_count: int
     warning_count: int
