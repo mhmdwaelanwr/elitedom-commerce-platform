@@ -15,26 +15,29 @@ export function HomeCatalogSections() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
-    setError(null);
-    void fetchRichCatalog({ locale, limit: 24 })
-      .then((result) => {
-        if (active) setProducts(result);
-      })
-      .catch((reason: unknown) => {
-        if (active) {
-          setError(
-            reason instanceof Error
-              ? reason.message
-              : t("storefront", "catalogueLoadError"),
-          );
-        }
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+    const timer = window.setTimeout(() => {
+      setLoading(true);
+      setError(null);
+      void fetchRichCatalog({ locale, limit: 24 })
+        .then((result) => {
+          if (active) setProducts(result);
+        })
+        .catch((reason: unknown) => {
+          if (active) {
+            setError(
+              reason instanceof Error
+                ? reason.message
+                : t("storefront", "catalogueLoadError"),
+            );
+          }
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 0);
     return () => {
       active = false;
+      window.clearTimeout(timer);
     };
   }, [locale, t]);
 
