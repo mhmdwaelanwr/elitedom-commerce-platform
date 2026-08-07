@@ -19,8 +19,8 @@ Reservation states are:
 
 - `reserved`: units were withheld from available-to-sell at checkout.
 - `released`: an unpaid/cancelled order restored those units exactly once.
-- `consumed_pending_source`: the local warehouse shipped units already withheld at checkout, but Odoo has not necessarily reflected the physical decrement yet.
-- `consumed`: Odoo's authoritative physical stock decrease has reconciled the shipped reservation.
+- `consumed_pending_source`: the local warehouse shipped units already withheld at checkout, but a source snapshot at or after that shipment has not yet reconciled them.
+- `consumed`: a sufficiently recent authoritative Odoo stock snapshot has reconciled the shipped reservation.
 
 This prevents two failure modes that existed before Stage 6:
 
@@ -107,7 +107,7 @@ No supplier API, email, or customer-data transmission is fabricated. The existin
 
 Signed Odoo callbacks remain HMAC-authenticated and `WebhookReceipt`-deduplicated.
 
-Inventory callbacks and periodic Celery inventory sync now project Odoo's absolute physical quantity into available-to-sell through `elitedom_inventory_source_balance` instead of assigning `product.stock_qty` blindly.
+Inventory callbacks and periodic Celery inventory sync now treat Odoo's absolute physical quantity as authoritative and calculate storefront availability as physical on-hand minus still-active local reservations. A shipped reservation stays temporarily withheld only when the incoming source snapshot predates that shipment; the first snapshot at or after shipment reconciles it. Older source timestamps are ignored rather than regressing availability. This avoids assigning `product.stock_qty` blindly while preserving Odoo as the physical-stock authority.
 
 Order-status callbacks:
 
@@ -115,9 +115,10 @@ Order-status callbacks:
 - use the explicit fulfillment record as the forward-only lifecycle guard;
 - mirror compatible legacy `SaleOrder.state` and `StockPicking` values;
 - persist shipment carrier/tracking facts;
-- reconcile local reservation consumption at shipment;
+- reconcile local reservation consumption using the trusted Odoo event timestamp;
 - keep cancellation terminal;
-- ignore stale out-of-order callbacks without mutating state.
+- ignore stale out-of-order callbacks without mutating state;
+- preserve existing stale/duplicate response contracts for compatibility.
 
 Existing Odoo order creation retry behavior remains: the worker first looks up the remote sale order by Elitedom reference and persists the recovered remote id, preventing duplicate Odoo sale orders after retries.
 
