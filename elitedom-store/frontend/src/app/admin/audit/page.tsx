@@ -53,7 +53,7 @@ export default function AdminAuditPage() {
     return () => window.clearTimeout(timer);
   }, [load]);
 
-  if (!allowed) return <AdminSectionDenied section="audit logs" />;
+  if (!allowed) return <AdminSectionDenied section={t("admin", "auditLog")} />;
 
   return (
     <>
@@ -83,7 +83,7 @@ export default function AdminAuditPage() {
           placeholder="order / product / staff"
           value={entityDraft}
         />
-        <button className="button-primary px-4 py-2 text-sm" type="submit">Filter</button>
+        <button className="button-primary px-4 py-2 text-sm" type="submit">{t("admin", "filter")}</button>
       </form>
 
       <div className="mt-5">
@@ -143,8 +143,8 @@ function AuditCard({ log }: { log: AdminAuditLog }) {
             {t("admin", "beforeAfter")}
           </summary>
           <div className="mt-3 grid gap-3 lg:grid-cols-2">
-            <AuditJson label="Before" value={log.before_summary} />
-            <AuditJson label="After" value={log.after_summary} />
+            <AuditJson label={t("admin", "before")} value={log.before_summary} />
+            <AuditJson label={t("admin", "after")} value={log.after_summary} />
           </div>
         </details>
       ) : null}
