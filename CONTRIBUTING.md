@@ -1,12 +1,12 @@
 # Contributing to Elitedom
 
-Elitedom is maintained as a production-oriented monorepo. Contributions must preserve runtime correctness, migration safety, documentation accuracy, and operational recoverability.
+Elitedom is maintained as a production-oriented monorepo. Contributions must preserve runtime correctness, migration safety, documentation accuracy, operational recoverability, and licensing boundaries.
 
 ## Before starting
 
 Use the structured GitHub issue forms for defects and feature proposals when work needs tracking. Security vulnerabilities must follow `SECURITY.md` and must not be disclosed through a public issue.
 
-Start implementation only after understanding the affected runtime boundary, source-of-truth documentation, migration/provider implications, and rollback surface.
+Start implementation only after understanding the affected runtime boundary, source-of-truth documentation, migration/provider implications, rollback surface, and license boundary.
 
 ## Branch and pull-request workflow
 
@@ -19,6 +19,14 @@ Start implementation only after understanding the affected runtime boundary, sou
 7. Merge only after required checks are green and review/approval policy is satisfied.
 
 `CODEOWNERS` defines the current review ownership boundary. As the engineering organization grows, ownership should be split by domain rather than removed.
+
+## Licensing of contributions
+
+Unless a file or component explicitly states a different license, original Elitedom work in this repository is licensed under the Apache License 2.0. Contributions intentionally submitted for inclusion in that work are accepted under the same Apache License 2.0 terms.
+
+The Odoo addon at `elitedom-store/odoo/addons/elitedom_connector/` is a separate licensing boundary and remains LGPL-3.0 as declared in its manifest. Do not remove or silently replace component-level license declarations, copyright notices, attribution notices, or third-party notices.
+
+See `LICENSE` and `NOTICE` before contributing. A contribution must not copy source, media, fonts, documentation, or other material whose license is incompatible with the target component.
 
 ## Architectural boundaries
 
@@ -93,4 +101,4 @@ Do not commit generated caches, editor state, runtime logs, local media, coverag
 
 ## Definition of done
 
-A change is complete when implementation, tests, migrations, operational behavior, and documentation agree; all applicable CI jobs pass; rollback/recovery implications are understood; and no new secret, generated artifact, dead source tree, or misleading documentation is tracked.
+A change is complete when implementation, tests, migrations, operational behavior, documentation, and licensing boundaries agree; all applicable CI jobs pass; rollback/recovery implications are understood; and no new secret, generated artifact, dead source tree, incompatible third-party material, or misleading documentation is tracked.

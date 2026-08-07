@@ -1,8 +1,18 @@
 # Elitedom Commerce Platform
 
-Elitedom is a production-oriented commerce platform for Egyptian technology retail. The repository contains the customer storefront, staff administration experience, FastAPI application service, PostgreSQL persistence, Redis/Celery background processing, an Odoo 17 connector, deployment topology, and a governed engineering documentation system.
+Elitedom is an enterprise-grade commerce platform for Egyptian technology retail, combining a bilingual customer storefront, staff administration, payments, fulfillment, ERP synchronization, security controls, observability, and governed release operations in one production-oriented monorepo.
 
 > **Release posture:** code quality and launch-control automation are implemented, but public production launch still requires environment-specific credentials, provider acceptance, deployment evidence, backup/restore proof, monitoring validation, and UAT approval for the exact release candidate.
+
+## Project profile
+
+**Repository description**
+
+> Enterprise commerce platform for Egyptian technology retail — Next.js storefront/admin, FastAPI services, PostgreSQL, Redis/Celery, Paymob payments, Odoo 17 integration, Arabic/RTL support, RBAC/MFA, Docker, CI, and governed launch operations.
+
+**Recommended GitHub topics**
+
+`ecommerce` · `marketplace` · `enterprise` · `erp` · `odoo` · `fastapi` · `nextjs` · `react` · `typescript` · `postgresql` · `redis` · `celery` · `paymob` · `payments` · `arabic` · `rtl` · `rbac` · `mfa` · `docker` · `devops`
 
 ## Repository map
 
@@ -16,6 +26,8 @@ Elitedom is a production-oriented commerce platform for Egyptian technology reta
 ├── .gitignore           Repository-wide generated/secret-file policy
 ├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
+├── LICENSE              Apache License 2.0 for original Elitedom work unless noted
+├── NOTICE               Multi-license, attribution, and trademark boundary
 ├── SECURITY.md
 └── README.md
 ```
@@ -35,6 +47,17 @@ The repository intentionally keeps the executable platform under `elitedom-store
 | Authentication | Password, phone OTP, Google/Apple flows, session management, staff TOTP MFA |
 | Media | Local development storage or S3-compatible object storage + CDN |
 | Operations | Docker Compose, health/readiness, metrics, tracing hooks, launch control plane |
+
+## Product capabilities
+
+- Bilingual English/Arabic storefront with LTR/RTL and light/dark/system appearance support.
+- Product discovery, catalog, cart, checkout, account, B2B, and staff administration journeys.
+- Paymob-first payment orchestration with idempotent webhook handling and isolated legacy Stripe compatibility.
+- Phone OTP plus Google/Apple identity paths, persisted sessions, staff TOTP MFA, RBAC, and audit controls.
+- PostgreSQL-backed transactional state with reversible Alembic migrations and migration replay gates.
+- Odoo 17 Community synchronization for catalog, inventory, order, and fulfillment workflows.
+- Redis/Celery background processing, transactional/outbox patterns, health/readiness, metrics, and tracing hooks.
+- S3-compatible media/CDN support, SEO assets, release acceptance gates, external smoke testing, and operational runbooks.
 
 ## Component entry points
 
@@ -92,6 +115,7 @@ Every change must preserve the repository's green baseline:
 - Dependabot tracks npm, Python/pip, and GitHub Actions dependencies on a controlled weekly cadence.
 - Structured issue forms collect reproducible defects and outcome-oriented feature requests without encouraging secrets in public issues.
 - `.gitattributes`, `.gitignore`, and Repository Hygiene keep platform-generated/editor/runtime artifacts out of source control.
+- Automated dependency PRs are reviewed as production changes; major upgrades are never assumed safe solely because Dependabot generated them.
 
 ## Security and secrets
 
@@ -99,10 +123,18 @@ Never commit real credentials, webhook secrets, OAuth secrets, database password
 
 See [`SECURITY.md`](SECURITY.md) and [`docs/operations/infrastructure/SECRETS.md`](docs/operations/infrastructure/SECRETS.md).
 
+## Licensing
+
+Original Elitedom source code, documentation, configuration, and repository tooling are licensed under the **Apache License 2.0** unless a file or component explicitly states otherwise. See [`LICENSE`](LICENSE) and [`NOTICE`](NOTICE).
+
+The Odoo connector under `elitedom-store/odoo/addons/elitedom_connector/` remains separately licensed under **LGPL-3.0**, matching its addon manifest and the Odoo Community licensing boundary. Third-party frameworks, libraries, container images, media, fonts, and other dependencies retain their respective upstream licenses and notices.
+
+The Apache License 2.0 does not grant rights to Elitedom trademarks, logos, names, or brand identity beyond reasonable attribution.
+
 ## Contribution model
 
-Work on focused branches, keep migrations reversible, preserve webhook idempotency/signature verification, and include documentation with behavioral changes. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Work on focused branches, keep migrations reversible, preserve webhook idempotency/signature verification, and include documentation with behavioral changes. Unless explicitly stated otherwise for a separately licensed component, contributions intentionally submitted for inclusion in the Apache-licensed work are accepted under Apache License 2.0 terms. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
-Documentation truth, canonical repository paths, and launch-control assets are continuously validated in CI. Production readiness remains release- and environment-specific.
+Documentation truth, canonical repository paths, licensing boundaries, and launch-control assets are continuously validated in CI. Production readiness remains release- and environment-specific.
