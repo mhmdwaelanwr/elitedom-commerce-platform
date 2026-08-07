@@ -1,0 +1,95 @@
+name: Bug report
+description: Report a reproducible defect in the storefront, backend, integrations, operations, or tooling.
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. Do not include credentials, tokens, customer PII, private provider URLs, MFA recovery material, or other secrets.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Storefront / frontend
+        - Backend / API
+        - Authentication / authorization
+        - Payments / Paymob
+        - Odoo / ERP integration
+        - Fulfillment / orders
+        - Infrastructure / deployment
+        - Documentation / tooling
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What is wrong, and what should happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Provide the smallest reliable sequence that reproduces the issue.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+
+  - type: input
+    id: release
+    attributes:
+      label: Release / commit
+      description: Commit SHA, tag, or release identifier if known.
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local development
+        - CI
+        - Staging
+        - Production
+        - Unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Safe evidence
+      description: Add sanitized logs, request IDs, screenshots, or test references. Remove secrets and personal data.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Reporter checks
+      options:
+        - label: I searched existing issues for the same defect.
+          required: true
+        - label: I removed secrets, credentials, and customer data from this report.
+          required: true
