@@ -4,7 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useStore } from "@/components/store/StoreProvider";
-import { canAccessAdminSection, isStaffRole, type AdminSection } from "@/lib/admin-api";
+import {
+  canAccessAdminSection,
+  fetchAdminAccess,
+  isStaffRole,
+  type AdminAccess,
+  type AdminSection,
+} from "@/lib/admin-api";
 import { humanize } from "@/lib/admin-ui";
 import { logout } from "@/lib/api";
 import { cn } from "@/lib/cn";
@@ -26,6 +32,8 @@ const navigation: NavigationItem[] = [
   { href: "/admin/rma", label: "warrantyDesk", section: "rma", icon: "shield" },
   { href: "/admin/rfqs", label: "b2bRfqs", section: "rfqs", icon: "quote" },
   { href: "/admin/shipments", label: "fulfilment", section: "shipments", icon: "truck" },
+  { href: "/admin/staff", label: "staffAccess", section: "staff", icon: "key" },
+  { href: "/admin/audit", label: "auditLog", section: "audit", icon: "history" },
 ];
 
 export function AdminShell({ children }: { children: ReactNode }) {
@@ -34,6 +42,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
   const { direction, t } = usePreferences();
   const { notify, session, setSession } = useStore();
   const [ready, setReady] = useState(false);
+  const [access, setAccess] = useState<AdminAccess | null>(null);
+  const [accessError, setAccessError] = useState(false);
   const [isSigningOut, setSigningOut] = useState(false);
 
   useEffect(() => {
@@ -41,26 +51,37 @@ export function AdminShell({ children }: { children: ReactNode }) {
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!ready || !session || !isStaffRole(session.role)) return;
+    let active = true;
+    setAccessError(false);
+    fetchAdminAccess(session)
+      .then((payload) => {
+        if (active) setAccess(payload);
+      })
+      .catch(() => {
+        if (active) {
+          setAccess(null);
+          setAccessError(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [ready, session]);
+
   if (!ready) return <AdminBootScreen />;
 
   if (!session || !isStaffRole(session.role)) {
-    return (
-      <div className="site-container grid min-h-[60vh] place-items-center py-10">
-        <section className="max-w-lg rounded-3xl border border-border bg-surface p-8 text-center shadow-2xl">
-          <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-danger/30 bg-danger/10 text-danger"><AdminIcon name="lock" /></div>
-          <p className="section-kicker mt-6">{t("admin", "restrictedArea")}</p>
-          <h1 className="mt-2 text-2xl font-black text-foreground">{t("admin", "staffRequired")}</h1>
-          <p className="mt-3 text-sm leading-6 text-muted">{t("admin", "restrictedDescription")}</p>
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <Link className="button-primary" href="/signin?next=/admin">{t("auth", "signIn")}</Link>
-            <Link className="button-secondary" href="/">{t("admin", "returnToStore")}</Link>
-          </div>
-        </section>
-      </div>
-    );
+    return <RestrictedAdminAccess />;
   }
 
-  const visibleNavigation = navigation.filter((item) => canAccessAdminSection(session.role, item.section));
+  if (!access && !accessError) return <AdminBootScreen />;
+  if (accessError || !access) return <RestrictedAdminAccess />;
+
+  const visibleNavigation = navigation.filter((item) =>
+    canAccessAdminSection(access.permissions, item.section),
+  );
 
   async function signOut() {
     if (!session) return;
@@ -107,7 +128,8 @@ export function AdminShell({ children }: { children: ReactNode }) {
             <div className="hidden border-t border-border p-4 lg:block">
               <div className="rounded-2xl border border-border bg-surface p-3">
                 <p className="truncate text-sm font-bold text-foreground">{session.email}</p>
-                <p className="mt-1 text-xs font-medium text-muted">{humanize(session.role)}</p>
+                <p className="mt-1 text-xs font-medium text-muted">{humanize(access.role)}</p>
+                <p className="mt-1 text-[11px] text-muted">{access.permissions.length} {t("admin", "activePermissions")}</p>
                 <button className="focus-ring mt-3 text-xs font-bold text-primary hover:brightness-110 disabled:opacity-60" disabled={isSigningOut} onClick={signOut} type="button">
                   {isSigningOut ? t("auth", "signingOut") : t("auth", "signOut")}
                 </button>
@@ -116,7 +138,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </aside>
           <div className="min-w-0 flex-1 bg-background">
             <div className="flex items-center justify-between border-b border-border px-5 py-3 sm:px-7 lg:hidden">
-              <p className="text-xs font-bold text-muted">{humanize(session.role)}</p>
+              <p className="text-xs font-bold text-muted">{humanize(access.role)}</p>
               <button className="focus-ring text-xs font-bold text-primary disabled:opacity-60" disabled={isSigningOut} onClick={signOut} type="button">
                 {isSigningOut ? t("auth", "signingOut") : t("auth", "signOut")}
               </button>
@@ -125,6 +147,24 @@ export function AdminShell({ children }: { children: ReactNode }) {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function RestrictedAdminAccess() {
+  const { t } = usePreferences();
+  return (
+    <div className="site-container grid min-h-[60vh] place-items-center py-10">
+      <section className="max-w-lg rounded-3xl border border-border bg-surface p-8 text-center shadow-2xl">
+        <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-danger/30 bg-danger/10 text-danger"><AdminIcon name="lock" /></div>
+        <p className="section-kicker mt-6">{t("admin", "restrictedArea")}</p>
+        <h1 className="mt-2 text-2xl font-black text-foreground">{t("admin", "staffRequired")}</h1>
+        <p className="mt-3 text-sm leading-6 text-muted">{t("admin", "restrictedDescription")}</p>
+        <div className="mt-6 flex flex-wrap justify-center gap-3">
+          <Link className="button-primary" href="/signin?next=/admin">{t("auth", "signIn")}</Link>
+          <Link className="button-secondary" href="/">{t("admin", "returnToStore")}</Link>
+        </div>
+      </section>
     </div>
   );
 }
@@ -141,7 +181,7 @@ function AdminBootScreen() {
   );
 }
 
-type IconName = "bag" | "bolt" | "box" | "grid" | "lock" | "quote" | "shield" | "truck" | "users";
+type IconName = "bag" | "bolt" | "box" | "grid" | "history" | "key" | "lock" | "quote" | "shield" | "truck" | "users";
 
 export function AdminIcon({ name }: { name: IconName }) {
   const paths: Record<IconName, ReactNode> = {
@@ -153,6 +193,8 @@ export function AdminIcon({ name }: { name: IconName }) {
     quote: <><path d="M5 5h14v10H9l-4 4V5Z" /><path d="M9 9h.01M15 9h.01" strokeWidth="3" /></>,
     truck: <><path d="M3 5h11v11H3zM14 9h3l3 3v4h-6z" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></>,
     lock: <><rect height="10" rx="2" width="14" x="5" y="11" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></>,
+    key: <><circle cx="8" cy="15" r="4" /><path d="m11 12 8-8M16 7l2 2M14 9l2 2" /></>,
+    history: <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5M12 7v5l3 2" /></>,
     bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z" />,
   };
   return <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
