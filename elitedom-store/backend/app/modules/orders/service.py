@@ -326,6 +326,25 @@ class OrderService:
                 raise ResourceNotFoundError("Partner", partner_id or 0)
         order_partner_id = order_partner.id
 
+        billing_name = request.customer_name or order_partner.name
+        billing_email = (
+            str(request.customer_email).strip().lower()
+            if request.customer_email is not None
+            else order_partner.email.strip().lower()
+        )
+        billing_mobile = (request.customer_mobile or order_partner.phone or "").strip()
+        if request.payment_method in ELECTRONIC_PAYMENT_METHODS:
+            if not billing_email or billing_email.endswith(".elitedom.local"):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A deliverable billing email is required for electronic payment.",
+                )
+            if not billing_mobile:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A billing mobile number is required for electronic payment.",
+                )
+
         products_by_id = await self._products_by_id(cart.items)
 
         subtotal = Decimal("0.00")
@@ -414,7 +433,7 @@ class OrderService:
             self.db.add(payment_attempt)
             await self.db.flush()
 
-            first_name, last_name = self._split_customer_name(order_partner.name)
+            first_name, last_name = self._split_customer_name(billing_name)
             paymob_items = [
                 {
                     "name": products_by_id[item.product_id].name,
@@ -445,8 +464,8 @@ class OrderService:
                 billing_data={
                     "first_name": first_name,
                     "last_name": last_name,
-                    "email": order_partner.email,
-                    "phone_number": order_partner.phone or "NA",
+                    "email": billing_email,
+                    "phone_number": billing_mobile,
                     "apartment": "NA",
                     "floor": "NA",
                     "street": request.shipping_address,
@@ -457,7 +476,7 @@ class OrderService:
                 customer={
                     "first_name": first_name,
                     "last_name": last_name,
-                    "email": order_partner.email,
+                    "email": billing_email,
                 },
             )
             payment_attempt.status = "pending"
