@@ -1,25 +1,20 @@
 """Elitedom Store — provider-neutral payment operations."""
 
-from decimal import Decimal
-
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models import SaleOrder
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.payments.models import PaymentAttempt, PaymentRefund
-from app.shared.events import PaymentRefundRequested
+from app.modules.payments.refunds import ensure_full_refund_request
 from app.shared.exceptions import ResourceConflictError, ResourceNotFoundError
-from app.shared.outbox import publish_domain_event
-from app.shared.schemas import PaymentStatus, UserRole
+from app.shared.schemas import PaymentStatus
 from app.shared.security import get_current_user
 
 router = APIRouter()
-
-
-def _is_adminish(role: str) -> bool:
-    return role in {UserRole.SYSTEM_ADMIN.value, UserRole.FINANCE_OFFICER.value}
 
 
 async def _load_order(order_id: int, db: AsyncSession, *, lock: bool = False) -> SaleOrder:
@@ -49,13 +44,6 @@ async def _latest_refund(order_id: int, db: AsyncSession) -> PaymentRefund | Non
         .order_by(PaymentRefund.created_at.desc())
         .limit(1)
     )
-
-
-def _minor_units(amount: Decimal) -> int:
-    minor = Decimal(amount) * Decimal("100")
-    if amount < 0 or minor != minor.to_integral_value():
-        raise ResourceConflictError("Order amount cannot be represented in payment minor units.")
-    return int(minor)
 
 
 @router.get("/public/order/{order_number}")
@@ -88,9 +76,10 @@ async def get_payment_status(
 ):
     """Return the local order state and latest provider attempt/refund trail."""
     order = await _load_order(order_id, db)
-
-    if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
-        raise ResourceNotFoundError("SaleOrder", order_id)
+    if order.partner_id != current_user["user_id"]:
+        await AdminAccessService(db).require(
+            current_user["user_id"], AdminPermission.PAYMENTS_VIEW.value
+        )
 
     attempt = await _latest_attempt(order.id, db)
     refund = await _latest_refund(order.id, db)
@@ -119,19 +108,27 @@ async def get_payment_status(
 @router.post("/{order_id}/refund")
 async def request_refund(
     order_id: int,
+    request: Request,
     reason: str = Query(default="customer_request", min_length=3, max_length=255),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Create one full refund request without claiming provider completion."""
+    """Create/reuse one full refund request without claiming provider completion."""
     order = await _load_order(order_id, db, lock=True)
+    privileged = order.partner_id != current_user["user_id"]
+    if privileged:
+        role, permissions = await AdminAccessService(db).require(
+            current_user["user_id"], AdminPermission.PAYMENTS_REFUND.value
+        )
+        current_user = {**current_user, "role": role, "permissions": sorted(permissions)}
 
-    if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
-        raise ResourceNotFoundError("SaleOrder", order_id)
-
-    if order.payment_status != PaymentStatus.PAID.value:
+    if order.payment_status not in {
+        PaymentStatus.PAID.value,
+        PaymentStatus.REFUND_REQUESTED.value,
+    }:
         raise ResourceConflictError(
-            f"Refunds can only be created for paid orders. Current status: {order.payment_status}."
+            "Refunds can only be requested for paid orders. "
+            f"Current status: {order.payment_status}."
         )
 
     attempt = await _latest_attempt(order.id, db)
@@ -140,54 +137,49 @@ async def request_refund(
             f"The latest provider payment attempt is not refundable: {attempt.status}."
         )
 
-    provider = attempt.provider if attempt else ("stripe" if order.stripe_payment_intent_id else None)
-    if provider is None:
-        raise ResourceConflictError("This order has no verified provider payment to refund.")
-
-    refund = PaymentRefund(
-        order_id=order.id,
-        attempt_id=attempt.id if attempt else None,
-        provider=provider,
-        amount_minor=(attempt.amount_minor if attempt else _minor_units(order.amount_total)),
-        currency=(attempt.currency if attempt else order.currency),
-        status="requested",
+    before = {
+        "payment_status": order.payment_status,
+        "latest_attempt_id": attempt.id if attempt else None,
+        "latest_attempt_status": attempt.status if attempt else None,
+    }
+    refund, created = await ensure_full_refund_request(
+        db=db,
+        order=order,
+        attempt=attempt,
         reason=reason,
-        idempotency_key=f"refund:{provider}:{order.id}:full",
+        source_context="payments_api",
     )
-    db.add(refund)
-    order.payment_status = PaymentStatus.REFUND_REQUESTED.value
-    await db.flush()
 
-    await publish_domain_event(
-        db,
-        PaymentRefundRequested(
-            payload={
+    if privileged:
+        await AdminAccessService(db).record_audit(
+            actor=current_user,
+            action="payment.refund.request",
+            entity_type="refund",
+            entity_id=refund.id,
+            before=before,
+            after={
                 "order_id": order.id,
-                "order_number": order.name,
-                "provider": provider,
-                "payment_attempt_id": attempt.id if attempt else None,
-                "provider_transaction_id": (
-                    attempt.provider_transaction_id
-                    if attempt
-                    else order.stripe_payment_intent_id
-                ),
-                "refund_id": refund.id,
+                "payment_status": order.payment_status,
+                "refund_status": refund.status,
                 "amount_minor": refund.amount_minor,
                 "currency": refund.currency,
-                "reason": reason,
-            }
-        ),
-    )
+                "provider": refund.provider,
+                "reason": refund.reason,
+                "created": created,
+            },
+            request=request,
+        )
 
     return {
         "status": "refund_requested",
         "refund_status": refund.status,
         "refund_id": refund.id,
-        "provider": provider,
+        "provider": refund.provider,
         "order_id": order.id,
         "order_number": order.name,
         "payment_status": order.payment_status,
         "amount_minor": refund.amount_minor,
         "currency": refund.currency,
-        "reason": reason,
+        "reason": refund.reason,
+        "created": created,
     }
