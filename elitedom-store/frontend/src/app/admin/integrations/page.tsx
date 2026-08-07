@@ -17,7 +17,7 @@ import { usePreferences } from "@/providers/AppPreferencesProvider";
 
 export default function AdminIntegrationsPage() {
   const { session } = useStore();
-  const { t } = usePreferences();
+  const { locale, t } = usePreferences();
   const [data, setData] = useState<AdminIntegrationStatusResponse | null>(null);
   const [isLoading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,16 +29,42 @@ export default function AdminIntegrationsPage() {
     try {
       setData(await fetchControlIntegrations(session));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load integration readiness.");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : locale === "ar"
+            ? "تعذر تحميل حالة جاهزية التكاملات."
+            : "Unable to load integration readiness.",
+      );
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [locale, session]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const labels = locale === "ar"
+    ? {
+        version: "الإصدار",
+        metrics: "المقاييس",
+        debug: "وضع التصحيح",
+        hosts: "المضيفون المسموحون",
+        cors: "مصادر CORS",
+        proxies: "الوكلاء الموثوقون",
+        media: "مسار الوسائط",
+      }
+    : {
+        version: "Version",
+        metrics: "Metrics",
+        debug: "Debug",
+        hosts: "Allowed hosts",
+        cors: "CORS origins",
+        proxies: "Trusted proxies",
+        media: "Media path",
+      };
 
   return (
     <>
@@ -56,13 +82,13 @@ export default function AdminIntegrationsPage() {
           <div className="space-y-6">
             <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               <RuntimeFact label={t("admin", "environment")} value={humanize(data.runtime.environment)} />
-              <RuntimeFact label="Version" value={data.runtime.app_version} />
-              <RuntimeFact label="Metrics" value={data.runtime.metrics_enabled ? t("admin", "enabled") : t("admin", "disabled")} />
-              <RuntimeFact label="Debug" value={data.runtime.debug ? t("admin", "enabled") : t("admin", "disabled")} />
-              <RuntimeFact label="Allowed hosts" value={String(data.runtime.allowed_host_count)} />
-              <RuntimeFact label="CORS origins" value={String(data.runtime.cors_origin_count)} />
-              <RuntimeFact label="Trusted proxies" value={String(data.runtime.trusted_proxy_count)} />
-              <RuntimeFact label="Media path" value={data.runtime.media_public_path} />
+              <RuntimeFact label={labels.version} value={data.runtime.app_version} />
+              <RuntimeFact label={labels.metrics} value={data.runtime.metrics_enabled ? t("admin", "enabled") : t("admin", "disabled")} />
+              <RuntimeFact label={labels.debug} value={data.runtime.debug ? t("admin", "enabled") : t("admin", "disabled")} />
+              <RuntimeFact label={labels.hosts} value={String(data.runtime.allowed_host_count)} />
+              <RuntimeFact label={labels.cors} value={String(data.runtime.cors_origin_count)} />
+              <RuntimeFact label={labels.proxies} value={String(data.runtime.trusted_proxy_count)} />
+              <RuntimeFact label={labels.media} value={data.runtime.media_public_path} />
             </section>
 
             <section className="grid gap-4 lg:grid-cols-2">
@@ -78,7 +104,7 @@ export default function AdminIntegrationsPage() {
                   <div className="mt-4 grid gap-2 sm:grid-cols-2">
                     {integration.checks.map((check) => (
                       <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-elevated/30 px-3 py-2.5" key={check.key}>
-                        <span className="text-xs font-semibold text-muted">{check.label}</span>
+                        <span className="text-xs font-semibold text-muted">{localizeCheck(check.key, check.label, locale)}</span>
                         <span className={`text-xs font-black ${check.configured ? "text-success" : "text-danger"}`}>
                           {check.configured ? t("admin", "configured") : t("admin", "missing")}
                         </span>
@@ -105,4 +131,29 @@ function RuntimeFact({ label, value }: { label: string; value: string }) {
       <p className="mt-2 break-words text-sm font-black text-foreground">{value}</p>
     </div>
   );
+}
+
+function localizeCheck(key: string, fallback: string, locale: "en" | "ar") {
+  if (locale !== "ar") return fallback;
+  const arabic: Record<string, string> = {
+    service_url: "رابط الخدمة",
+    database: "قاعدة البيانات",
+    api_user: "مستخدم API",
+    api_key: "مفتاح API",
+    webhook_secret: "سر Webhook",
+    secret_key: "المفتاح السري",
+    public_key: "المفتاح العام",
+    hmac_secret: "سر HMAC",
+    card_method: "طريقة دفع البطاقات",
+    wallet_method: "طريقة دفع المحافظ",
+    notification_url: "رابط الإشعارات",
+    redirection_url: "رابط إعادة التوجيه",
+    client_id: "معرّف العميل",
+    account_sid: "معرّف الحساب",
+    auth_token: "رمز المصادقة",
+    sender: "المرسل",
+    sendgrid: "SendGrid",
+    zeptomail: "ZeptoMail",
+  };
+  return arabic[key] ?? fallback;
 }
