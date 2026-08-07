@@ -26,6 +26,13 @@ ALLOWED_ROOT_FILES = {
 }
 
 CANONICAL_PATHS = (
+    ".gitattributes",
+    ".github/CODEOWNERS",
+    ".github/PULL_REQUEST_TEMPLATE.md",
+    ".github/dependabot.yml",
+    ".github/ISSUE_TEMPLATE/bug_report.yml",
+    ".github/ISSUE_TEMPLATE/feature_request.yml",
+    ".github/ISSUE_TEMPLATE/config.yml",
     "docs/README.md",
     "docs/governance/DOCUMENTATION_STANDARD.md",
     "docs/product/foundation/PROJECT_FOUNDATION.md",
@@ -39,10 +46,15 @@ CANONICAL_PATHS = (
     "docs/delivery/releases/STAGE_0_BASELINE.md",
     "docs/delivery/releases/STAGE_1_CLEANUP_REPORT.md",
     "docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md",
+    "elitedom-store/backend/README.md",
     "elitedom-store/backend/app/main.py",
     "elitedom-store/frontend/package.json",
+    "elitedom-store/frontend/package-lock.json",
+    "elitedom-store/infrastructure/README.md",
     "elitedom-store/infrastructure/docker-compose.yml",
+    "elitedom-store/odoo/README.md",
     "elitedom-store/odoo/addons/elitedom_connector/__manifest__.py",
+    "elitedom-store/scripts/README.md",
     "elitedom-store/scripts/validate_documentation.py",
 )
 
@@ -54,8 +66,12 @@ LEGACY_DOCUMENTATION_PREFIXES = tuple(f"{index:02d}_" for index in range(19))
 
 RETIRED_EXACT_FILES = {
     "DOCUMENTATION_INDEX.md",
+    "elitedom-store/backend/package-lock.json",
     "elitedom-store/docs/STAGE_0_BASELINE.md",
     "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md",
+    "elitedom-store/frontend/CLAUDE.md",
+    "elitedom-store/frontend/pnpm-lock.yaml",
+    "elitedom-store/frontend/yarn.lock",
     "elitedom-store/frontend/public/file.svg",
     "elitedom-store/frontend/public/globe.svg",
     "elitedom-store/frontend/public/next.svg",
@@ -64,15 +80,24 @@ RETIRED_EXACT_FILES = {
 }
 
 GENERATED_PARTS = {
+    ".cache",
+    ".fleet",
+    ".idea",
     ".mypy_cache",
     ".next",
     ".npm",
     ".pytest_cache",
     ".ruff_cache",
     ".turbo",
+    ".vscode",
+    "__MACOSX",
     "__pycache__",
+    "htmlcov",
     "node_modules",
 }
+
+JUNK_SUFFIXES = {".orig", ".rej", ".temp", ".tmp"}
+CANONICAL_NPM_LOCK = "elitedom-store/frontend/package-lock.json"
 
 
 def tracked_files() -> list[str]:
@@ -112,7 +137,7 @@ def find_violations(paths: list[str]) -> list[str]:
             violations.append(f"retired reference source is tracked: {raw_path}")
 
         if GENERATED_PARTS.intersection(path.parts):
-            violations.append(f"generated directory content is tracked: {raw_path}")
+            violations.append(f"generated/editor directory content is tracked: {raw_path}")
 
         if name == ".DS_Store" or name == "Thumbs.db":
             violations.append(f"operating-system artifact is tracked: {raw_path}")
@@ -122,6 +147,23 @@ def find_violations(paths: list[str]) -> list[str]:
 
         if path.suffix in {".pyc", ".pyo"}:
             violations.append(f"compiled Python artifact is tracked: {raw_path}")
+
+        if path.suffix in JUNK_SUFFIXES:
+            violations.append(f"temporary/conflict artifact is tracked: {raw_path}")
+
+        if name in {".coverage", "coverage.xml"} or name.startswith(".coverage."):
+            violations.append(f"coverage output is tracked: {raw_path}")
+
+        if name.endswith(".tsbuildinfo"):
+            violations.append(f"TypeScript build cache is tracked: {raw_path}")
+
+        if name.endswith(".log"):
+            violations.append(f"runtime log is tracked: {raw_path}")
+
+        if name == "package-lock.json" and raw_path != CANONICAL_NPM_LOCK:
+            violations.append(
+                f"unexpected npm lockfile is tracked: {raw_path}; frontend is the canonical npm package"
+            )
 
         if raw_path.startswith("elitedom-store/backend/media/"):
             violations.append(f"local product media is tracked: {raw_path}")

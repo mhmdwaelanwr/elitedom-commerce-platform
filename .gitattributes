@@ -1,0 +1,20 @@
+# Normalize text files across operating systems.
+* text=auto eol=lf
+
+# Windows command files keep CRLF when added intentionally.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Treat common binary assets as binary to avoid meaningless diffs.
+*.avif binary
+*.gif binary
+*.ico binary
+*.jpeg binary
+*.jpg binary
+*.pdf binary
+*.png binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.zip binary

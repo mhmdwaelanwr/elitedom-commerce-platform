@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a product, platform, integration, operational, or engineering improvement.
+title: "[Feature]: "
+labels: []
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Storefront / frontend
+        - Backend / API
+        - Authentication / authorization
+        - Payments / Paymob
+        - Odoo / ERP integration
+        - Fulfillment / orders
+        - Infrastructure / operations
+        - Developer experience / tooling
+        - Documentation / governance
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: Describe the user, business, operational, or engineering problem before proposing the implementation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: What measurable or observable outcome should the change produce?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed approach
+      description: Optional implementation direction, constraints, or alternatives.
+
+  - type: textarea
+    id: contracts
+    attributes:
+      label: Contracts and risks
+      description: Note API, data, authorization, provider, migration, deployment, accessibility, localization, or rollback impact if known.
+
+  - type: checkboxes
+    id: readiness
+    attributes:
+      label: Request checks
+      options:
+        - label: I searched existing issues and pull requests for a similar request.
+          required: true
+        - label: This request does not contain secrets, credentials, or customer data.
+          required: true

@@ -1,6 +1,6 @@
 # Elitedom Commerce Platform
 
-Elitedom is a production-oriented commerce platform for Egyptian technology retail. The repository contains the customer storefront, staff administration experience, FastAPI application service, PostgreSQL persistence, Redis/Celery background processing, an Odoo 17 connector, deployment topology, and an engineering documentation system.
+Elitedom is a production-oriented commerce platform for Egyptian technology retail. The repository contains the customer storefront, staff administration experience, FastAPI application service, PostgreSQL persistence, Redis/Celery background processing, an Odoo 17 connector, deployment topology, and a governed engineering documentation system.
 
 > **Release posture:** code quality and launch-control automation are implemented, but public production launch still requires environment-specific credentials, provider acceptance, deployment evidence, backup/restore proof, monitoring validation, and UAT approval for the exact release candidate.
 
@@ -8,12 +8,15 @@ Elitedom is a production-oriented commerce platform for Egyptian technology reta
 
 ```text
 .
-├── .github/             GitHub Actions and contribution automation
+├── .github/             CI, ownership, dependency automation, issue/PR intake
 ├── docs/                Enterprise engineering knowledge base
 ├── elitedom-store/      Canonical executable commerce platform
-├── .editorconfig
-├── .gitignore
+├── .editorconfig        Cross-editor formatting defaults
+├── .gitattributes       Cross-platform text/binary normalization
+├── .gitignore           Repository-wide generated/secret-file policy
+├── CODE_OF_CONDUCT.md
 ├── CONTRIBUTING.md
+├── SECURITY.md
 └── README.md
 ```
 
@@ -32,6 +35,15 @@ The repository intentionally keeps the executable platform under `elitedom-store
 | Authentication | Password, phone OTP, Google/Apple flows, session management, staff TOTP MFA |
 | Media | Local development storage or S3-compatible object storage + CDN |
 | Operations | Docker Compose, health/readiness, metrics, tracing hooks, launch control plane |
+
+## Component entry points
+
+- [`elitedom-store/README.md`](elitedom-store/README.md) — executable platform overview and setup entry point.
+- [`elitedom-store/backend/README.md`](elitedom-store/backend/README.md) — API/domain/migration boundary.
+- [`elitedom-store/frontend/README.md`](elitedom-store/frontend/README.md) — storefront/admin frontend boundary.
+- [`elitedom-store/odoo/README.md`](elitedom-store/odoo/README.md) — Odoo connector boundary.
+- [`elitedom-store/infrastructure/README.md`](elitedom-store/infrastructure/README.md) — Compose/deployment topology.
+- [`elitedom-store/scripts/README.md`](elitedom-store/scripts/README.md) — CI, hygiene, launch, and validation tooling.
 
 ## Documentation
 
@@ -52,8 +64,7 @@ Key entry points:
 git clone https://github.com/mhmdwaelanwr/elitedom-erp-architecture-main.git
 cd elitedom-erp-architecture-main/elitedom-store
 cp .env.example .env
-python3 scripts/check_repository_hygiene.py
-python3 scripts/validate_documentation.py
+make verify-repo
 make dev
 make migrate
 make seed
@@ -73,6 +84,15 @@ Every change must preserve the repository's green baseline:
 6. Launch acceptance asset validation.
 7. Repository and documentation hygiene validation.
 
+`make verify-repo` runs the repository/documentation/launch/Odoo static contracts locally. GitHub Actions remains authoritative for the complete CI gate set.
+
+## Repository governance
+
+- `CODEOWNERS` defines review ownership and is intended to split by domain as the team grows.
+- Dependabot tracks npm, Python/pip, and GitHub Actions dependencies on a controlled weekly cadence.
+- Structured issue forms collect reproducible defects and outcome-oriented feature requests without encouraging secrets in public issues.
+- `.gitattributes`, `.gitignore`, and Repository Hygiene keep platform-generated/editor/runtime artifacts out of source control.
+
 ## Security and secrets
 
 Never commit real credentials, webhook secrets, OAuth secrets, database passwords, recovery codes, or production environment files. Staging and production configuration fails closed for weak core secrets, unsafe hosts/CORS, disabled staff MFA, in-memory rate limiting, and invalid enabled integrations.
@@ -85,4 +105,4 @@ Work on focused branches, keep migrations reversible, preserve webhook idempoten
 
 ---
 
-Documentation baseline verified against executable code at `5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3`. Production readiness remains release- and environment-specific.
+Documentation truth, canonical repository paths, and launch-control assets are continuously validated in CI. Production readiness remains release- and environment-specific.
