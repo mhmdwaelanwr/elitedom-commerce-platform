@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AdminError,
   AdminLoading,
@@ -20,37 +20,15 @@ import { usePreferences } from "@/providers/AppPreferencesProvider";
 export default function AdminLaunchReadinessPage() {
   const { session } = useStore();
   const { locale } = usePreferences();
+  const [releaseRef, setReleaseRef] = useState(
+    process.env.NEXT_PUBLIC_RELEASE_REF ?? "",
+  );
   const [data, setData] = useState<AdminLaunchReadinessResponse | null>(null);
   const [canManage, setCanManage] = useState(false);
-  const [isLoading, setLoading] = useState(true);
+  const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const copy = locale === "ar" ? arabicCopy : englishCopy;
-
-  const load = useCallback(async () => {
-    if (!session) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const [readiness, access] = await Promise.all([
-        fetchLaunchReadiness(session),
-        fetchAdminAccess(session),
-      ]);
-      setData(readiness);
-      setCanManage(access.permissions.includes("config.manage"));
-    } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : copy.loadError,
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [copy.loadError, session]);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 0);
-    return () => window.clearTimeout(timer);
-  }, [load]);
 
   const grouped = useMemo(() => {
     const groups = new Map<string, AdminLaunchGate[]>();
@@ -62,18 +40,45 @@ export default function AdminLaunchReadinessPage() {
     return [...groups.entries()];
   }, [data]);
 
+  async function load(targetReleaseRef = releaseRef) {
+    if (!session) return;
+    const scopedRelease = targetReleaseRef.trim();
+    if (scopedRelease.length < 7) {
+      setError(copy.releaseRequired);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const [readiness, access] = await Promise.all([
+        fetchLaunchReadiness(scopedRelease, session),
+        fetchAdminAccess(session),
+      ]);
+      setReleaseRef(readiness.release_ref);
+      setData(readiness);
+      setCanManage(access.permissions.includes("config.manage"));
+    } catch (requestError) {
+      setError(
+        requestError instanceof Error ? requestError.message : copy.loadError,
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function saveGate(
     gate: AdminLaunchGate,
     status: LaunchAcceptanceStatus,
     evidenceRef: string,
     notes: string,
   ) {
-    if (!session) return;
+    if (!session || !data) return;
     setError(null);
     try {
       setData(
         await updateLaunchGate(
           gate.key,
+          data.release_ref,
           {
             status,
             evidence_ref: evidenceRef.trim() || null,
@@ -97,16 +102,41 @@ export default function AdminLaunchReadinessPage() {
         eyebrow={copy.eyebrow}
         title={copy.title}
       />
-      <div className="mt-7">
-        {isLoading ? (
+
+      <section className="mt-7 rounded-2xl border border-border bg-surface p-5">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <label className="min-w-0 flex-1 text-xs font-black text-foreground">
+            {copy.releaseRef}
+            <input
+              autoComplete="off"
+              className="mt-1.5 w-full rounded-xl border border-border bg-background px-3 py-2 text-sm text-foreground"
+              maxLength={128}
+              onChange={(event) => setReleaseRef(event.target.value)}
+              placeholder={copy.releasePlaceholder}
+              value={releaseRef}
+            />
+          </label>
+          <button
+            className="button-primary lg:min-w-40"
+            disabled={isLoading}
+            onClick={() => void load()}
+            type="button"
+          >
+            {isLoading ? copy.checking : copy.checkRelease}
+          </button>
+        </div>
+        <p className="mt-2 text-xs leading-5 text-muted">{copy.releaseHelp}</p>
+      </section>
+
+      <div className="mt-5">
+        {error ? <AdminError error={error} onRetry={() => void load()} /> : null}
+        {isLoading && !data ? (
           <AdminLoading label={copy.loading} />
-        ) : error && !data ? (
-          <AdminError error={error} onRetry={() => void load()} />
         ) : data ? (
           <div className="space-y-6">
-            {error ? <AdminError error={error} onRetry={() => void load()} /> : null}
-
-            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+              <SummaryCard label={copy.release} value={data.release_ref} />
+              <SummaryCard label={copy.environment} value={data.environment} />
               <SummaryCard
                 label={copy.overall}
                 value={localizeOverall(data.overall_status, locale)}
@@ -141,7 +171,7 @@ export default function AdminLaunchReadinessPage() {
                       canManage={canManage}
                       copy={copy}
                       gate={gate}
-                      key={`${gate.key}:${gate.status}:${gate.evidence_ref ?? ""}:${gate.notes ?? ""}`}
+                      key={`${data.release_ref}:${gate.key}:${gate.status}:${gate.evidence_ref ?? ""}:${gate.notes ?? ""}`}
                       locale={locale}
                       onSave={saveGate}
                     />
@@ -150,7 +180,12 @@ export default function AdminLaunchReadinessPage() {
               </section>
             ))}
           </div>
-        ) : null}
+        ) : (
+          <section className="rounded-2xl border border-dashed border-border bg-elevated/20 p-6 text-center">
+            <p className="text-sm font-black text-foreground">{copy.noReleaseTitle}</p>
+            <p className="mt-2 text-sm leading-6 text-muted">{copy.noReleaseBody}</p>
+          </section>
+        )}
       </div>
     </>
   );
@@ -299,10 +334,10 @@ function localizeGateLabel(key: string, fallback: string, locale: "en" | "ar") {
 function localizeDetail(gate: AdminLaunchGate, locale: "en" | "ar") {
   if (locale !== "ar") return gate.detail;
   if (gate.source === "operator") {
-    if (gate.status === "passed") return "تم تسجيل قبول المشغل مع مرجع دليل داعم.";
-    if (gate.status === "waived") return "تم استثناء هذا الشرط ويجب مراجعته قبل الموافقة النهائية على الإطلاق.";
-    if (gate.status === "failed") return "فشل آخر اختبار قبول لهذا الشرط.";
-    return "لم يكتمل اختبار القبول التشغيلي لهذا الشرط بعد.";
+    if (gate.status === "passed") return "تم تسجيل قبول المشغل مع مرجع دليل داعم لهذا الإصدار.";
+    if (gate.status === "waived") return "تم استثناء هذا الشرط لهذا الإصدار ويجب مراجعته قبل الموافقة النهائية على الإطلاق.";
+    if (gate.status === "failed") return "فشل آخر اختبار قبول لهذا الإصدار.";
+    return "لم يكتمل اختبار القبول التشغيلي لهذا الإصدار بعد.";
   }
   return gate.result === "pass" ? "تم التحقق من هذا الشرط تلقائيًا من إعدادات التشغيل." : gate.result === "warn" ? "هذا الشرط لا يمنع الإطلاق لكنه يحتاج مراجعة تشغيلية." : "إعدادات التشغيل الحالية لا تحقق هذا الشرط الإلزامي.";
 }
@@ -310,17 +345,27 @@ function localizeDetail(gate: AdminLaunchGate, locale: "en" | "ar") {
 const englishCopy = {
   eyebrow: "Release operations",
   title: "Launch readiness",
-  description: "A fail-closed release gate that combines deployment configuration with audited operator acceptance evidence.",
+  description: "A fail-closed release gate that combines deployment configuration with audited operator acceptance evidence scoped to one release candidate.",
+  releaseRef: "Release reference",
+  releasePlaceholder: "Commit SHA or immutable release tag",
+  releaseHelp: "Every sign-off is isolated by this release reference and runtime environment. Use the exact candidate SHA or immutable tag planned for deployment.",
+  releaseRequired: "Enter an immutable release reference with at least 7 characters before checking readiness.",
+  checkRelease: "Check release",
+  checking: "Checking…",
   loading: "Checking launch readiness…",
   loadError: "Unable to load launch readiness.",
   saveError: "Unable to save launch acceptance evidence.",
+  release: "Release",
+  environment: "Environment",
   overall: "Overall status",
   blockers: "Blockers",
   warnings: "Warnings",
   generated: "Generated",
   releaseRule: "Release rule",
-  releaseRuleBody: "Do not promote a release while any blocker remains. Warnings require an explicit release-owner decision and operator gates must carry evidence before they can pass.",
+  releaseRuleBody: "Do not promote a release while any blocker remains. Warnings require an explicit release-owner decision and operator gates must carry evidence for this exact release before they can pass.",
   readOnly: "You have read-only configuration access. A staff member with config.manage permission must record launch sign-offs.",
+  noReleaseTitle: "Select the release candidate first",
+  noReleaseBody: "Launch evidence is never shared automatically between releases. Enter the candidate SHA or immutable tag above to inspect its independent readiness state.",
   gates: "gates",
   required: "Required",
   status: "Acceptance status",
@@ -341,17 +386,27 @@ const englishCopy = {
 const arabicCopy: typeof englishCopy = {
   eyebrow: "عمليات الإصدار",
   title: "جاهزية الإطلاق",
-  description: "بوابة إطلاق صارمة تجمع بين إعدادات التشغيل وأدلة قبول تشغيلية مدققة.",
+  description: "بوابة إطلاق صارمة تجمع بين إعدادات التشغيل وأدلة قبول مدققة ومربوطة بإصدار محدد.",
+  releaseRef: "مرجع الإصدار",
+  releasePlaceholder: "Commit SHA أو Release Tag ثابت",
+  releaseHelp: "كل اعتماد معزول حسب مرجع الإصدار وبيئة التشغيل. استخدم نفس SHA أو Tag الثابت المخطط لنشره.",
+  releaseRequired: "أدخل مرجع إصدار ثابتًا لا يقل عن 7 أحرف قبل فحص الجاهزية.",
+  checkRelease: "فحص الإصدار",
+  checking: "جارٍ الفحص…",
   loading: "جارٍ فحص جاهزية الإطلاق…",
   loadError: "تعذر تحميل جاهزية الإطلاق.",
   saveError: "تعذر حفظ دليل قبول الإطلاق.",
+  release: "الإصدار",
+  environment: "البيئة",
   overall: "الحالة العامة",
   blockers: "العوائق",
   warnings: "التحذيرات",
   generated: "وقت الفحص",
   releaseRule: "قاعدة الإطلاق",
-  releaseRuleBody: "لا يتم ترقية أي إصدار مع وجود عائق. التحذيرات تحتاج قرارًا صريحًا من مسؤول الإصدار، وشروط القبول التشغيلية لا تنجح بدون دليل.",
+  releaseRuleBody: "لا يتم ترقية أي إصدار مع وجود عائق. التحذيرات تحتاج قرارًا صريحًا من مسؤول الإصدار، وشروط القبول لا تنجح إلا بدليل خاص بهذا الإصدار نفسه.",
   readOnly: "لديك صلاحية قراءة الإعدادات فقط. تسجيل اعتماد الإطلاق يحتاج صلاحية config.manage.",
+  noReleaseTitle: "حدد إصدار الإطلاق أولًا",
+  noReleaseBody: "أدلة الإطلاق لا تنتقل تلقائيًا بين الإصدارات. أدخل SHA أو Tag الثابت لمراجعة حالة جاهزية مستقلة لهذا الإصدار.",
   gates: "شروط",
   required: "إلزامي",
   status: "حالة القبول",
@@ -370,6 +425,7 @@ const arabicCopy: typeof englishCopy = {
 };
 
 const arabicGateLabels: Record<string, string> = {
+  release_identity: "ربط الأدلة بإصدار محدد",
   production_environment: "اختيار بيئة الإنتاج",
   debug_disabled: "إيقاف وضع التصحيح",
   staff_mfa: "فرض التحقق متعدد العوامل للموظفين",
