@@ -10,24 +10,18 @@ import { usePreferences } from "@/providers/AppPreferencesProvider";
 export default function OrdersPage() {
   const { locale, t } = usePreferences();
   const { currency, session } = useStore();
-  const [orders, setOrders] = useState<AccountOrder[]>([]);
-  const [isLoading, setLoading] = useState(Boolean(session));
+  const [orders, setOrders] = useState<AccountOrder[] | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
     if (!session) return;
     let active = true;
-    setLoading(true);
-    setError(false);
     void fetchAccountOrders(session)
       .then((result) => {
         if (active) setOrders(result.orders);
       })
       .catch(() => {
         if (active) setError(true);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
       });
     return () => {
       active = false;
@@ -47,6 +41,8 @@ export default function OrdersPage() {
       </main>
     );
   }
+
+  const isLoading = orders === null && !error;
 
   return (
     <main className="site-container py-8 sm:py-12">
@@ -72,7 +68,7 @@ export default function OrdersPage() {
           <h2 className="font-black text-foreground">{t("account", "ordersLoadError")}</h2>
           <p className="mt-2 text-sm text-muted">{t("account", "ordersLoadErrorDescription")}</p>
         </section>
-      ) : orders.length === 0 ? (
+      ) : orders?.length === 0 ? (
         <section className="mt-8 rounded-2xl border border-border bg-surface p-10 text-center">
           <h2 className="text-xl font-black text-foreground">{t("account", "noOrders")}</h2>
           <Link className="button-primary mt-5" href="/shop">
@@ -81,7 +77,7 @@ export default function OrdersPage() {
         </section>
       ) : (
         <div className="mt-8 grid gap-4">
-          {orders.map((order) => (
+          {orders?.map((order) => (
             <article className="rounded-2xl border border-border bg-surface p-5 sm:p-6" key={order.id}>
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
                 <div>
