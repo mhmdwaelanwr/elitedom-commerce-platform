@@ -58,33 +58,25 @@ def _minor_units(amount: Decimal) -> int:
     return int(minor)
 
 
-@router.get("/public/{attempt_id}")
+@router.get("/public/order/{order_number}")
 async def get_public_payment_status(
-    attempt_id: str,
-    order_number: str = Query(..., min_length=8, max_length=64),
+    order_number: str,
     db: AsyncSession = Depends(get_db),
 ):
-    """Expose a non-PII status using two independently returned checkout references."""
-    attempt = await db.scalar(
-        select(PaymentAttempt).where(
-            PaymentAttempt.id == attempt_id,
-            PaymentAttempt.provider_reference == order_number,
-        )
-    )
-    if attempt is None:
-        raise ResourceNotFoundError("PaymentAttempt", attempt_id)
+    """Expose payment state only; never return customer or order-line data."""
+    order = await db.scalar(select(SaleOrder).where(SaleOrder.name == order_number))
+    if order is None:
+        raise ResourceNotFoundError("SaleOrder", order_number)
 
-    order = await db.get(SaleOrder, attempt.order_id)
-    if order is None or order.name != order_number:
-        raise ResourceNotFoundError("PaymentAttempt", attempt_id)
+    attempt = await _latest_attempt(order.id, db)
+    if attempt is None:
+        raise ResourceNotFoundError("PaymentAttempt", order_number)
 
     return {
         "order_number": order.name,
         "payment_status": order.payment_status,
         "provider": attempt.provider,
         "provider_attempt_status": attempt.status,
-        "amount_minor": attempt.amount_minor,
-        "currency": attempt.currency,
     }
 
 
