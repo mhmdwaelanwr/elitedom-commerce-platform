@@ -9,7 +9,14 @@ import pytest
 from PIL import Image
 from sqlalchemy import select
 
-from app.models import Partner, ProductCategory, ProductImage, ProductSupplier, ProductTemplate, Supplier
+from app.models import (
+    Partner,
+    ProductCategory,
+    ProductImage,
+    ProductSupplier,
+    ProductTemplate,
+    Supplier,
+)
 from app.modules.admin.models import AdminAuditLog
 from app.modules.products.catalog_models import (
     CategoryCatalogContent,
