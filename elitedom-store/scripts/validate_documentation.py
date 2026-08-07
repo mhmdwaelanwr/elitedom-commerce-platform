@@ -244,7 +244,7 @@ def main() -> int:
             errors.append(f"{relative}: release-stage records must be historical.")
 
         if relative.parent == Path("docs/architecture/decisions") and relative.name.startswith("ADR-"):
-            decision_status = metadata.get("decision_status")
+            decision_status = metadata.get("decision_status", "").lower()
             if decision_status not in ALLOWED_DECISION_STATUSES:
                 errors.append(
                     f"{relative}: ADR decision_status must be one of: "
@@ -252,7 +252,7 @@ def main() -> int:
                 )
             if status == "superseded" and decision_status != "superseded":
                 errors.append(
-                    f"{relative}: superseded ADR must also set decision_status=superseded."
+                    f"{relative}: superseded ADR must also set decision_status=Superseded."
                 )
 
         integration_status_contracts = {
