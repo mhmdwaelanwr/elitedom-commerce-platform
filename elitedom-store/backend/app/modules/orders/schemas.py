@@ -143,6 +143,7 @@ class SaleOrderResponse(BaseModel):
     shipping_address: str
     shipping_governorate: Optional[str] = None
     odoo_order_id: Optional[int] = None
+    # Legacy Stripe identifiers remain readable while existing orders age out.
     stripe_session_id: Optional[str] = None
     stripe_payment_intent_id: Optional[str] = None
     is_dropship: bool
@@ -154,4 +155,8 @@ class SaleOrderResponse(BaseModel):
 class CheckoutResponse(BaseModel):
     order: SaleOrderResponse
     payment_gateway_url: Optional[str] = None
+    payment_provider: Optional[str] = None
+    payment_attempt_id: Optional[str] = None
+    paymob_intention_id: Optional[str] = None
+    # Kept for backwards-compatible clients reading historical Stripe checkouts.
     stripe_session_id: Optional[str] = None

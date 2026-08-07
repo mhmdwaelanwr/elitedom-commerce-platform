@@ -14,8 +14,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.integrations.odoo import tasks as odoo_tasks
-from app.integrations.stripe import checkout as stripe_checkout
-from app.integrations.stripe import webhooks as stripe_webhooks
+from app.integrations.paymob import webhooks as paymob_webhooks
+from app.integrations.paymob.client import PaymobIntention
+from app.integrations.paymob.hmac import calculate_transaction_hmac
 from app.middleware.webhook_signature import settings as webhook_settings
 from app.models import (
     OutboxEvent,
@@ -25,6 +26,7 @@ from app.models import (
     SaleOrderLine,
     StockPicking,
 )
+from app.modules.orders import service as order_service
 from app.shared.outbox_tasks import ClaimedOutboxEvent, resolve_outbox_route
 
 
@@ -51,13 +53,22 @@ def _load_odoo_payload_helpers() -> ModuleType:
 payloads = _load_odoo_payload_helpers()
 
 
-def _stripe_settings() -> SimpleNamespace:
+def _paymob_settings() -> SimpleNamespace:
     return SimpleNamespace(
-        stripe_secret_key="sk_test_123456789",
-        stripe_webhook_secret="whsec_test_123456789",
-        stripe_currency="egp",
-        stripe_checkout_success_url="https://store.example.test/checkout/success",
-        stripe_checkout_cancel_url="https://store.example.test/checkout?payment=cancelled",
+        paymob_enabled=True,
+        paymob_secret_key="sk_test_" + "a" * 40,
+        paymob_public_key="pk_test_" + "b" * 40,
+        paymob_hmac_secret="h" * 64,
+        paymob_card_payment_method_id=101,
+        paymob_wallet_payment_method_id=202,
+        paymob_currency="EGP",
+        paymob_base_url="https://accept.paymob.com",
+        paymob_unified_checkout_url="https://accept.paymob.com/unifiedcheckout/",
+        paymob_notification_url=(
+            "https://api.example.test/api/v1/webhooks/paymob/transaction"
+        ),
+        paymob_redirection_url="https://store.example.test/checkout/payment-result",
+        paymob_timeout_seconds=5.0,
     )
 
 
@@ -88,16 +99,30 @@ async def _checkout_paid_order(
     )
     assert add_item.status_code == 200
 
-    monkeypatch.setattr(stripe_checkout, "get_settings", _stripe_settings)
-    monkeypatch.setattr(stripe_webhooks, "settings", _stripe_settings())
+    paymob_settings = _paymob_settings()
     monkeypatch.setattr(
-        stripe_checkout.stripe.checkout.Session,
-        "create",
-        lambda **_: {
-            "id": "cs_odoo_e2e",
-            "url": "https://checkout.stripe.com/c/pay/cs_odoo_e2e",
-            "payment_intent": "pi_odoo_e2e",
-        },
+        order_service,
+        "ensure_paymob_is_configured",
+        lambda *, payment_method: paymob_settings,
+    )
+    monkeypatch.setattr(paymob_webhooks, "settings", paymob_settings)
+
+    async def create_intention(self: Any, **kwargs: Any) -> PaymobIntention:
+        return PaymobIntention(
+            id="pi_odoo_e2e",
+            client_secret="client_secret_odoo_e2e",
+            checkout_url=(
+                "https://accept.paymob.com/unifiedcheckout/"
+                "?publicKey=pk_test&clientSecret=client_secret_odoo_e2e"
+            ),
+            provider_order_id="9988",
+            special_reference=kwargs["merchant_reference"],
+        )
+
+    monkeypatch.setattr(
+        order_service.PaymobClient,
+        "create_intention",
+        create_intention,
     )
 
     checkout = await client.post(
@@ -112,34 +137,56 @@ async def _checkout_paid_order(
         },
     )
     assert checkout.status_code == 201
-    order_payload = checkout.json()["order"]
+    checkout_payload = checkout.json()
+    order_payload = checkout_payload["order"]
+    assert checkout_payload["payment_provider"] == "paymob"
+    assert checkout_payload["paymob_intention_id"] == "pi_odoo_e2e"
 
-    stripe_event = {
-        "id": "evt_odoo_e2e_paid",
-        "type": "checkout.session.completed",
+    transaction = {
+        "amount_cents": 701100,
+        "created_at": "2026-08-07T00:00:00.000000",
+        "currency": "EGP",
+        "error_occured": False,
+        "has_parent_transaction": False,
+        "id": 7001001,
+        "integration_id": paymob_settings.paymob_card_payment_method_id,
+        "is_3d_secure": True,
+        "is_auth": False,
+        "is_capture": False,
+        "is_refunded": False,
+        "is_standalone_payment": True,
+        "is_voided": False,
+        "order": {
+            "id": "9988",
+            "merchant_order_id": order_payload["name"],
+        },
+        "owner": 42,
+        "pending": False,
+        "source_data": {
+            "pan": "2346",
+            "sub_type": "MasterCard",
+            "type": "card",
+        },
+        "success": True,
+        "payment_key_claims": {
+            "intention_id": "pi_odoo_e2e",
+            "extra": {
+                "order_id": str(order_payload["id"]),
+                "order_number": order_payload["name"],
+            },
+        },
         "data": {
-            "object": {
-                "id": "cs_odoo_e2e",
-                "payment_intent": "pi_odoo_e2e",
-                "metadata": {
-                    "order_id": str(order_payload["id"]),
-                    "order_number": order_payload["name"],
-                },
-                "payment_status": "paid",
-                "amount_total": 701100,
-                "currency": "egp",
-            }
+            "message": "approved",
+            "txn_response_code": "APPROVED",
         },
     }
-    monkeypatch.setattr(
-        stripe_webhooks.stripe.Webhook,
-        "construct_event",
-        lambda **_: stripe_event,
+    signature = calculate_transaction_hmac(
+        transaction,
+        paymob_settings.paymob_hmac_secret,
     )
     paid = await client.post(
-        "/api/v1/webhooks/payment/stripe-callback",
-        content=b"{}",
-        headers={"Stripe-Signature": "test-signature"},
+        f"/api/v1/webhooks/paymob/transaction?hmac={signature}",
+        json={"type": "TRANSACTION", "obj": transaction},
     )
     assert paid.status_code == 200
     assert paid.json() == {"status": "processed"}
@@ -177,7 +224,6 @@ async def _order_snapshot(db: AsyncSession, order: SaleOrder) -> dict[str, Any]:
                 "discount_percent": float(line.discount_percent),
             }
         )
-
     return {
         "id": order.id,
         "name": order.name,

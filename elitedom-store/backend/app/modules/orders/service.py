@@ -16,9 +16,10 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.integrations.stripe.checkout import (
-    create_checkout_session,
-    ensure_stripe_checkout_is_configured,
+from app.integrations.paymob.client import (
+    PaymobClient,
+    ensure_paymob_is_configured,
+    to_minor_units,
 )
 from app.models import (
     Cart,
@@ -37,6 +38,7 @@ from app.modules.orders.schemas import (
     SaleOrderResponse,
     UpdateCartItemRequest,
 )
+from app.modules.payments.models import PaymentAttempt
 from app.shared.events import CartCheckedOut, OrderConfirmed, OrderCreated
 from app.shared.exceptions import (
     InsufficientStockError,
@@ -63,6 +65,10 @@ GOVERNORATE_SHIPPING_RATES: dict[str, Decimal] = {
 }
 DEFAULT_SHIPPING_RATE = Decimal("100.00")
 MONEY_QUANTUM = Decimal("0.01")
+ELECTRONIC_PAYMENT_METHODS = {
+    PaymentMethod.CREDIT_CARD,
+    PaymentMethod.MOBILE_WALLET,
+}
 
 # Order State Machine valid transitions per FR-ORD-002
 VALID_STATE_TRANSITIONS: dict[OrderState, set[OrderState]] = {
@@ -89,9 +95,6 @@ class OrderService:
         self._require_cart_owner(partner_id=partner_id, session_id=session_id)
         cart = await self._find_cart(partner_id, session_id)
         if not cart:
-            # Authenticated carts are identified only by their partner.  A
-            # session id always identifies a guest cart and must not become a
-            # second way to access an authenticated cart.
             cart = Cart(
                 partner_id=partner_id,
                 session_id=session_id if partner_id is None else None,
@@ -101,7 +104,6 @@ class OrderService:
             await self.db.flush()
             cart = await self._load_cart(cart.id)
 
-        # Build schema response with product details
         products_by_id = await self._products_by_id(cart.items)
         items_schema = []
         subtotal = Decimal("0.00")
@@ -139,7 +141,6 @@ class OrderService:
         """Add product to shopping cart with stock check."""
         self._require_cart_owner(partner_id=partner_id, session_id=session_id)
 
-        # Verify product exists and has stock
         prod_res = await self.db.execute(
             select(ProductTemplate).where(ProductTemplate.id == request.product_id)
         )
@@ -161,7 +162,6 @@ class OrderService:
             await self.db.flush()
             cart = await self._load_cart(cart.id)
 
-        # Check if item already in cart
         existing_item = next((i for i in cart.items if i.product_id == request.product_id), None)
         if existing_item:
             new_qty = existing_item.quantity + request.quantity
@@ -173,8 +173,6 @@ class OrderService:
                 product_id=request.product_id,
                 quantity=request.quantity,
             )
-            # Keep the already-loaded relationship accurate for the response
-            # in the same request, rather than relying on a later lazy load.
             cart.items.append(new_item)
 
         await self.db.flush()
@@ -195,7 +193,6 @@ class OrderService:
 
         item = next((entry for entry in cart.items if entry.id == item_id), None)
         if not item:
-            # Do not disclose whether the id belongs to another session/cart.
             raise ResourceNotFoundError("CartItem", item_id)
 
         product = await self.db.scalar(
@@ -224,7 +221,6 @@ class OrderService:
 
         item = next((entry for entry in cart.items if entry.id == item_id), None)
         if not item:
-            # Do not disclose whether the id belongs to another session/cart.
             raise ResourceNotFoundError("CartItem", item_id)
 
         await self.db.delete(item)
@@ -244,8 +240,6 @@ class OrderService:
         if partner_id is not None:
             query = query.where(Cart.partner_id == partner_id)
         elif session_id:
-            # Guest cart lookup must never match a cart already owned by a
-            # partner, even if someone happens to know its historical session.
             query = query.where(
                 Cart.partner_id.is_(None),
                 Cart.session_id == session_id,
@@ -295,20 +289,12 @@ class OrderService:
         session_id: Optional[str] = None,
     ) -> CheckoutResponse:
         """
-        Execute streamlined checkout (FR-CART-002):
-        1. Validate cart items & stock
-        2. Calculate governorate shipping fee (FR-CART-004) & VAT (14%)
-        3. Create SaleOrder & SaleOrderLine
-        4. Atomically reserve local stock and initialize Stripe when needed
-        5. Deactivate Cart
-        6. Publish CartCheckedOut & OrderCreated domain events
+        Execute checkout with server pricing, atomic stock reservation, and a
+        Paymob-hosted payment intention for card or mobile-wallet payments.
         """
-        # Validate Stripe before looking up/creating a guest partner, order,
-        # or making any other durable checkout mutation.  The service will use
-        # this same settings object when it creates the hosted session below.
-        stripe_settings = (
-            ensure_stripe_checkout_is_configured()
-            if request.payment_method == PaymentMethod.CREDIT_CARD
+        paymob_settings = (
+            ensure_paymob_is_configured(payment_method=request.payment_method)
+            if request.payment_method in ELECTRONIC_PAYMENT_METHODS
             else None
         )
 
@@ -330,26 +316,37 @@ class OrderService:
         if not cart or not cart.items:
             raise ResourceNotFoundError("Cart", cart_identifier)
 
-        # A guest order still needs a durable customer/partner record because
-        # SaleOrder.partner_id is non-null.  We reuse an existing email record
-        # without altering its account data; new guest partners never receive a
-        # password hash and therefore cannot authenticate until they register.
-        order_partner_id = (
-            (await self._get_or_create_guest_partner(request)).id
-            if is_guest_checkout
-            else partner_id
-        )
-
-        if order_partner_id is None:
-            # Defensive guard for static type narrowing and database integrity.
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Unable to determine the order customer.",
+        if is_guest_checkout:
+            order_partner = await self._get_or_create_guest_partner(request)
+        else:
+            order_partner = await self.db.scalar(
+                select(Partner).where(Partner.id == partner_id)
             )
+            if order_partner is None:
+                raise ResourceNotFoundError("Partner", partner_id or 0)
+        order_partner_id = order_partner.id
+
+        billing_name = request.customer_name or order_partner.name
+        billing_email = (
+            str(request.customer_email).strip().lower()
+            if request.customer_email is not None
+            else order_partner.email.strip().lower()
+        )
+        billing_mobile = (request.customer_mobile or order_partner.phone or "").strip()
+        if request.payment_method in ELECTRONIC_PAYMENT_METHODS:
+            if not billing_email or billing_email.endswith(".elitedom.local"):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A deliverable billing email is required for electronic payment.",
+                )
+            if not billing_mobile:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="A billing mobile number is required for electronic payment.",
+                )
 
         products_by_id = await self._products_by_id(cart.items)
 
-        # Calculate totals
         subtotal = Decimal("0.00")
         is_dropship_order = False
         requested_quantities: dict[int, int] = {}
@@ -364,8 +361,6 @@ class OrderService:
                 is_dropship_order = True
             subtotal += prod.list_price * item.quantity
 
-        # Cart items are normally unique per product, but aggregate quantities
-        # defensively so an inconsistent legacy cart cannot bypass stock checks.
         for product_id, quantity in requested_quantities.items():
             prod = products_by_id[product_id]
             if prod.stock_qty < quantity and not prod.is_dropship_enabled:
@@ -376,11 +371,15 @@ class OrderService:
         )
         tax = ((subtotal + shipping_fee) * Decimal("0.14")).quantize(
             MONEY_QUANTUM, rounding=ROUND_HALF_UP
-        )  # 14% Egyptian VAT
+        )
         total = (subtotal + shipping_fee + tax).quantize(MONEY_QUANTUM, rounding=ROUND_HALF_UP)
 
-        # Create unique order reference
         order_number = f"SO-{datetime.now(UTC):%Y}-{uuid4().hex[:6].upper()}"
+        currency = (
+            str(paymob_settings.paymob_currency).strip().upper()
+            if paymob_settings is not None
+            else "EGP"
+        )
 
         sale_order = SaleOrder(
             name=order_number,
@@ -392,14 +391,7 @@ class OrderService:
             amount_shipping=shipping_fee,
             amount_tax=tax,
             amount_total=total,
-            # The currency is part of the immutable priced order.  It is
-            # later compared with the signed Stripe event before payment can
-            # transition to paid.
-            currency=(
-                str(stripe_settings.stripe_currency).strip().upper()
-                if stripe_settings is not None
-                else "EGP"
-            ),
+            currency=currency,
             shipping_address=request.shipping_address,
             shipping_governorate=request.shipping_governorate,
             is_dropship=is_dropship_order,
@@ -408,7 +400,6 @@ class OrderService:
         self.db.add(sale_order)
         await self.db.flush()
 
-        # Create lines
         for item in cart.items:
             prod = products_by_id[item.product_id]
             line = SaleOrderLine(
@@ -421,31 +412,84 @@ class OrderService:
             )
             self.db.add(line)
 
-        # The conditional UPDATE is the final concurrency-safe inventory
-        # guard: two concurrent checkouts cannot both sell the last unit.  A
-        # Stripe error after this point aborts the request transaction and
-        # therefore restores the reservation automatically.
         await self._reserve_non_dropship_stock(products_by_id, requested_quantities)
 
         payment_gateway_url: str | None = None
-        if request.payment_method == PaymentMethod.CREDIT_CARD:
-            stripe_session = await create_checkout_session(
-                order=sale_order,
-                cart_items=cart.items,
-                products_by_id=products_by_id,
-                settings=stripe_settings,
+        payment_attempt: PaymentAttempt | None = None
+        paymob_intention_id: str | None = None
+        if request.payment_method in ELECTRONIC_PAYMENT_METHODS:
+            payment_attempt = PaymentAttempt(
+                order_id=sale_order.id,
+                provider="paymob",
+                payment_method=request.payment_method.value,
+                status="initializing",
+                amount_minor=to_minor_units(total),
+                currency=currency,
+                idempotency_key=(
+                    f"paymob:{sale_order.name}:{request.payment_method.value}"
+                ),
+                provider_reference=sale_order.name,
             )
-            sale_order.stripe_session_id = stripe_session.id
-            sale_order.stripe_payment_intent_id = stripe_session.payment_intent_id
-            payment_gateway_url = stripe_session.url
+            self.db.add(payment_attempt)
+            await self.db.flush()
+
+            first_name, last_name = self._split_customer_name(billing_name)
+            paymob_items = [
+                {
+                    "name": products_by_id[item.product_id].name,
+                    "amount": to_minor_units(products_by_id[item.product_id].list_price),
+                    "description": products_by_id[item.product_id].sku,
+                    "quantity": item.quantity,
+                }
+                for item in cart.items
+            ]
+            delivery_and_tax = shipping_fee + tax
+            if delivery_and_tax:
+                paymob_items.append(
+                    {
+                        "name": "Delivery and VAT",
+                        "amount": to_minor_units(delivery_and_tax),
+                        "description": request.shipping_governorate,
+                        "quantity": 1,
+                    }
+                )
+
+            intention = await PaymobClient(settings=paymob_settings).create_intention(
+                amount=total,
+                currency=currency,
+                payment_method=request.payment_method,
+                merchant_reference=sale_order.name,
+                order_id=sale_order.id,
+                items=paymob_items,
+                billing_data={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": billing_email,
+                    "phone_number": billing_mobile,
+                    "apartment": "NA",
+                    "floor": "NA",
+                    "street": request.shipping_address,
+                    "building": "NA",
+                    "city": request.shipping_governorate,
+                    "country": "EG",
+                },
+                customer={
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": billing_email,
+                },
+            )
+            payment_attempt.status = "pending"
+            payment_attempt.provider_intention_id = intention.id
+            payment_attempt.provider_order_id = intention.provider_order_id
+            payment_attempt.provider_reference = (
+                intention.special_reference or sale_order.name
+            )
+            payment_gateway_url = intention.checkout_url
+            paymob_intention_id = intention.id
         elif request.payment_method == PaymentMethod.COD:
-            # COD stock is reserved at checkout, so make it visible to the
-            # warehouse without incorrectly claiming that it has been paid.
             sale_order.state = OrderState.SENT.value
 
-        # Associate the completed guest cart with the resulting partner for
-        # traceability, then make it inaccessible to either guest or account
-        # cart endpoints.  Authenticated carts already have this partner id.
         if is_guest_checkout:
             cart.partner_id = order_partner_id
         cart.is_active = False
@@ -472,6 +516,12 @@ class OrderService:
                     "order_number": completed_order.name,
                     "partner_id": order_partner_id,
                     "total_amount": float(completed_order.amount_total),
+                    "payment_provider": (
+                        payment_attempt.provider if payment_attempt else None
+                    ),
+                    "payment_attempt_id": (
+                        payment_attempt.id if payment_attempt else None
+                    ),
                 }
             ),
         )
@@ -485,9 +535,10 @@ class OrderService:
 
         return CheckoutResponse(
             order=SaleOrderResponse.model_validate(completed_order),
-            # A payment URL is returned only after a real Stripe session is
-            # created.  It is never manufactured from an order id.
             payment_gateway_url=payment_gateway_url,
+            payment_provider=payment_attempt.provider if payment_attempt else None,
+            payment_attempt_id=payment_attempt.id if payment_attempt else None,
+            paymob_intention_id=paymob_intention_id,
             stripe_session_id=completed_order.stripe_session_id,
         )
 
@@ -513,10 +564,16 @@ class OrderService:
                 .values(stock_qty=ProductTemplate.stock_qty - quantity)
             )
             if reservation.rowcount != 1:
-                # ``product.stock_qty`` may be stale after a competing order,
-                # but the error remains safe and the enclosing transaction
-                # rolls back all earlier reservations from this checkout.
                 raise InsufficientStockError(product.sku, quantity, product.stock_qty)
+
+    @staticmethod
+    def _split_customer_name(name: str) -> tuple[str, str]:
+        parts = [part for part in name.strip().split() if part]
+        if not parts:
+            return "Customer", "Customer"
+        if len(parts) == 1:
+            return parts[0], parts[0]
+        return parts[0], " ".join(parts[1:])
 
     @staticmethod
     def _require_guest_contact_details(request: CheckoutRequest) -> None:
@@ -541,10 +598,6 @@ class OrderService:
         email = str(request.customer_email).lower()
         partner = await self._find_partner_by_email(email)
         if partner is not None:
-            # Never attach an anonymous checkout to an account that can already
-            # authenticate (including an OAuth-only account).  Reusing only
-            # passwordless, unverified guest records preserves guest order
-            # history without allowing an email-only account takeover.
             if partner.password_hash or partner.email_verified:
                 raise ResourceConflictError(
                     "This email belongs to an existing account. Sign in to place this order."
@@ -563,9 +616,6 @@ class OrderService:
             email_verified=False,
         )
 
-        # The normal lookup covers the common path.  A savepoint lets a
-        # simultaneous first checkout for the same email safely fall back to
-        # the row that won the unique-email race without invalidating checkout.
         try:
             async with self.db.begin_nested():
                 self.db.add(partner)

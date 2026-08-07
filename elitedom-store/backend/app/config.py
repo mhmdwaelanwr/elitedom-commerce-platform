@@ -146,6 +146,19 @@ class Settings(BaseSettings):
     stripe_checkout_success_url: str = ""
     stripe_checkout_cancel_url: str = ""
 
+    paymob_enabled: bool = False
+    paymob_secret_key: str = ""
+    paymob_public_key: str = ""
+    paymob_hmac_secret: str = ""
+    paymob_card_payment_method_id: int = Field(default=0, ge=0)
+    paymob_wallet_payment_method_id: int = Field(default=0, ge=0)
+    paymob_currency: str = "EGP"
+    paymob_base_url: str = "https://accept.paymob.com"
+    paymob_unified_checkout_url: str = "https://accept.paymob.com/unifiedcheckout/"
+    paymob_notification_url: str = ""
+    paymob_redirection_url: str = ""
+    paymob_timeout_seconds: float = Field(default=15.0, ge=1.0, le=60.0)
+
     algolia_app_id: str = ""
     algolia_api_key: str = ""
     algolia_search_key: str = ""
@@ -209,6 +222,27 @@ class Settings(BaseSettings):
                 integration_errors.append("ODOO_API_KEY")
         if self.odoo_webhooks_enabled and not is_secure_secret(self.odoo_webhook_secret):
             integration_errors.append("ODOO_WEBHOOK_SECRET")
+        if self.paymob_enabled:
+            if not is_secure_secret(self.paymob_secret_key, minimum_length=20):
+                integration_errors.append("PAYMOB_SECRET_KEY")
+            if not is_secure_secret(self.paymob_public_key, minimum_length=20):
+                integration_errors.append("PAYMOB_PUBLIC_KEY")
+            if not is_secure_secret(self.paymob_hmac_secret, minimum_length=32):
+                integration_errors.append("PAYMOB_HMAC_SECRET")
+            if self.paymob_card_payment_method_id <= 0:
+                integration_errors.append("PAYMOB_CARD_PAYMENT_METHOD_ID")
+            if self.paymob_wallet_payment_method_id <= 0:
+                integration_errors.append("PAYMOB_WALLET_PAYMENT_METHOD_ID")
+            if not is_https_url(self.paymob_base_url):
+                integration_errors.append("PAYMOB_BASE_URL")
+            if not is_https_url(self.paymob_unified_checkout_url):
+                integration_errors.append("PAYMOB_UNIFIED_CHECKOUT_URL")
+            if not is_https_url(self.paymob_notification_url):
+                integration_errors.append("PAYMOB_NOTIFICATION_URL")
+            if not is_https_url(self.paymob_redirection_url):
+                integration_errors.append("PAYMOB_REDIRECTION_URL")
+            if len(self.paymob_currency.strip()) != 3 or not self.paymob_currency.isalpha():
+                integration_errors.append("PAYMOB_CURRENCY")
         if self.sendgrid_enabled and not is_secure_secret(self.sendgrid_api_key, minimum_length=20):
             integration_errors.append("SENDGRID_API_KEY")
         if self.zeptomail_enabled and not is_secure_secret(self.zeptomail_api_key, minimum_length=20):
