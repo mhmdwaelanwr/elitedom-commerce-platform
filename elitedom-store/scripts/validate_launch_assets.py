@@ -9,11 +9,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 STORE = ROOT / "elitedom-store"
+STAGE_10_DOC = ROOT / "docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md"
 
 REQUIRED_FILES = (
     ROOT / ".github/workflows/ci.yml",
     ROOT / ".github/workflows/launch-smoke.yml",
-    ROOT / "docs/STAGE_10_UAT_GO_LIVE.md",
+    ROOT / "docs/README.md",
+    STAGE_10_DOC,
     STORE / "docs/GO_LIVE_RUNBOOK.md",
     STORE / "scripts/live_smoke.py",
     STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py",
@@ -81,8 +83,14 @@ def main() -> int:
     for marker in REQUIRED_RUNBOOK_MARKERS:
         require(marker in runbook, f"Go-live runbook is missing section: {marker}", errors)
 
-    stage_doc = (ROOT / "docs/STAGE_10_UAT_GO_LIVE.md").read_text(encoding="utf-8")
-    for marker in ("Launch Control Plane", "UAT matrix", "External smoke", "Known live-provider gates", "release reference"):
+    stage_doc = STAGE_10_DOC.read_text(encoding="utf-8")
+    for marker in (
+        "Launch Control Plane",
+        "UAT matrix",
+        "External smoke",
+        "Known live-provider gates",
+        "release reference",
+    ):
         require(marker in stage_doc, f"Stage 10 documentation is missing: {marker}", errors)
 
     migration = (STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py").read_text(encoding="utf-8")
