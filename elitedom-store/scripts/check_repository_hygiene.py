@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate that generated files and retired sources are not tracked."""
+"""Validate canonical repository structure and reject generated/retired files."""
 
 from __future__ import annotations
 
@@ -8,7 +8,32 @@ from pathlib import Path, PurePosixPath
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 
+ALLOWED_ROOT_DIRECTORIES = {
+    ".github",
+    "docs",
+    "elitedom-store",
+}
+
+ALLOWED_ROOT_FILES = {
+    ".editorconfig",
+    ".gitattributes",
+    ".gitignore",
+    "CODE_OF_CONDUCT.md",
+    "CONTRIBUTING.md",
+    "LICENSE",
+    "README.md",
+    "SECURITY.md",
+}
+
 CANONICAL_PATHS = (
+    "docs/README.md",
+    "docs/product/foundation/PROJECT_FOUNDATION.md",
+    "docs/product/requirements/BUSINESS_REQUIREMENTS.md",
+    "docs/architecture/overview/SOLUTION_ARCHITECTURE.md",
+    "docs/architecture/decisions/ADR-001-Odoo.md",
+    "docs/engineering/development/DEVELOPMENT_GUIDELINES.md",
+    "docs/operations/runbooks/RUNBOOK.md",
+    "docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md",
     "elitedom-store/backend/app/main.py",
     "elitedom-store/frontend/package.json",
     "elitedom-store/infrastructure/docker-compose.yml",
@@ -19,7 +44,10 @@ RETIRED_PREFIXES = (
     "nextjs-ecommerce-template-main/",
 )
 
+LEGACY_DOCUMENTATION_PREFIXES = tuple(f"{index:02d}_" for index in range(19))
+
 RETIRED_EXACT_FILES = {
+    "DOCUMENTATION_INDEX.md",
     "elitedom-store/frontend/public/file.svg",
     "elitedom-store/frontend/public/globe.svg",
     "elitedom-store/frontend/public/next.svg",
@@ -56,9 +84,21 @@ def find_violations(paths: list[str]) -> list[str]:
     for raw_path in paths:
         path = PurePosixPath(raw_path)
         name = path.name
+        top_level = path.parts[0]
+
+        if len(path.parts) == 1:
+            if raw_path not in ALLOWED_ROOT_FILES:
+                violations.append(f"unexpected repository-root file: {raw_path}")
+        elif top_level not in ALLOWED_ROOT_DIRECTORIES:
+            violations.append(f"unexpected repository-root directory: {top_level}/")
+
+        if top_level.startswith(LEGACY_DOCUMENTATION_PREFIXES):
+            violations.append(
+                f"legacy numbered documentation root is tracked: {top_level}/; use docs/<domain>/"
+            )
 
         if raw_path in RETIRED_EXACT_FILES:
-            violations.append(f"retired starter asset is tracked: {raw_path}")
+            violations.append(f"retired file is tracked: {raw_path}")
 
         if any(raw_path.startswith(prefix) for prefix in RETIRED_PREFIXES):
             violations.append(f"retired reference source is tracked: {raw_path}")
@@ -82,6 +122,11 @@ def find_violations(paths: list[str]) -> list[str]:
             name.startswith(".env.") and not name.endswith(".example")
         ):
             violations.append(f"environment or secret file is tracked: {raw_path}")
+
+        if path.parent == PurePosixPath("docs") and name.startswith("STAGE_"):
+            violations.append(
+                f"release report is stored at docs root: {raw_path}; use docs/delivery/releases/"
+            )
 
     for required_path in CANONICAL_PATHS:
         if not (REPOSITORY_ROOT / required_path).is_file():

@@ -1,24 +1,40 @@
 # Elitedom Commerce Platform
 
-Elitedom is an actively developed commerce platform that combines a customer storefront, a FastAPI application service, PostgreSQL, Redis/Celery, and an Odoo 17 ERP connector.
+Elitedom is a production-oriented commerce platform for Egyptian technology retail, combining a bilingual Next.js storefront and admin console, a FastAPI application layer, PostgreSQL, Redis/Celery, Odoo 17 and provider integrations behind explicit operational controls.
 
-> **Delivery status:** the repository is suitable for local development and staging work. It is not yet approved for a public production launch. Paymob, phone-first authentication, bilingual RTL/LTR UI, full permission management, shipping operations, legal/commercial configuration, and production UAT remain delivery gates.
+> **Release status:** the Stage 0–10 engineering roadmap is implemented and merged. The repository is a green release candidate, not a claim that a production environment has been launched. Real go-live still requires environment secrets, public DNS/TLS, provider acceptance, external smoke evidence and release-scoped UAT sign-off.
 
-## Canonical implementation
+## Repository architecture
 
-All executable application code lives under [`elitedom-store/`](elitedom-store/):
+The repository intentionally has a small root surface:
+
+```text
+.
+├── .github/             GitHub Actions and repository policy
+├── docs/                Product, architecture, engineering, operations and delivery knowledge
+├── elitedom-store/      Canonical executable commerce platform
+├── .editorconfig        Cross-language editor defaults
+├── .gitignore           Repository-wide generated/secret-file policy
+├── CONTRIBUTING.md      Engineering and contribution rules
+└── README.md            Repository entry point
+```
+
+The executable platform remains under `elitedom-store/` to preserve stable CI, Docker, deployment and developer-tooling boundaries:
 
 ```text
 elitedom-store/
-├── backend/          FastAPI, SQLAlchemy, Alembic, workers and tests
-├── frontend/         Next.js storefront and administration UI
-├── infrastructure/   Development and production Docker Compose overlays
-├── odoo/             Bundled Odoo 17 addons
-├── scripts/          Repository and integration validation tools
-└── docs/             Implementation and delivery reports
+├── backend/             FastAPI, SQLAlchemy, Alembic, Celery and backend tests
+├── frontend/            Next.js storefront and administration UI
+├── infrastructure/      Development/production Docker Compose and deployment assets
+├── odoo/                Odoo 17 addons
+├── scripts/             Hygiene, smoke, integration and release validation tools
+├── docs/                Implementation-coupled runbooks and status reports
+├── .env.example         Environment contract without secrets
+├── Makefile             Developer and operator shortcuts
+└── README.md            Platform-local guide
 ```
 
-The numbered root directories (`00_PROJECT_FOUNDATION` through `18_COMPLIANCE`) contain architecture and operating documentation. Start with [`DOCUMENTATION_INDEX.md`](DOCUMENTATION_INDEX.md) for that material.
+Architecture and governance documentation is no longer stored as numbered root folders. Start at [`docs/README.md`](docs/README.md).
 
 ## Runtime stack
 
@@ -26,10 +42,13 @@ The numbered root directories (`00_PROJECT_FOUNDATION` through `18_COMPLIANCE`) 
 | --- | --- |
 | Storefront and admin | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | Application API | Python 3.11, FastAPI, Pydantic, SQLAlchemy async |
-| Application data | PostgreSQL 15 and Alembic migrations |
+| Application data | PostgreSQL 15 with Alembic migrations |
 | ERP | Odoo 17 Community with `elitedom_connector` |
-| Background jobs | Celery and Redis |
+| Background processing | Celery and Redis |
+| Payments | Paymob integration with signed/idempotent callback handling |
+| Authentication | Phone OTP, Google, Apple, tracked sessions and staff MFA controls |
 | Deployment | Docker Compose development and production overlays |
+| Media | Validated local development storage plus S3-compatible/CDN production support |
 
 ## Local development
 
@@ -44,48 +63,44 @@ make seed
 make admin-bootstrap
 ```
 
-Main local endpoints:
+Main local services:
 
 - Storefront: `http://localhost:3000`
-- FastAPI documentation: `http://localhost:8000/docs`
-- FastAPI health: `http://localhost:8000/health`
+- FastAPI docs: `http://localhost:8000/docs`
+- API liveness: `http://localhost:8000/health/live`
+- API readiness: `http://localhost:8000/health/ready`
 - Odoo: `http://localhost:8069`
-
-`make clean` removes Docker volumes and local data. Use it only when an intentional destructive reset is required.
 
 ## Quality gates
 
-```bash
-cd elitedom-store
-python3 scripts/check_repository_hygiene.py
-make validate-odoo
+Pull requests are expected to preserve the complete CI baseline:
 
-cd backend
-python -m ruff check .
-python -m pytest app/tests -q
+1. Backend — Ruff and full pytest suite on Python 3.11.
+2. Frontend — ESLint, TypeScript and production build on Node 22.
+3. Odoo 17 — addon structure, clean installation and module tests.
+4. PostgreSQL — fresh upgrade, latest downgrade/replay and full downgrade/replay.
+5. Docker Compose — development and production topology validation.
+6. Launch acceptance — release-control assets and go-live guardrails.
 
-cd ../frontend
-npm ci
-npm run lint
-npx tsc --noEmit
-npm run build
-```
+A separate Repository Hygiene workflow enforces canonical paths and rejects generated files, secrets, retired sources and root-structure drift.
 
-GitHub Actions additionally installs and tests the addon in the official Odoo 17 image, replays Alembic migrations against PostgreSQL 15, validates both Docker Compose topologies, and runs repository hygiene independently.
+## Documentation map
 
-## Integration status
+- [`docs/product/`](docs/product/) — foundation and requirements.
+- [`docs/architecture/`](docs/architecture/) — solution design, ADRs, C4, data, APIs and integrations.
+- [`docs/engineering/`](docs/engineering/) — workflows, UI/UX, testing and development standards.
+- [`docs/operations/`](docs/operations/) — infrastructure, runbooks, observability, governance, DR and compliance.
+- [`docs/delivery/`](docs/delivery/) — project-management material and stage release history.
+- [`elitedom-store/docs/`](elitedom-store/docs/) — implementation-coupled runbooks and current operational status.
 
-- **Odoo:** bundled addon, signed webhooks, idempotent processing, outbox/retry, catalogue, inventory, order and shipment events are implemented.
-- **Product media:** local filesystem storage is available for development; production object storage/CDN remains required.
-- **Payments:** Stripe-era code remains during the transition. Paymob is not implemented yet and will be introduced behind a provider-neutral payment service.
-- **Authentication:** email/password and backend social-token verification exist. Phone OTP, complete Google/Apple browser flows, account linking and hardened session revocation remain planned.
-- **Notifications and optional providers:** incomplete providers are fail-closed and disabled unless valid configuration is supplied.
+## Production release control
 
-No third-party secret belongs in source control. Copy `.env.example` locally and provide real credentials only through environment or secret-management tooling.
+The admin Launch Control Plane records automatic readiness gates and operator evidence by **release reference + environment + gate**. Evidence from an older release cannot satisfy a newer release.
 
-## Delivery reports
+Actual production launch requires the target environment to pass its external smoke run and required operator gates, including provider flows, bilingual UAT, backup/restore, monitoring and rollback evidence.
 
-- [`elitedom-store/docs/STAGE_0_BASELINE.md`](elitedom-store/docs/STAGE_0_BASELINE.md) — verified implementation baseline and launch gaps.
-- [`elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md`](elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md) — repository cleanup evidence and retained/deferred work.
+## Security
 
-Future feature work must preserve migration compatibility, backend authorization checks, current Odoo contracts, and a green CI baseline.
+Never commit third-party secrets, customer data, `.env` files, access tokens or production credentials. Deployment secrets are supplied through environment/secret-management tooling and production configuration fails closed when mandatory security controls are missing.
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for repository conventions and validation expectations.
