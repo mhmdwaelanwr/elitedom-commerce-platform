@@ -108,14 +108,13 @@ async def update_purchase_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = SupplierManager,
 ) -> PurchaseOrderResponse:
-    before = await SupplierService(db).get_purchase_order(po_number)
     result = await SupplierService(db).update_purchase_order(po_number, payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="supplier.purchase_order.update",
         entity_type="purchase_order",
         entity_id=po_number,
-        before=before,
+        before={"po_number": po_number},
         after=result,
         request=request,
     )
@@ -185,8 +184,9 @@ async def update_supplier(
     db: AsyncSession = Depends(get_db),
     current_user: dict = SupplierManager,
 ) -> SupplierResponse:
-    before = await SupplierService(db).get_supplier(supplier_id)
-    result = await SupplierService(db).update_supplier(supplier_id, payload)
+    service = SupplierService(db)
+    before = await service.get_supplier(supplier_id)
+    result = await service.update_supplier(supplier_id, payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="supplier.update",
