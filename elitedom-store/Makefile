@@ -2,7 +2,7 @@
 # Elitedom Store — Developer Makefile
 # =============================================================================
 
-.PHONY: help dev stop build logs logs-api logs-odoo prod-config prod-up prod-down prod-logs prod-migrate prod-odoo-upgrade prod-odoo-smoke test test-unit test-api test-e2e lint lint-fix typecheck audit validate-odoo migrate migrate-new migrate-down seed admin-bootstrap odoo-install-connector odoo-upgrade-connector odoo-smoke shell db-shell app-db-shell redis-cli clean
+.PHONY: help dev stop build logs logs-api logs-odoo prod-config prod-up prod-down prod-logs prod-migrate prod-odoo-upgrade prod-odoo-smoke test test-unit test-api test-e2e lint lint-fix typecheck audit validate-odoo verify-repo migrate migrate-new migrate-down seed admin-bootstrap odoo-install-connector odoo-upgrade-connector odoo-smoke shell db-shell app-db-shell redis-cli clean
 
 DOCKER_COMPOSE ?= $(shell if docker compose version >/dev/null 2>&1; then printf '%s' 'docker compose'; elif docker-compose version >/dev/null 2>&1; then printf '%s' 'docker-compose'; else printf '%s' 'docker compose'; fi)
 COMPOSE_DEV = $(DOCKER_COMPOSE) --env-file ../.env -f docker-compose.yml -f docker-compose.dev.yml
@@ -94,6 +94,12 @@ test-e2e: ## Run checkout/payment/Odoo contract flow
 validate-odoo: ## Statically validate the Odoo 17 addon
 	python scripts/validate_odoo_addon.py
 
+verify-repo: ## Run repository, documentation, launch, and Odoo static contracts
+	python3 scripts/check_repository_hygiene.py
+	python3 scripts/validate_documentation.py
+	python3 scripts/validate_launch_assets.py
+	python3 scripts/validate_odoo_addon.py
+
 lint: ## Run linter (ruff)
 	cd backend && ruff check .
 
@@ -118,7 +124,12 @@ app-db-shell: ## Open the Store API PostgreSQL shell
 redis-cli: ## Open Redis CLI
 	cd infrastructure && $(COMPOSE_DEV) exec redis redis-cli -a "$${REDIS_PASSWORD}"
 
-clean: ## Remove all development containers, volumes, and build artifacts
+clean: ## Remove development containers/volumes and generated build/test artifacts
 	cd infrastructure && $(COMPOSE_DEV) down -v --remove-orphans
-	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
-	find . -type d -name .pytest_cache -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name __pycache__ -prune -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name .pytest_cache -prune -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name .mypy_cache -prune -exec rm -rf {} + 2>/dev/null || true
+	find . -type d -name .ruff_cache -prune -exec rm -rf {} + 2>/dev/null || true
+	rm -rf backend/htmlcov backend/.coverage backend/coverage.xml
+	rm -rf frontend/.next frontend/out frontend/.turbo
+	find frontend -type f -name '*.tsbuildinfo' -delete 2>/dev/null || true
