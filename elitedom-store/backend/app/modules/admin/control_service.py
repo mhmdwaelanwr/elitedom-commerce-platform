@@ -56,13 +56,25 @@ class AdminControlPlaneService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def launch_readiness(self) -> AdminLaunchReadinessResponse:
+    async def launch_readiness(
+        self,
+        *,
+        release_ref: str,
+    ) -> AdminLaunchReadinessResponse:
+        scoped_release = self._normalize_release_ref(release_ref)
         integration_response = self.integration_status()
         integrations = {item.key: item for item in integration_response.integrations}
 
         hosts = [host.strip() for host in settings.allowed_hosts.split(",") if host.strip()]
         cors_origins = settings.cors_origin_list
         gates: list[AdminLaunchGate] = [
+            self._automatic_launch_gate(
+                key="release_identity",
+                label="Release candidate explicitly scoped",
+                category="deployment",
+                passed=True,
+                detail=f"Launch evidence is scoped to release {scoped_release} in {settings.environment}.",
+            ),
             self._automatic_launch_gate(
                 key="production_environment",
                 label="Production environment selected",
@@ -201,7 +213,12 @@ class AdminControlPlaneService:
         persisted = {
             item.key: item
             for item in (
-                await self.db.scalars(select(LaunchAcceptance))
+                await self.db.scalars(
+                    select(LaunchAcceptance).where(
+                        LaunchAcceptance.release_ref == scoped_release,
+                        LaunchAcceptance.environment == settings.environment,
+                    )
+                )
             ).all()
         }
         for key, label, category, required in _MANUAL_LAUNCH_GATES:
@@ -209,16 +226,16 @@ class AdminControlPlaneService:
             status = record.status if record is not None else "pending"
             if status == "passed":
                 result = "pass"
-                detail = "Operator acceptance is recorded with supporting evidence."
+                detail = "Operator acceptance is recorded with supporting evidence for this release."
             elif status == "waived":
                 result = "warn"
-                detail = "This launch gate was waived and must be reviewed before release approval."
+                detail = "This launch gate was waived for this release and must be reviewed before release approval."
             elif status == "failed":
                 result = "block" if required else "warn"
-                detail = "The latest operator acceptance failed."
+                detail = "The latest operator acceptance for this release failed."
             else:
                 result = "block" if required else "warn"
-                detail = "Operator acceptance has not been completed."
+                detail = "Operator acceptance has not been completed for this release."
             gates.append(
                 AdminLaunchGate(
                     key=key,
@@ -244,6 +261,8 @@ class AdminControlPlaneService:
             else ("conditional" if warning_count else "ready")
         )
         return AdminLaunchReadinessResponse(
+            release_ref=scoped_release,
+            environment=settings.environment,
             overall_status=overall_status,
             blocker_count=blocker_count,
             warning_count=warning_count,
@@ -254,10 +273,12 @@ class AdminControlPlaneService:
     async def update_launch_gate(
         self,
         *,
+        release_ref: str,
         gate_key: str,
         payload: AdminLaunchGateUpdate,
         verified_by: int,
     ) -> tuple[LaunchAcceptance, dict[str, object] | None]:
+        scoped_release = self._normalize_release_ref(release_ref)
         definition = next(
             (item for item in _MANUAL_LAUNCH_GATES if item[0] == gate_key),
             None,
@@ -276,10 +297,20 @@ class AdminControlPlaneService:
                 "Waiving a launch gate requires operator notes explaining the exception."
             )
 
-        record = await self.db.get(LaunchAcceptance, gate_key)
+        record = await self.db.scalar(
+            select(LaunchAcceptance)
+            .where(
+                LaunchAcceptance.release_ref == scoped_release,
+                LaunchAcceptance.environment == settings.environment,
+                LaunchAcceptance.key == gate_key,
+            )
+            .with_for_update()
+        )
         before = None
         if record is not None:
             before = {
+                "release_ref": record.release_ref,
+                "environment": record.environment,
                 "status": record.status,
                 "evidence_ref": record.evidence_ref,
                 "notes": record.notes,
@@ -287,7 +318,11 @@ class AdminControlPlaneService:
                 "verified_at": record.verified_at,
             }
         else:
-            record = LaunchAcceptance(key=gate_key)
+            record = LaunchAcceptance(
+                release_ref=scoped_release,
+                environment=settings.environment,
+                key=gate_key,
+            )
             self.db.add(record)
 
         record.status = payload.status
@@ -584,6 +619,19 @@ class AdminControlPlaneService:
                 media_public_path=settings.media_public_path,
             ),
         )
+
+    @staticmethod
+    def _normalize_release_ref(release_ref: str) -> str:
+        normalized = release_ref.strip()
+        if len(normalized) < 7 or len(normalized) > 128:
+            raise ResourceConflictError(
+                "Release reference must contain between 7 and 128 characters."
+            )
+        if any(character.isspace() for character in normalized):
+            raise ResourceConflictError(
+                "Release reference must not contain whitespace."
+            )
+        return normalized
 
     @staticmethod
     def _automatic_launch_gate(
