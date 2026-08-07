@@ -12,10 +12,18 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Partner
-from app.modules.admin.access import ALL_ADMIN_PERMISSIONS, STAFF_ROLES, permissions_for_role
+from app.modules.admin.access import (
+    ALL_ADMIN_PERMISSIONS,
+    STAFF_ROLES,
+    permissions_for_role,
+)
 from app.modules.admin.models import AdminAuditLog, StaffPermissionOverride
 from app.modules.auth.models import AuthSession
-from app.shared.exceptions import InsufficientPermissionsError, ResourceConflictError, ResourceNotFoundError
+from app.shared.exceptions import (
+    InsufficientPermissionsError,
+    ResourceConflictError,
+    ResourceNotFoundError,
+)
 
 _REDACTED = "[REDACTED]"
 _SENSITIVE_FRAGMENTS = (
@@ -37,11 +45,11 @@ def _safe_value(value: Any, *, depth: int = 0) -> Any:
     """Return a bounded JSON-safe audit summary without credentials/payment secrets."""
     if depth > 4:
         return "[TRUNCATED]"
-    if value is None or isinstance(value, (bool, int, float)):
+    if value is None or isinstance(value, bool | int | float):
         return value
     if isinstance(value, Decimal):
         return str(value)
-    if isinstance(value, (datetime, date)):
+    if isinstance(value, datetime | date):
         return value.isoformat()
     if isinstance(value, Enum):
         return value.value
@@ -58,7 +66,7 @@ def _safe_value(value: Any, *, depth: int = 0) -> Any:
                 else _safe_value(raw_value, depth=depth + 1)
             )
         return sanitized
-    if isinstance(value, (list, tuple, set, frozenset)):
+    if isinstance(value, list | tuple | set | frozenset):
         return [_safe_value(item, depth=depth + 1) for item in list(value)[:80]]
     text = str(value)
     return text if len(text) <= 1000 else f"{text[:997]}..."
