@@ -23,24 +23,11 @@ export default function PaymentResultPage() {
   }, []);
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const storedOrder = window.sessionStorage.getItem(ORDER_STORAGE_KEY);
-    const callbackOrder =
-      query.get("merchant_order_id") ??
-      query.get("special_reference") ??
-      query.get("order_number");
-    const resolvedOrder = storedOrder || callbackOrder;
-    if (!resolvedOrder) {
-      setState("missing");
-      return;
-    }
-
-    setOrderNumber(resolvedOrder);
     let active = true;
-    let timer: number | undefined;
+    let pollTimer: number | undefined;
     let checks = 0;
 
-    async function checkStatus() {
+    async function checkStatus(resolvedOrder: string) {
       try {
         const status = await fetchPublicPaymentStatus(resolvedOrder);
         if (!active) return;
@@ -59,7 +46,10 @@ export default function PaymentResultPage() {
           setState("pending");
           return;
         }
-        timer = window.setTimeout(checkStatus, STATUS_CHECK_DELAY_MS);
+        pollTimer = window.setTimeout(
+          () => void checkStatus(resolvedOrder),
+          STATUS_CHECK_DELAY_MS,
+        );
       } catch {
         if (!active) return;
         checks += 1;
@@ -67,14 +57,34 @@ export default function PaymentResultPage() {
           setState("error");
           return;
         }
-        timer = window.setTimeout(checkStatus, STATUS_CHECK_DELAY_MS);
+        pollTimer = window.setTimeout(
+          () => void checkStatus(resolvedOrder),
+          STATUS_CHECK_DELAY_MS,
+        );
       }
     }
 
-    void checkStatus();
+    const initializationTimer = window.setTimeout(() => {
+      const query = new URLSearchParams(window.location.search);
+      const storedOrder = window.sessionStorage.getItem(ORDER_STORAGE_KEY);
+      const callbackOrder =
+        query.get("merchant_order_id") ??
+        query.get("special_reference") ??
+        query.get("order_number");
+      const resolvedOrder = storedOrder || callbackOrder;
+      if (!resolvedOrder) {
+        setState("missing");
+        return;
+      }
+
+      setOrderNumber(resolvedOrder);
+      void checkStatus(resolvedOrder);
+    }, 0);
+
     return () => {
       active = false;
-      if (timer !== undefined) window.clearTimeout(timer);
+      window.clearTimeout(initializationTimer);
+      if (pollTimer !== undefined) window.clearTimeout(pollTimer);
     };
   }, [checkVersion]);
 
