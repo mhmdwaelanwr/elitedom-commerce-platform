@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models import ProductSupplier, ProductTemplate, PurchaseOrder, SaleOrder, Supplier
+from app.modules.fulfillment.models import InventoryReservation, Shipment
 from app.modules.suppliers.schemas import (
     ProductSupplierListResponse,
     ProductSupplierResponse,
@@ -77,8 +78,6 @@ class ProductSupplierService:
             )
 
         product = await self._product(product_id, lock=True)
-        # Draft products need sourcing configured *before* ProductService will
-        # publish them, so inactive records are intentionally linkable here.
         if request.is_primary and not product.is_dropship_enabled:
             raise ResourceConflictError(
                 "A primary dropship supplier requires a dropship-enabled product."
@@ -152,10 +151,9 @@ class DropshipFulfillmentService:
     async def ensure_purchase_orders_for_paid_order(self, order_id: int) -> list[PurchaseOrder]:
         """Create supplier POs only for a confirmed payment transaction.
 
-        The caller is expected to invoke this from the payment-confirmation
-        transition.  The payment status guard makes direct/retry invocation
-        harmless, while the durable ``fulfillment_key`` prevents duplicate POs
-        if two confirmed-payment paths ever race.
+        Reservation rows are the immutable local-vs-dropship snapshot.  This
+        prevents a later product configuration change from rerouting an old
+        order to or away from a supplier.
         """
 
         order = await self.db.scalar(
@@ -180,10 +178,28 @@ class DropshipFulfillmentService:
                 )
             ).scalars()
         }
+        local_product_ids = set(
+            (
+                await self.db.execute(
+                    select(InventoryReservation.product_id).where(
+                        InventoryReservation.order_id == order.id
+                    )
+                )
+            ).scalars()
+        )
+        has_snapshot = bool(local_product_ids)
+
         dropship_quantities: dict[int, int] = defaultdict(int)
         for line in order.order_lines:
             product = products_by_id.get(line.product_id)
-            if product is not None and product.is_dropship_enabled:
+            if product is None:
+                continue
+            is_dropship_line = (
+                line.product_id not in local_product_ids
+                if has_snapshot
+                else product.is_dropship_enabled
+            )
+            if is_dropship_line:
                 dropship_quantities[product.id] += line.quantity
 
         if not dropship_quantities:
@@ -218,9 +234,6 @@ class DropshipFulfillmentService:
             groups[link.supplier_id].append((product, link, quantity))
 
         if missing_product_ids:
-            # Do not guess a supplier or expose a customer's shipping data.
-            # The paid order remains auditable and procurement can safely add
-            # a vetted mapping before any future retry/reconciliation action.
             logger.error(
                 "Paid dropship order %s has no active verified primary supplier for product ids=%s",
                 order.id,
@@ -236,6 +249,7 @@ class DropshipFulfillmentService:
                 .with_for_update()
             )
             if existing is not None:
+                await self._ensure_shipment(order.id, existing)
                 continue
 
             purchase_order = await self._create_purchase_order(
@@ -247,11 +261,8 @@ class DropshipFulfillmentService:
             if purchase_order is None:
                 continue
             created.append(purchase_order)
+            await self._ensure_shipment(order.id, purchase_order)
 
-            # This compact event intentionally carries references only.  A
-            # future authorized provider adapter can load its own minimum data
-            # after staff approval; the durable outbox never carries a name,
-            # email, telephone number, or delivery address.
             await publish_domain_event(
                 self.db,
                 DropshipFulfillmentRequested(
@@ -266,6 +277,24 @@ class DropshipFulfillmentService:
             )
 
         return created
+
+    async def _ensure_shipment(self, order_id: int, purchase_order: PurchaseOrder) -> Shipment:
+        shipment_key = f"dropship-po:{purchase_order.id}"
+        shipment = await self.db.scalar(
+            select(Shipment).where(Shipment.shipment_key == shipment_key).with_for_update()
+        )
+        if shipment is None:
+            shipment = Shipment(
+                order_id=order_id,
+                supplier_po_id=purchase_order.id,
+                shipment_key=shipment_key,
+                fulfillment_leg="dropship",
+                status="pending",
+                external_reference=purchase_order.po_number,
+            )
+            self.db.add(shipment)
+            await self.db.flush()
+        return shipment
 
     async def _create_purchase_order(
         self,
@@ -324,6 +353,7 @@ class DropshipFulfillmentService:
                 select(PurchaseOrder).where(PurchaseOrder.fulfillment_key == fulfillment_key)
             )
             if recovered is not None:
+                await self._ensure_shipment(order.id, recovered)
                 return None
             raise
 

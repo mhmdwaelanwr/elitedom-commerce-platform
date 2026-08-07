@@ -1,9 +1,8 @@
 """Signed Odoo ERP webhook handlers.
 
-Odoo is the source of truth for inventory and fulfillment status.  These
-endpoints therefore intentionally do *not* use a customer JWT or order-owner
-check: a request is authorized by the HMAC dependency and then applied as a
-trusted integration update.
+Odoo is authoritative for physical inventory and ERP fulfillment facts.  All
+callbacks are HMAC authenticated, receipt-deduplicated, row-serialized, and
+projected into the explicit Stage 6 lifecycle without trusting client state.
 """
 
 from __future__ import annotations
@@ -23,6 +22,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.middleware.webhook_signature import verify_odoo_webhook
 from app.models import ProductTemplate, SaleOrder, StockPicking, WebhookReceipt
+from app.modules.fulfillment.models import Shipment
+from app.modules.fulfillment.service import (
+    CANCELLED,
+    CONFIRMED,
+    DELIVERED,
+    PAYMENT_PENDING,
+    PROCESSING,
+    SHIPPED,
+    FulfillmentLifecycleService,
+)
+from app.modules.inventory.reservations import InventoryReservationService
 from app.shared.events import (
     InventoryUpdated,
     OrderCancelled,
@@ -40,10 +50,6 @@ VerifiedOdooBody = Annotated[bytes, Depends(verify_odoo_webhook)]
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 IdempotencyKey = Annotated[str | None, Header(alias="X-Idempotency-Key")]
 
-
-# Odoo's public values are deliberately accepted alongside the local values.
-# ``SaleOrder.state`` uses Odoo's canonical draft/sent/sale/done/cancel values,
-# while the human-facing "shipped" status is represented by the picking state.
 ORDER_STATE_BY_ODOO_STATUS = {
     "draft": "draft",
     "sent": "sent",
@@ -87,50 +93,32 @@ EVENT_CLASS_BY_ODOO_STATUS = {
     "cancelled": OrderCancelled,
     "canceled": OrderCancelled,
 }
-
-# An Odoo delivery can arrive more than once and not necessarily in lifecycle
-# order.  ``SaleOrder.state`` intentionally has no separate ``shipped`` value,
-# so the latest picking supplies that intermediate stage.  These stages are
-# used only at the integration boundary; they prevent a delayed ``confirmed``
-# or ``sent`` message from reopening a delivered local order.
-ORDER_LIFECYCLE_STAGE_BY_ODOO_STATUS = {
-    "draft": 0,
-    "sent": 1,
-    "confirmed": 2,
-    "sale": 2,
-    "paid": 2,
-    "processing": 2,
-    "invoiced": 2,
-    "shipped": 3,
-    "delivered": 4,
-    "done": 4,
+FULFILLMENT_STATUS_BY_ODOO_STATUS = {
+    "draft": PAYMENT_PENDING,
+    "sent": CONFIRMED,
+    "confirmed": CONFIRMED,
+    "sale": CONFIRMED,
+    "paid": CONFIRMED,
+    "processing": PROCESSING,
+    "invoiced": PROCESSING,
+    "shipped": SHIPPED,
+    "delivered": DELIVERED,
+    "done": DELIVERED,
+    "cancel": CANCELLED,
+    "cancelled": CANCELLED,
+    "canceled": CANCELLED,
 }
-ORDER_LIFECYCLE_STAGE_BY_ORDER_STATE = {
-    "draft": 0,
-    "sent": 1,
-    "sale": 2,
-    "done": 4,
-}
-ORDER_LIFECYCLE_STAGE_BY_PICKING_STATE = {
-    "draft": 0,
-    "waiting": 1,
-    "confirmed": 2,
-    "assigned": 2,
-    # The local picking model represents carrier dispatch as ``done``.  The
-    # SaleOrder remains ``sale`` until Odoo reports delivered/done, which lets
-    # us distinguish shipped (3) from delivered (4) without another column.
-    "done": 3,
+FULFILLMENT_RANK = {
+    PAYMENT_PENDING: 0,
+    CONFIRMED: 1,
+    PROCESSING: 2,
+    SHIPPED: 3,
+    DELIVERED: 4,
 }
 ODOO_CANCELLATION_STATUSES = {"cancel", "cancelled", "canceled"}
 
 
 class _OdooWebhookPayload(BaseModel):
-    """Fields shared by signed Odoo messages.
-
-    An event id is preferred.  When an older Odoo automation cannot supply
-    one, the raw payload hash becomes an idempotency key instead.
-    """
-
     model_config = ConfigDict(extra="ignore", str_strip_whitespace=True)
 
     event_id: str | None = Field(default=None, min_length=1, max_length=120)
@@ -170,7 +158,6 @@ PayloadModel = TypeVar("PayloadModel", bound=BaseModel)
 
 
 def _parse_payload(body: bytes, payload_type: type[PayloadModel]) -> PayloadModel:
-    """Decode and structurally validate an already-authenticated JSON body."""
     try:
         raw_payload = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
@@ -197,7 +184,6 @@ def _parse_payload(body: bytes, payload_type: type[PayloadModel]) -> PayloadMode
 
 
 def _event_key(body: bytes, event_id: str | None, idempotency_key: str | None) -> str:
-    """Return a deterministic key scoped by the Odoo source in the receipt table."""
     supplied_key = (event_id or idempotency_key or "").strip()
     if supplied_key:
         return f"event:{supplied_key}"[:128]
@@ -211,7 +197,6 @@ async def _claim_delivery(
     event_key: str,
     event_type: str,
 ) -> bool:
-    """Persist a receipt before mutating state; return False for a duplicate."""
     existing = await db.scalar(
         select(WebhookReceipt.id).where(
             WebhookReceipt.source == "odoo",
@@ -232,9 +217,6 @@ async def _claim_delivery(
     try:
         await db.flush()
     except IntegrityError:
-        # A concurrent delivery won the unique-key race.  There are no state
-        # mutations before this point, so rolling back is safe and makes the
-        # session usable for FastAPI's normal response lifecycle.
         await db.rollback()
         return False
     return True
@@ -249,7 +231,6 @@ async def _get_or_create_picking(
     order: SaleOrder,
     payload: OrderStatusWebhookPayload,
 ) -> StockPicking:
-    """Find the relevant delivery order or create a local mirror for it."""
     if payload.picking_reference:
         picking = await db.scalar(
             select(StockPicking).where(StockPicking.name == payload.picking_reference)
@@ -277,52 +258,51 @@ async def _get_or_create_picking(
     return picking
 
 
-async def _latest_picking(db: AsyncSession, order: SaleOrder) -> StockPicking | None:
-    """Load the current delivery mirror without creating a stale one."""
-    return await db.scalar(
-        select(StockPicking)
-        .where(StockPicking.sale_id == order.id)
-        .order_by(StockPicking.id.desc())
-        .limit(1)
-    )
-
-
-def _current_lifecycle_stage(order: SaleOrder, picking: StockPicking | None) -> int | None:
-    """Return the current forward-only fulfillment stage or a terminal marker.
-
-    ``None`` denotes cancellation.  A cancellation may never be reopened by a
-    later webhook, and an order/picking that is already complete takes
-    precedence over older non-terminal messages.
-    """
-    if order.state == "cancel" or (picking is not None and picking.state == "cancel"):
-        return None
-
-    order_stage = ORDER_LIFECYCLE_STAGE_BY_ORDER_STATE.get(order.state, 0)
-    picking_stage = (
-        ORDER_LIFECYCLE_STAGE_BY_PICKING_STATE.get(picking.state, 0) if picking is not None else 0
-    )
-    return max(order_stage, picking_stage)
-
-
-def _can_apply_lifecycle_update(
+async def _shipment_for_picking(
+    db: AsyncSession,
     order: SaleOrder,
-    picking: StockPicking | None,
-    new_status: str,
-) -> bool:
-    """Allow only forward Odoo fulfillment transitions.
+    picking: StockPicking,
+) -> Shipment:
+    shipment = await db.scalar(
+        select(Shipment)
+        .where(
+            Shipment.order_id == order.id,
+            Shipment.external_reference == picking.name,
+        )
+        .order_by(Shipment.id.desc())
+        .limit(1)
+        .with_for_update()
+    )
+    if shipment is None:
+        shipment = await db.scalar(
+            select(Shipment)
+            .where(Shipment.shipment_key == f"picking:{picking.id}")
+            .with_for_update()
+        )
+    if shipment is None:
+        shipment = Shipment(
+            order_id=order.id,
+            shipment_key=f"picking:{picking.id}",
+            fulfillment_leg="dropship" if picking.picking_type == "dropship" else "local",
+            status="pending",
+            external_reference=picking.name,
+        )
+        db.add(shipment)
+        await db.flush()
+    return shipment
 
-    Odoo's retries are deduplicated by receipt, while a distinct, delayed
-    event is a legitimate delivery that must be acknowledged but ignored when
-    it would regress the lifecycle.  Cancellation is terminal and is only
-    accepted before shipment; delivery is terminal too.
-    """
-    current_stage = _current_lifecycle_stage(order, picking)
-    if current_stage is None:
+
+def _can_apply_fulfillment(current_status: str, new_odoo_status: str) -> bool:
+    if current_status == CANCELLED:
         return False
-    if new_status in ODOO_CANCELLATION_STATUSES:
-        return current_stage < ORDER_LIFECYCLE_STAGE_BY_ODOO_STATUS["shipped"]
-    target_stage = ORDER_LIFECYCLE_STAGE_BY_ODOO_STATUS[new_status]
-    return target_stage > current_stage
+    if new_odoo_status in ODOO_CANCELLATION_STATUSES:
+        return current_status in {PAYMENT_PENDING, CONFIRMED, PROCESSING}
+    target = FULFILLMENT_STATUS_BY_ODOO_STATUS[new_odoo_status]
+    current_rank = FULFILLMENT_RANK.get(current_status)
+    target_rank = FULFILLMENT_RANK.get(target)
+    if current_rank is None or target_rank is None:
+        return False
+    return target_rank > current_rank
 
 
 @router.post("/inventory")
@@ -331,7 +311,7 @@ async def odoo_inventory_webhook(
     db: DatabaseSession,
     idempotency_key: IdempotencyKey = None,
 ):
-    """Persist an HMAC-authenticated stock level update from Odoo."""
+    """Apply an authenticated absolute Odoo stock snapshot reservation-safely."""
     payload = _parse_payload(body, InventoryWebhookPayload)
     event_key = _event_key(body, payload.event_id, idempotency_key)
     if not await _claim_delivery(
@@ -341,16 +321,23 @@ async def odoo_inventory_webhook(
         return {"status": "duplicate", "event_key": event_key, "sku": payload.product_sku}
 
     product = await db.scalar(
-        select(ProductTemplate).where(ProductTemplate.sku == payload.product_sku)
+        select(ProductTemplate)
+        .where(ProductTemplate.sku == payload.product_sku)
+        .with_for_update()
     )
     if product is None:
         raise ResourceNotFoundError("Product SKU", payload.product_sku)
 
-    previous_quantity = product.stock_qty
-    product.stock_qty = payload.new_quantity
-    await db.flush()
+    previous_quantity, new_available = await InventoryReservationService(
+        db
+    ).apply_authoritative_quantity(
+        product=product,
+        source_quantity=payload.new_quantity,
+        source="odoo_webhook",
+        occurred_at=payload.timestamp,
+    )
 
-    if previous_quantity != payload.new_quantity:
+    if previous_quantity != new_available:
         await publish_domain_event(
             db,
             InventoryUpdated(
@@ -358,7 +345,8 @@ async def odoo_inventory_webhook(
                     "product_id": product.id,
                     "sku": product.sku,
                     "previous_quantity": previous_quantity,
-                    "new_quantity": payload.new_quantity,
+                    "source_on_hand_quantity": payload.new_quantity,
+                    "new_quantity": new_available,
                     "warehouse_location": payload.warehouse_location,
                     "event_key": event_key,
                     "occurred_at": payload.timestamp.isoformat(),
@@ -368,18 +356,19 @@ async def odoo_inventory_webhook(
         )
 
     logger.info(
-        "Applied Odoo inventory update: sku=%s previous=%s current=%s event=%s",
+        "Applied Odoo inventory update: sku=%s source_on_hand=%s available=%s event=%s",
         product.sku,
-        previous_quantity,
         payload.new_quantity,
+        new_available,
         event_key,
     )
     return {
         "status": "processed",
         "event_key": event_key,
         "sku": product.sku,
-        "stock_qty": product.stock_qty,
-        "changed": previous_quantity != payload.new_quantity,
+        "stock_qty": new_available,
+        "source_on_hand_qty": payload.new_quantity,
+        "changed": previous_quantity != new_available,
     }
 
 
@@ -389,12 +378,7 @@ async def odoo_order_status_webhook(
     db: DatabaseSession,
     idempotency_key: IdempotencyKey = None,
 ):
-    """Apply a trusted Odoo lifecycle and tracking update to a local order.
-
-    The lookup deliberately uses only Odoo's order reference.  Webhooks are
-    authenticated at the integration boundary and must not be constrained by
-    whichever customer owns the sale order.
-    """
+    """Apply one trusted, forward-only Odoo fulfillment/tracking update."""
     payload = _parse_payload(body, OrderStatusWebhookPayload)
     event_key = _event_key(body, payload.event_id, idempotency_key)
     if not await _claim_delivery(
@@ -407,25 +391,26 @@ async def odoo_order_status_webhook(
             "order_reference": payload.order_reference,
         }
 
-    # Serialize distinct status events for the same order.  The receipt makes
-    # identical deliveries idempotent; the row lock plus the transition guard
-    # keeps two different, out-of-order deliveries from racing a terminal
-    # lifecycle state backwards.
     order = await db.scalar(
         select(SaleOrder).where(SaleOrder.name == payload.order_reference).with_for_update()
     )
     if order is None:
         raise ResourceNotFoundError("SaleOrder", payload.order_reference)
 
-    existing_picking = await _latest_picking(db, order)
-    if not _can_apply_lifecycle_update(order, existing_picking, payload.new_status):
+    lifecycle_service = FulfillmentLifecycleService(db)
+    lifecycle = await lifecycle_service.get(order.id, lock=True)
+    if not _can_apply_fulfillment(lifecycle.status, payload.new_status):
+        picking = await db.scalar(
+            select(StockPicking)
+            .where(StockPicking.sale_id == order.id)
+            .order_by(StockPicking.id.desc())
+            .limit(1)
+        )
         logger.info(
-            "Ignored stale Odoo order update: order=%s status=%s current_order_state=%s "
-            "current_picking_state=%s event=%s",
+            "Ignored stale Odoo order update: order=%s status=%s fulfillment=%s event=%s",
             order.name,
             payload.new_status,
-            order.state,
-            existing_picking.state if existing_picking is not None else None,
+            lifecycle.status,
             event_key,
         )
         return {
@@ -433,33 +418,71 @@ async def odoo_order_status_webhook(
             "event_key": event_key,
             "order_reference": order.name,
             "order_state": order.state,
-            "picking_id": existing_picking.id if existing_picking is not None else None,
+            "fulfillment_status": lifecycle.status,
+            "picking_id": picking.id if picking is not None else None,
             "tracking_number": (
-                existing_picking.courier_tracking_ref if existing_picking is not None else None
+                picking.courier_tracking_ref if picking is not None else None
             ),
             "changed": False,
         }
 
-    picking = await _get_or_create_picking(db, order, payload)
     previous_order_state = order.state
-    previous_tracking_number = picking.courier_tracking_ref
+    previous_fulfillment_status = lifecycle.status
     target_order_state = ORDER_STATE_BY_ODOO_STATUS[payload.new_status]
-    target_picking_state = PICKING_STATE_BY_ODOO_STATUS[payload.new_status]
+    target_fulfillment = FULFILLMENT_STATUS_BY_ODOO_STATUS[payload.new_status]
+    picking = await _get_or_create_picking(db, order, payload)
+    previous_picking_state = picking.state
+    previous_tracking_number = picking.courier_tracking_ref
 
-    # Odoo owns fulfillment status.  Do not route this through the storefront
-    # state machine (which rightly enforces customer/admin transitions).
+    if payload.new_status in ODOO_CANCELLATION_STATUSES:
+        lifecycle, lifecycle_changed = await lifecycle_service.cancel(
+            order.id,
+            reason="odoo_cancelled",
+            occurred_at=payload.timestamp,
+        )
+        released = await InventoryReservationService(db).release_order(order.id)
+        if released or not order.stock_reservation_released:
+            order.stock_reservation_released = True
+        picking.state = "cancel"
+    else:
+        lifecycle, lifecycle_changed = await lifecycle_service.force_forward_from_integration(
+            order.id,
+            target_fulfillment,
+            occurred_at=payload.timestamp,
+        )
+        picking.state = PICKING_STATE_BY_ODOO_STATUS[payload.new_status]
+
     order.state = target_order_state
     if payload.odoo_order_id is not None:
         order.odoo_order_id = payload.odoo_order_id
-    picking.state = target_picking_state
     if payload.tracking_number:
         picking.courier_tracking_ref = payload.tracking_number
-    if target_picking_state == "done":
+    if picking.state == "done":
         picking.completed_date = payload.timestamp
+
+    shipment = await _shipment_for_picking(db, order, picking)
+    shipment.carrier = payload.carrier or shipment.carrier
+    shipment.tracking_number = payload.tracking_number or shipment.tracking_number
+    shipment.external_reference = picking.name
+    if target_fulfillment == SHIPPED:
+        if shipment.status != "shipped":
+            shipment.status = "shipped"
+            shipment.shipped_at = shipment.shipped_at or payload.timestamp
+        if previous_picking_state != "done" and picking.picking_type != "dropship":
+            await InventoryReservationService(db).mark_order_consumed(order.id)
+    elif target_fulfillment == DELIVERED:
+        shipment.status = "delivered"
+        shipment.shipped_at = shipment.shipped_at or payload.timestamp
+        shipment.delivered_at = shipment.delivered_at or payload.timestamp
+    elif target_fulfillment == CANCELLED:
+        if shipment.status not in {"shipped", "delivered"}:
+            shipment.status = "cancelled"
     await db.flush()
 
     changed = (
         previous_order_state != order.state
+        or previous_fulfillment_status != lifecycle.status
+        or previous_picking_state != picking.state
         or previous_tracking_number != picking.courier_tracking_ref
     )
     event_type = EVENT_CLASS_BY_ODOO_STATUS.get(payload.new_status)
@@ -471,8 +494,10 @@ async def odoo_order_status_webhook(
                     "order_id": order.id,
                     "order_number": order.name,
                     "state": order.state,
+                    "fulfillment_status": lifecycle.status,
                     "odoo_status": payload.new_status,
                     "picking_id": picking.id,
+                    "shipment_id": shipment.id,
                     "tracking_number": picking.courier_tracking_ref,
                     "carrier": payload.carrier,
                     "event_key": event_key,
@@ -483,10 +508,12 @@ async def odoo_order_status_webhook(
         )
 
     logger.info(
-        "Applied Odoo order update: order=%s status=%s state=%s tracking=%s event=%s",
+        "Applied Odoo order update: order=%s status=%s state=%s fulfillment=%s "
+        "tracking=%s event=%s",
         order.name,
         payload.new_status,
         order.state,
+        lifecycle.status,
         picking.courier_tracking_ref,
         event_key,
     )
@@ -495,7 +522,10 @@ async def odoo_order_status_webhook(
         "event_key": event_key,
         "order_reference": order.name,
         "order_state": order.state,
+        "fulfillment_status": lifecycle.status,
         "picking_id": picking.id,
+        "shipment_id": shipment.id,
         "tracking_number": picking.courier_tracking_ref,
-        "changed": changed,
+        "carrier": shipment.carrier,
+        "changed": changed or lifecycle_changed,
     }
