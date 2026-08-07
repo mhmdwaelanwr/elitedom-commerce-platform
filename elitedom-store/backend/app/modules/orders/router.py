@@ -14,6 +14,8 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Cart, SaleOrder
+from app.modules.fulfillment.service import CONFIRMED, FulfillmentLifecycleService
+from app.modules.inventory.reservations import InventoryReservationService
 from app.modules.orders.schemas import (
     AddToCartRequest,
     CheckoutRequest,
@@ -26,7 +28,7 @@ from app.shared.exceptions import (
     InvalidCredentialsError,
     ResourceNotFoundError,
 )
-from app.shared.schemas import OrderState, UserRole
+from app.shared.schemas import OrderState, PaymentMethod, UserRole
 from app.shared.security import (
     decode_token,
     get_current_user,
@@ -230,22 +232,23 @@ async def checkout(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """
-    Submit checkout order.
-    FR-CART-002: Streamlined checkout with address, delivery, payment.
-    FR-CART-003: Stripe credit card + COD support.
-    FR-CART-004: Governorate-based shipping fee calculation.
-    """
-    # Query is the established cart API contract; support a payload session id
-    # as a compatibility fallback for API clients that cannot append a query.
+    """Submit checkout with Stage 6 durable reservation tracking."""
     requested_session_id = session_id if session_id is not None else request.session_id
     partner_id, guest_session_id = _cart_owner(current_user, requested_session_id)
-    service = OrderService(db)
-    return await service.checkout(
+    response = await OrderService(db).checkout(
         request,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
+
+    # Stage 5 already performs the conditional SQL decrement.  Capture the
+    # reservation in the same transaction rather than subtracting stock twice.
+    await InventoryReservationService(db).adopt_checkout_reservations(response.order.id)
+    lifecycle_service = FulfillmentLifecycleService(db)
+    await lifecycle_service.get(response.order.id)
+    if request.payment_method == PaymentMethod.COD:
+        await lifecycle_service.transition(response.order.id, CONFIRMED)
+    return response
 
 
 # ── Order Management Endpoints ───────────────────────────────────────────────
@@ -298,7 +301,7 @@ async def get_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get order details including line items and tracking info."""
+    """Get order details including line items."""
     query = (
         select(SaleOrder)
         .options(selectinload(SaleOrder.order_lines))
@@ -321,10 +324,7 @@ async def update_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN)),
 ):
-    """
-    Update order status (admin/warehouse only).
-    FR-ORD-002: Status transitions per state machine.
-    """
+    """Update the legacy Odoo-compatible order state for warehouse/admin callers."""
     service = OrderService(db)
     return await service.update_order_state(order_id, target_state)
 
@@ -335,7 +335,7 @@ async def cancel_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cancel a pending order."""
+    """Legacy cancellation route; Stage 6 cancellation orchestration wraps this next."""
     query = select(SaleOrder).where(SaleOrder.id == order_id)
     order = (await db.execute(query)).scalar_one_or_none()
     if not order:

@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ProductTemplate
+from app.models import ProductTemplate, SaleOrderLine
 from app.modules.fulfillment.models import InventoryReservation, InventorySourceBalance
 from app.shared.exceptions import ExternalServiceError, InsufficientStockError, ResourceConflictError
 
@@ -28,6 +28,63 @@ class InventoryReservationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def adopt_checkout_reservations(self, order_id: int) -> int:
+        """Record reservations already atomically deducted by the legacy checkout.
+
+        Stage 5's checkout decrement is intentionally retained.  This method is
+        called in the same request transaction immediately after checkout, so
+        it adds durable reservation semantics without double-mutating stock.
+        """
+        rows = (
+            await self.db.execute(
+                select(SaleOrderLine, ProductTemplate)
+                .join(ProductTemplate, SaleOrderLine.product_id == ProductTemplate.id)
+                .where(SaleOrderLine.order_id == order_id)
+            )
+        ).all()
+        quantities: dict[int, int] = {}
+        products: dict[int, ProductTemplate] = {}
+        for line, product in rows:
+            if product.is_dropship_enabled:
+                continue
+            quantities[line.product_id] = quantities.get(line.product_id, 0) + line.quantity
+            products[line.product_id] = product
+
+        recorded = 0
+        for product_id in sorted(quantities):
+            quantity = quantities[product_id]
+            existing = await self.db.scalar(
+                select(InventoryReservation)
+                .where(
+                    InventoryReservation.order_id == order_id,
+                    InventoryReservation.product_id == product_id,
+                )
+                .with_for_update()
+            )
+            if existing is not None:
+                if existing.quantity != quantity:
+                    raise ResourceConflictError(
+                        "The order has an incompatible persisted inventory reservation."
+                    )
+                continue
+
+            product = products[product_id]
+            await self._ensure_source_balance(
+                product_id=product_id,
+                inferred_on_hand=product.stock_qty + quantity,
+            )
+            self.db.add(
+                InventoryReservation(
+                    order_id=order_id,
+                    product_id=product_id,
+                    quantity=quantity,
+                    status=RESERVED,
+                )
+            )
+            recorded += quantity
+        await self.db.flush()
+        return recorded
+
     async def reserve_checkout_stock(
         self,
         *,
@@ -35,7 +92,7 @@ class InventoryReservationService:
         products_by_id: dict[int, ProductTemplate],
         requested_quantities: dict[int, int],
     ) -> None:
-        """Atomically reserve all non-dropship quantities for a new checkout."""
+        """Atomically reserve all non-dropship quantities for direct service callers."""
         for product_id in sorted(requested_quantities):
             quantity = requested_quantities[product_id]
             product = products_by_id[product_id]

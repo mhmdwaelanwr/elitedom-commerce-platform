@@ -2,14 +2,16 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import ProductTemplate, SaleOrder
+from app.models import SaleOrder
+from app.modules.fulfillment.service import CANCELLED, FulfillmentLifecycleService
+from app.modules.inventory.reservations import InventoryReservationService
 from app.modules.payments.models import PaymentAttempt, PaymentRefund
+from app.modules.payments.refunds import ensure_full_refund_request
 from app.modules.suppliers.dropship import DropshipFulfillmentService
 from app.shared.events import PaymentFailed, PaymentRefunded, PaymentSucceeded
-from app.shared.exceptions import ExternalServiceError
 from app.shared.outbox import publish_domain_event
 from app.shared.schemas import OrderState, PaymentStatus
 
@@ -30,8 +32,28 @@ async def mark_payment_succeeded(
         attempt.completed_at = attempt.completed_at or datetime.now(UTC)
         return "already_processed"
 
+    lifecycle_service = FulfillmentLifecycleService(db)
+    lifecycle = await lifecycle_service.get(order.id, lock=True)
+
+    # A late success after a customer/operations cancellation must never reopen
+    # fulfillment.  Record the captured payment and request a refund instead.
+    if lifecycle.status == CANCELLED and lifecycle.cancellation_reason != "payment_failed":
+        order.payment_status = PaymentStatus.PAID.value
+        attempt.status = "succeeded"
+        attempt.failure_code = None
+        attempt.completed_at = datetime.now(UTC)
+        await db.flush()
+        await ensure_full_refund_request(
+            db=db,
+            order=order,
+            attempt=attempt,
+            reason="payment_captured_after_cancellation",
+            source_context=f"{attempt.provider}_webhook",
+        )
+        return "refund_requested"
+
     if order.stock_reservation_released:
-        await _reserve_order_stock(db, order)
+        await InventoryReservationService(db).rereserve_order(order.id)
         order.stock_reservation_released = False
 
     order.payment_status = PaymentStatus.PAID.value
@@ -44,6 +66,7 @@ async def mark_payment_succeeded(
     attempt.status = "succeeded"
     attempt.failure_code = None
     attempt.completed_at = datetime.now(UTC)
+    await lifecycle_service.confirm_after_verified_payment(order.id)
     await db.flush()
 
     await DropshipFulfillmentService(db).ensure_purchase_orders_for_paid_order(order.id)
@@ -87,8 +110,8 @@ async def mark_payment_failed(
     attempt.status = "failed"
     attempt.failure_code = failure_code
     attempt.completed_at = datetime.now(UTC)
-    await db.flush()
-    await _release_order_stock(db, order)
+    await InventoryReservationService(db).release_order(order.id)
+    await FulfillmentLifecycleService(db).cancel(order.id, reason="payment_failed")
     await db.flush()
 
     await publish_domain_event(
@@ -159,54 +182,3 @@ async def mark_payment_refunded(
         source_context=f"{attempt.provider}_webhook",
     )
     return "processed"
-
-
-async def _reserve_order_stock(db: AsyncSession, order: SaleOrder) -> None:
-    quantities = await _non_dropship_quantities(db, order)
-    for product_id, quantity in quantities.items():
-        reservation = await db.execute(
-            update(ProductTemplate)
-            .where(ProductTemplate.id == product_id, ProductTemplate.stock_qty >= quantity)
-            .values(stock_qty=ProductTemplate.stock_qty - quantity)
-        )
-        if reservation.rowcount != 1:
-            raise ExternalServiceError(
-                "Inventory", "Unable to reserve stock for a successful payment."
-            )
-
-
-async def _release_order_stock(db: AsyncSession, order: SaleOrder) -> None:
-    quantities = await _non_dropship_quantities(db, order)
-    for product_id, quantity in quantities.items():
-        release = await db.execute(
-            update(ProductTemplate)
-            .where(ProductTemplate.id == product_id)
-            .values(stock_qty=ProductTemplate.stock_qty + quantity)
-        )
-        if release.rowcount != 1:
-            raise ExternalServiceError(
-                "Inventory", "Unable to restore stock for a failed payment."
-            )
-
-
-async def _non_dropship_quantities(db: AsyncSession, order: SaleOrder) -> dict[int, int]:
-    product_ids = {line.product_id for line in order.order_lines}
-    if not product_ids:
-        return {}
-
-    products = await db.execute(
-        select(ProductTemplate.id, ProductTemplate.is_dropship_enabled).where(
-            ProductTemplate.id.in_(product_ids)
-        )
-    )
-    dropship_by_id = {
-        product_id: is_dropship for product_id, is_dropship in products.all()
-    }
-    if product_ids - dropship_by_id.keys():
-        raise ExternalServiceError("Inventory", "A product for this order no longer exists.")
-
-    quantities: dict[int, int] = {}
-    for line in order.order_lines:
-        if not dropship_by_id[line.product_id]:
-            quantities[line.product_id] = quantities.get(line.product_id, 0) + line.quantity
-    return quantities

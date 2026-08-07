@@ -89,6 +89,52 @@ class FulfillmentLifecycleService:
         await self.db.flush()
         return record
 
+    async def cancel(
+        self,
+        order_id: int,
+        *,
+        reason: str,
+        occurred_at: datetime | None = None,
+    ) -> tuple[OrderFulfillment, bool]:
+        """Cancel only pre-shipment work and keep the reason for late callbacks."""
+        record = await self.get(order_id, lock=True)
+        if record.status == CANCELLED:
+            return record, False
+        if record.status not in {PAYMENT_PENDING, CONFIRMED, PROCESSING, READY_TO_SHIP}:
+            raise InvalidOrderStateTransition(record.status, CANCELLED)
+
+        now = occurred_at or datetime.now(UTC)
+        record.status = CANCELLED
+        record.cancellation_reason = reason
+        record.cancelled_at = record.cancelled_at or now
+        await self.db.flush()
+        return record, True
+
+    async def confirm_after_verified_payment(
+        self,
+        order_id: int,
+        *,
+        occurred_at: datetime | None = None,
+    ) -> tuple[OrderFulfillment, bool]:
+        """Confirm payment-pending work or recover only a payment-failure cancel."""
+        record = await self.get(order_id, lock=True)
+        now = occurred_at or datetime.now(UTC)
+        if record.status == CANCELLED:
+            if record.cancellation_reason != "payment_failed":
+                return record, False
+            record.status = CONFIRMED
+            record.cancellation_reason = None
+            record.cancelled_at = None
+            record.confirmed_at = record.confirmed_at or now
+            await self.db.flush()
+            return record, True
+        if record.status == PAYMENT_PENDING:
+            record.status = CONFIRMED
+            record.confirmed_at = record.confirmed_at or now
+            await self.db.flush()
+            return record, True
+        return record, False
+
     async def force_forward_from_integration(
         self,
         order_id: int,
