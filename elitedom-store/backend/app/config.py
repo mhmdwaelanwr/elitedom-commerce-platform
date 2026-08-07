@@ -69,10 +69,15 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"
     log_level: str = "INFO"
     metrics_enabled: bool = True
+    metrics_bearer_token: str = ""
     otel_service_name: str = "elitedom-fastapi"
     otel_exporter_otlp_endpoint: str = ""
     otel_trace_sample_ratio: float = Field(default=0.1, ge=0, le=1)
     trusted_proxy_ips: str = ""
+    staff_mfa_required: bool = False
+    rate_limit_backend: Literal["memory", "redis"] = "memory"
+    rate_limit_default_per_minute: int = Field(default=100, ge=10, le=10_000)
+    readiness_timeout_seconds: float = Field(default=2.0, ge=0.2, le=10.0)
 
     media_root: str = "media"
     media_public_path: str = "/media"
@@ -209,6 +214,10 @@ class Settings(BaseSettings):
     def validate_deployment_safety(self) -> Settings:
         if self.app_postgres_db == self.odoo_db:
             raise ValueError("APP_POSTGRES_DB must differ from ODOO_DB.")
+        if self.otel_exporter_otlp_endpoint and not is_safe_service_url(
+            self.otel_exporter_otlp_endpoint
+        ):
+            raise ValueError("OTEL_EXPORTER_OTLP_ENDPOINT must be HTTPS or an internal service URL.")
 
         integration_errors: list[str] = []
         if self.odoo_sync_enabled:
@@ -265,12 +274,18 @@ class Settings(BaseSettings):
             raise ValueError("ALLOWED_HOSTS must not contain '*' outside development.")
         if "*" in self.cors_origin_list:
             raise ValueError("CORS_ORIGINS must not contain '*' outside development.")
+        if not self.staff_mfa_required:
+            raise ValueError("STAFF_MFA_REQUIRED must be true in staging and production.")
+        if self.rate_limit_backend != "redis":
+            raise ValueError("RATE_LIMIT_BACKEND must be redis in staging and production.")
         required_secrets = {
             "SECRET_KEY": self.secret_key,
             "JWT_SECRET_KEY": self.jwt_secret_key,
             "POSTGRES_PASSWORD": self.postgres_password,
             "REDIS_PASSWORD": self.redis_password,
         }
+        if self.metrics_enabled:
+            required_secrets["METRICS_BEARER_TOKEN"] = self.metrics_bearer_token
         invalid = [name for name, value in required_secrets.items() if not is_secure_secret(value)]
         if invalid:
             raise ValueError(
