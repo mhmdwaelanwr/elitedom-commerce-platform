@@ -1,0 +1,13 @@
+# Default ownership. Split these entries as the engineering organization grows.
+* @mhmdwaelanwr
+
+# Governance and delivery controls
+/.github/ @mhmdwaelanwr
+/docs/ @mhmdwaelanwr
+
+# Runtime surfaces
+/elitedom-store/backend/ @mhmdwaelanwr
+/elitedom-store/frontend/ @mhmdwaelanwr
+/elitedom-store/infrastructure/ @mhmdwaelanwr
+/elitedom-store/odoo/ @mhmdwaelanwr
+/elitedom-store/scripts/ @mhmdwaelanwr
