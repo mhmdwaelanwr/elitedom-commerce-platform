@@ -9,6 +9,7 @@ import {
   fetchAdminAccess,
   isStaffRole,
   type AdminAccess,
+  type AdminPermission,
   type AdminSection,
 } from "@/lib/admin-api";
 import { humanize } from "@/lib/admin-ui";
@@ -22,7 +23,7 @@ type NavigationItem = {
   label: TranslationKey<"admin">;
   icon: IconName;
   section?: AdminSection;
-  permission?: string;
+  permission?: AdminPermission;
 };
 
 const navigation: NavigationItem[] = [
@@ -86,7 +87,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   if (accessError || !access) return <RestrictedAdminAccess />;
 
   const visibleNavigation = navigation.filter((item) => {
-    if (item.permission) return access.permissions.includes(item.permission as never);
+    if (item.permission) return access.permissions.includes(item.permission);
     return item.section ? canAccessAdminSection(access.permissions, item.section) : false;
   });
 
