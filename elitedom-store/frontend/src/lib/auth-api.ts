@@ -31,6 +31,24 @@ export type AuthDeviceSession = {
   created_at: string;
   last_used_at?: string | null;
   current: boolean;
+  mfa_verified?: boolean;
+};
+
+export type MfaStatus = {
+  required: boolean;
+  enrolled: boolean;
+  verified: boolean;
+  remainingRecoveryCodes: number;
+};
+
+export type MfaEnrollment = {
+  secret: string;
+  provisioningUri: string;
+};
+
+export type MfaEnrollmentConfirmation = {
+  status: MfaStatus;
+  recoveryCodes: string[];
 };
 
 async function authRequest<T>(
@@ -85,6 +103,20 @@ function toCustomerSession(payload: AuthPayload): CustomerSession {
     expiresAt: Date.now() + payload.expires_in * 1000,
     email: payload.email,
     name: payload.name,
+  };
+}
+
+function mapMfaStatus(payload: {
+  required: boolean;
+  enrolled: boolean;
+  verified: boolean;
+  remaining_recovery_codes: number;
+}): MfaStatus {
+  return {
+    required: payload.required,
+    enrolled: payload.enrolled,
+    verified: payload.verified,
+    remainingRecoveryCodes: payload.remaining_recovery_codes,
   };
 }
 
@@ -152,6 +184,59 @@ export async function oauthLogin(
 export async function refreshSession(): Promise<CustomerSession> {
   const result = await authRequest<AuthPayload>("/auth/refresh", { method: "POST" });
   return toCustomerSession(result);
+}
+
+export async function fetchMfaStatus(session: CustomerSession): Promise<MfaStatus> {
+  const result = await authRequest<{
+    required: boolean;
+    enrolled: boolean;
+    verified: boolean;
+    remaining_recovery_codes: number;
+  }>("/auth/mfa/status", {}, session.accessToken);
+  return mapMfaStatus(result);
+}
+
+export async function beginMfaEnrollment(session: CustomerSession): Promise<MfaEnrollment> {
+  const result = await authRequest<{ secret: string; provisioning_uri: string }>(
+    "/auth/mfa/enroll",
+    { method: "POST" },
+    session.accessToken,
+  );
+  return { secret: result.secret, provisioningUri: result.provisioning_uri };
+}
+
+export async function confirmMfaEnrollment(
+  code: string,
+  session: CustomerSession,
+): Promise<MfaEnrollmentConfirmation> {
+  const result = await authRequest<{
+    status: {
+      required: boolean;
+      enrolled: boolean;
+      verified: boolean;
+      remaining_recovery_codes: number;
+    };
+    recovery_codes: string[];
+  }>(
+    "/auth/mfa/confirm",
+    { method: "POST", body: JSON.stringify({ code }) },
+    session.accessToken,
+  );
+  return { status: mapMfaStatus(result.status), recoveryCodes: result.recovery_codes };
+}
+
+export async function verifyMfa(code: string, session: CustomerSession): Promise<MfaStatus> {
+  const result = await authRequest<{
+    required: boolean;
+    enrolled: boolean;
+    verified: boolean;
+    remaining_recovery_codes: number;
+  }>(
+    "/auth/mfa/verify",
+    { method: "POST", body: JSON.stringify({ code }) },
+    session.accessToken,
+  );
+  return mapMfaStatus(result);
 }
 
 export async function logoutSession(session: CustomerSession): Promise<void> {
