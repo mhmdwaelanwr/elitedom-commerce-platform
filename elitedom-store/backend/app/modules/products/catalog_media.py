@@ -91,6 +91,7 @@ async def store_catalog_media(upload: UploadFile, product_id: int) -> StoredCata
 
 
 def delete_catalog_media_file(url: str) -> None:
+    """Best-effort cleanup for locally managed catalogue objects."""
     settings = get_settings()
     public_prefix = f"{settings.media_public_path.rstrip('/')}/"
     if not url.startswith(public_prefix):
@@ -103,5 +104,11 @@ def delete_catalog_media_file(url: str) -> None:
         candidate.relative_to(root)
     except ValueError:
         return
-    if candidate.is_file():
-        candidate.unlink()
+    try:
+        if candidate.is_file():
+            candidate.unlink()
+    except OSError:
+        # The database transaction is already authoritative at this point.
+        # A later storage janitor may remove a local orphan; never turn a
+        # committed catalogue mutation into an apparent request failure.
+        return
