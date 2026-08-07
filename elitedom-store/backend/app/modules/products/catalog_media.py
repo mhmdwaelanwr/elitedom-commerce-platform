@@ -1,8 +1,8 @@
 """Validated product-media persistence with durable metadata.
 
-Stage 8 keeps the current local storage backend for compatibility, but the
-catalogue now records the metadata required to move objects behind a CDN or
-object-storage provider without changing product records.
+Stage 8 keeps the current local storage backend for compatibility, records the
+metadata needed for a future CDN/object-storage move, and coordinates local
+object cleanup with the surrounding database transaction lifecycle.
 """
 
 from __future__ import annotations
