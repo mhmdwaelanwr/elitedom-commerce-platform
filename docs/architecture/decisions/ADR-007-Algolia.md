@@ -4,35 +4,38 @@ status: current
 owner: architecture
 document_type: adr
 verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
-review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
-decision_status: Accepted as optional
+review_trigger: "Search provider strategy, catalogue source-of-truth, or Algolia adapter ownership materially changes."
+decision_status: Accepted
 ---
 
 # ADR-007 — Algolia Search Adapter
 
 ## Status
 
-Accepted as optional
+Accepted — optional capability.
 
 ## Context
 
-The platform benefits from an external search-index integration without making storefront correctness depend on an always-enabled third-party service.
+The platform can benefit from an external search index for discovery performance and relevance, but customer/catalogue correctness must not depend on an always-enabled third-party service. Canonical product/catalogue data remains application/ERP-owned according to existing domain boundaries.
 
 ## Decision
 
-Maintain Algolia behind an optional backend integration/service/task boundary. Core catalogue persistence remains in the application database; enabling Algolia requires environment credentials.
+Maintain Algolia behind an optional backend service/task adapter. Credentials and index administration remain server-side. Deployments may leave Algolia disabled unless the target release/environment explicitly requires the integration.
 
 ## Consequences
 
-- Search indexing failures must not corrupt canonical catalogue data.
-- Secrets stay server-side.
-- Deployment may run with Algolia unconfigured unless launch requirements explicitly enable it.
+- Search indexing failure must not corrupt canonical catalogue data.
+- Provider credentials never reach the browser.
+- Index writes/retries must be observable and repeat-safe for the implemented task model.
+- A deployment can remain functionally valid without Algolia when the product/release requirements permit fallback/non-Algolia discovery behavior.
+- Provider enablement and relevance acceptance are environment-specific evidence, not implied by this ADR.
 
 ## Implementation evidence
 
 - `elitedom-store/backend/app/integrations/algolia/service.py`
 - `elitedom-store/backend/app/integrations/algolia/tasks.py`
+- `docs/architecture/integrations/ALGOLIA.md`
 
 ## Review rule
 
-ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.
+If another search architecture replaces Algolia or search becomes a mandatory hard dependency, supersede this ADR with a new decision and preserve this record as history.
