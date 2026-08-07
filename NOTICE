@@ -1,0 +1,26 @@
+Elitedom Commerce Platform
+Copyright 2026 Elitedom contributors
+
+This repository is a multi-license work.
+
+Unless a file or component states otherwise, original Elitedom source code,
+documentation, configuration, and repository tooling are made available under
+the Apache License, Version 2.0. See LICENSE.
+
+Separately licensed repository component:
+
+- elitedom-store/odoo/addons/elitedom_connector/
+  License: GNU Lesser General Public License v3.0 (LGPL-3.0), as declared in
+  that addon's __manifest__.py.
+
+Third-party frameworks, libraries, container images, tools, fonts, media, and
+other dependencies remain subject to their respective upstream licenses and
+notices. Their presence in dependency manifests, lockfiles, containers, or the
+repository does not relicense them under the Apache License 2.0.
+
+The Apache License 2.0 does not grant trademark rights. Elitedom names, logos,
+brand assets, and product identity are not licensed except as required for
+reasonable attribution or as separately authorized in writing.
+
+This NOTICE is informational and does not modify the terms of any applicable
+license.
