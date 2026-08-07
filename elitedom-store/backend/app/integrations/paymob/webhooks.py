@@ -44,7 +44,7 @@ def _mapping(value: Any) -> Mapping[str, Any]:
 def _identifier(value: Any) -> str | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (str, int)) and str(value).strip():
+    if isinstance(value, str | int) and str(value).strip():
         return str(value)
     return None
 
