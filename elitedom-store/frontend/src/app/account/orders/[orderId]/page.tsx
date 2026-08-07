@@ -24,6 +24,7 @@ const CANCELLABLE_STATUSES = new Set([
 export default function OrderDetailsPage() {
   const params = useParams<{ orderId: string }>();
   const orderId = Number(params.orderId);
+  const hasValidOrderId = Number.isInteger(orderId) && orderId > 0;
   const { locale, t } = usePreferences();
   const { currency, notify, session } = useStore();
   const [order, setOrder] = useState<AccountOrder | null>(null);
@@ -32,15 +33,47 @@ export default function OrderDetailsPage() {
   const [isCancelling, setCancelling] = useState(false);
   const [error, setError] = useState(false);
 
-  const loadOrder = useCallback(async () => {
-    if (!session || !Number.isInteger(orderId) || orderId < 1) return;
+  const fetchOrderData = useCallback(() => {
+    if (!session || !hasValidOrderId) return null;
+    return Promise.all([
+      fetchAccountOrder(orderId, session),
+      fetchOrderTracking(orderId, session),
+    ]);
+  }, [hasValidOrderId, orderId, session]);
+
+  useEffect(() => {
+    const request = fetchOrderData();
+    if (!request) return;
+    let active = true;
+    void request
+      .then(([nextOrder, nextTracking]) => {
+        if (!active) return;
+        setOrder(nextOrder);
+        setTracking(nextTracking);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [fetchOrderData]);
+
+  const canCancel = useMemo(
+    () => Boolean(tracking && CANCELLABLE_STATUSES.has(tracking.fulfillment_status)),
+    [tracking],
+  );
+
+  async function reloadOrder() {
+    const request = fetchOrderData();
+    if (!request) return;
     setLoading(true);
     setError(false);
     try {
-      const [nextOrder, nextTracking] = await Promise.all([
-        fetchAccountOrder(orderId, session),
-        fetchOrderTracking(orderId, session),
-      ]);
+      const [nextOrder, nextTracking] = await request;
       setOrder(nextOrder);
       setTracking(nextTracking);
     } catch {
@@ -48,16 +81,7 @@ export default function OrderDetailsPage() {
     } finally {
       setLoading(false);
     }
-  }, [orderId, session]);
-
-  useEffect(() => {
-    void loadOrder();
-  }, [loadOrder]);
-
-  const canCancel = useMemo(
-    () => Boolean(tracking && CANCELLABLE_STATUSES.has(tracking.fulfillment_status)),
-    [tracking],
-  );
+  }
 
   async function handleCancel() {
     if (!session || !order || !canCancel || isCancelling) return;
@@ -71,7 +95,7 @@ export default function OrderDetailsPage() {
           : t("account", "orderCancelled"),
         "success",
       );
-      await loadOrder();
+      await reloadOrder();
     } catch {
       notify(t("account", "cancelOrderError"), "error");
     } finally {
@@ -93,7 +117,7 @@ export default function OrderDetailsPage() {
     );
   }
 
-  if (isLoading) {
+  if (isLoading && hasValidOrderId) {
     return (
       <main className="site-container py-10" aria-busy="true">
         <div className="h-10 w-64 animate-pulse rounded-xl bg-elevated" />
@@ -103,16 +127,18 @@ export default function OrderDetailsPage() {
     );
   }
 
-  if (error || !order || !tracking) {
+  if (!hasValidOrderId || error || !order || !tracking) {
     return (
       <main className="site-container py-12">
         <section className="rounded-3xl border border-danger/30 bg-danger/5 p-10 text-center">
           <h1 className="text-2xl font-black text-foreground">{t("account", "orderLoadError")}</h1>
           <p className="mt-2 text-sm text-muted">{t("account", "orderLoadErrorDescription")}</p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <button className="button-primary" onClick={() => void loadOrder()} type="button">
-              {t("common", "retry")}
-            </button>
+            {hasValidOrderId ? (
+              <button className="button-primary" onClick={() => void reloadOrder()} type="button">
+                {t("common", "retry")}
+              </button>
+            ) : null}
             <Link className="button-secondary" href="/account/orders">
               {t("account", "allOrders")}
             </Link>
