@@ -1,51 +1,39 @@
-# Pull Request Guidelines (PULL_REQUEST_GUIDELINES.md)
-
-Document Classification: Internal / Software Engineering & Collaboration  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Pull Request Guidelines"
+status: current
+owner: engineering
+document_type: development
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Pull Request Guidelines behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document standardizes the process for submitting Pull Requests (PRs) to the Elitedom Store repositories. A well-structured PR accelerates the review process, minimizes bugs, and maintains a clear history of why changes were made.
+# Pull Request Guidelines
 
-## 2. PR Creation Rules
-* Target Branch: Always ensure your PR targets the correct branch (e.g., `staging` for features, `main` for hotfixes).
-* Draft PRs: If your code is not yet ready for review but you want to run CI pipelines or share progress, open the PR as a "Draft".
-* Size Limit: Keep PRs small and focused on a single issue or feature. If a PR exceeds 400 lines of changes, consider breaking it down into smaller, logical PRs.
+## Purpose
 
-## 3. Pull Request Title
-Follow the Conventional Commits specification for PR titles to allow for automated changelog generation:
-* `feat:` A new feature (e.g., `feat(api): add endpoint for Algolia search sync`)
-* `fix:` A bug fix (e.g., `fix(odoo): resolve missing tax rates in order payload`)
-* `docs:` Documentation only changes
-* `refactor:` A code change that neither fixes a bug nor adds a feature
-* `perf:` A code change that improves performance
+Defines the minimum information and scope quality for reviewable pull requests.
 
-## 4. Required PR Description Template
-Every PR must include a detailed description containing the following sections:
+## Current state
 
-### What does this PR do?
-(Provide a brief explanation of the changes introduced by this PR. Include ticket numbers if applicable, e.g., "Resolves #TICKET-123")
+PRs are focused change units. They explain why the change exists, what contracts/data/operations change, how it was verified, and what remains manual/provider-dependent.
 
-### Type of Change
-- [ ] Bug fix (non-breaking change which fixes an issue)
-- [ ] New feature (non-breaking change which adds functionality)
-- [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] Database Migration (requires Alembic upgrade)
+## Invariants and controls
 
-### How Has This Been Tested?
-(Describe the tests you ran to verify your changes. E.g., "Tested locally against Odoo 17 Docker container. Verified HMAC signature logic using Postman.")
+- Use a specific title and concise problem/solution summary.
+- Call out migrations, API/security/provider/config/deployment changes explicitly.
+- Include test/CI evidence, not screenshots as the only proof.
+- Document rollback or compatibility implications for operationally significant changes.
+- Keep PR draft until coherent; do not merge with known failing required checks.
 
-### Deployment Notes
-(Are there any special instructions for deploying this? e.g., "Requires setting a new environment variable `STRIPE_WEBHOOK_SECRET`" or "Requires running `alembic upgrade head`").
+## Source of truth
 
-## 5. Merging Conditions
-* CI/CD checks must pass (Unit tests, Linting, Security Scans).
-* At least one approval from a Lead Engineer is required.
-* All comments and change requests must be resolved.
-* Use "Squash and Merge" to keep the commit history clean.
+- `.github/PULL_REQUEST_TEMPLATE.md`
+- `CONTRIBUTING.md`
 
----
-End of Document
+## Verification
+
+Reviewers should be able to reproduce or inspect every claimed verification item.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

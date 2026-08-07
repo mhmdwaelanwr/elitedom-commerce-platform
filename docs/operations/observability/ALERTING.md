@@ -1,29 +1,38 @@
-# Alerting Strategy & Rules (ALERTING.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, Oracle Cloud VPS  
-
+---
+title: "Alerting Standard"
+status: current
+owner: operations
+document_type: observability
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Alerting Standard behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-Alerting must be actionable, meaningful, and tied directly to user impact or critical infrastructure degradation. Avoid alert fatigue by ensuring alerts require human intervention.
+# Alerting Standard
 
-## 2. Alert Severity Levels
-* P1 - Critical: Immediate customer-facing outage or data loss risk (e.g., storefront down, FastAPI backend returning 5xx universally, Odoo database connection failure). Requires waking up the on-call engineer.
-* P2 - Warning: Significant degradation or component failure that does not immediately break the entire user experience (e.g., Algolia sync failing repeatedly, high memory usage > 85%, increased error rates on secondary endpoints). Handled during working hours.
-* P3 - Info: Non-urgent notifications for tracking trends or capacity planning (e.g., disk space reaching 75%). Routed to logging channels only.
+## Purpose
 
-## 3. Core Alerting Rules
-* High Error Rate: Trigger P1 if FastAPI 5xx error rate exceeds 5% over a 5-minute window.
-* High Latency: Trigger P2 if p95 HTTP response duration exceeds 1000ms for more than 10 minutes.
-* Odoo Sync Failure: Trigger P2 if background sync jobs fail consecutively 3 times.
-* VPS Resource Saturation: Trigger P1 if CPU load average exceeds VPS core count for 15 minutes continuously.
+Defines alert design and response expectations without claiming a specific monitoring vendor/configuration is already deployed.
 
-## 4. Notification Channels
-* P1 Alerts: Routed instantly to PagerDuty and high-priority Slack channels (`#alerts-critical`).
-* P2/P3 Alerts: Routed to standard operational Slack channels (`#alerts-ops`) and email summaries.
+## Current state
 
----
-End of Document
+Alert rules are environment-specific launch evidence. Repository docs define what should be alerted; the production monitoring system must prove delivery/ownership.
+
+## Invariants and controls
+
+- Page on customer-impacting availability/readiness or severe payment/data/security symptoms, not every warning log.
+- Alert on sustained error/latency/worker backlog and critical provider/DB/Redis readiness failures.
+- Use separate severity for degraded optional integrations.
+- Every alert has an owner, runbook link, actionable threshold/window and test evidence.
+
+## Source of truth
+
+- `docs/operations/runbooks/INCIDENT_RESPONSE.md`
+- `docs/operations/runbooks/MONITORING.md`
+
+## Verification
+
+Trigger representative staging alerts and record notification/triage evidence before launch.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

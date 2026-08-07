@@ -1,218 +1,41 @@
-# CONTEXT_MAP.md
-
-# Elitedom Context Map
-
-Version: 1.0
-
-Status: Approved
-
+---
+title: "Context Map"
+status: current
+owner: architecture
+document_type: architecture
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Context Map behavior, evidence, or source-of-truth changes."
 ---
 
-# 1. Purpose
+# Context Map
 
-This document defines the bounded contexts, ownership, responsibilities, and communication patterns across the Elitedom platform following Domain-Driven Design (DDD).
+## Purpose
 
----
+Defines bounded contexts and their ownership relationships so modules do not silently share business authority.
 
-# 2. Bounded Contexts
+## Current state
 
-| Context | Responsibility | Owner |
-|----------|---------------|------|
-| Identity | Authentication, Authorization, RBAC | IAM Module |
-| Customer | Customer lifecycle | CRM Module |
-| Product | Catalog Management | Catalog Module |
-| Inventory | Stock & Availability | Inventory Module |
-| Supplier | Procurement & Supplier Management | Procurement Module |
-| Order | Shopping Cart & Orders | Sales Module |
-| Payment | Payments & Refunds | Payment Module |
-| Shipping | Shipment & Delivery | Logistics Module |
-| Warranty | Warranty Lifecycle | Warranty Module |
-| Support | Tickets & Customer Support | CRM Module |
-| Loyalty | Rewards & Points | CRM Module |
-| Marketing | Promotions & Campaigns | Marketing Module |
-| Reporting | KPIs & Analytics | Analytics Module |
+The FastAPI codebase is a modular monolith. Contexts are separated by module/service responsibilities while sharing one application database. External ERP/payment/notification systems are adapters, not domain owners for every concept.
 
----
+## Invariants and controls
 
-# 3. Context Relationships
+- Identity & Access owns users, sessions, OTP, social identity and staff MFA.
+- Catalogue owns customer-facing product/category/content/media representation; ERP-originated catalogue data enters through controlled synchronization.
+- Commerce owns carts, checkout and orders; Payments owns payment/refund state; Fulfillment owns stock/shipping transitions.
+- Customer Service owns warranty/RMA; Commercial Extensions own B2B, loyalty and suppliers.
+- Administration owns permissions, audit, integration visibility/configuration surfaces and launch acceptance.
+- Integration adapters translate provider/ERP events into domain commands and never bypass domain authorization/state rules.
 
-Identity
-→ Customer
+## Source of truth
 
-Customer
-→ Order
+- `elitedom-store/backend/app/modules/`
+- `elitedom-store/backend/app/integrations/`
+- `elitedom-store/backend/app/shared/`
 
-Customer
-→ Loyalty
+## Verification
 
-Customer
-→ Support
+Review imports, routers, services, domain events and database ownership when a module begins reaching across contexts.
 
-Product
-→ Inventory
+## Change policy
 
-Supplier
-→ Inventory
-
-Supplier
-→ Product
-
-Order
-→ Payment
-
-Order
-→ Shipping
-
-Order
-→ Warranty
-
-Inventory
-→ Order
-
-Payment
-→ Order
-
-Shipping
-→ Order
-
-Warranty
-→ Support
-
-Marketing
-→ Product
-
-Reporting
-← All Contexts
-
----
-
-# 4. Communication Pattern
-
-Internal communication shall occur through:
-
-- Application Services
-- Domain Events
-- Internal APIs
-
-External communication shall occur through:
-
-- REST APIs
-- Webhooks
-- Message Queue (Future)
-
----
-
-# 5. Shared Kernel
-
-Shared objects allowed:
-
-- Money
-- Address
-- Country
-- Currency
-- Tax
-- Unit Of Measure
-
-Business entities shall never be shared.
-
----
-
-# 6. Upstream / Downstream
-
-Identity
-↑
-Customer
-
-Customer
-↑
-Order
-
-Product
-↑
-Inventory
-
-Inventory
-↑
-Order
-
-Supplier
-↑
-Inventory
-
-Payment
-↑
-Order
-
-Shipping
-↑
-Order
-
-Warranty
-↑
-Support
-
-Reporting
-↓
-All Domains
-
----
-
-# 7. Integration Rules
-
-Contexts may not access another context's database directly.
-
-Communication must occur through:
-
-- Service Contracts
-- APIs
-- Domain Events
-
----
-
-# 8. External Systems
-
-Odoo ERP
-
-Stripe
-
-Algolia
-
-Twilio
-
-SendGrid
-
-Zoho
-
-Hedera
-
-All integrations shall pass through dedicated integration services.
-
----
-
-# 9. Dependency Rules
-
-Presentation
-
-↓
-
-Application
-
-↓
-
-Domain
-
-↓
-
-Infrastructure
-
-No reverse dependency is permitted.
-
----
-
-# 10. Governance
-
-Every new business capability shall belong to exactly one bounded context.
-
-Cross-context changes require Architecture Review.
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

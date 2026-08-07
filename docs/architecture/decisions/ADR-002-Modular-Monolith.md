@@ -1,37 +1,38 @@
-# ADR-002: Adoption of Modular Monolith Architecture
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-002 — Modular Monolith Application"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted
 ---
 
-## 1. Context and Problem Statement
-As we design the Elitedom Store platform—integrating a reactive web/mobile frontend, a custom middleware layer, and Odoo 17 ERP—we must determine the structural design of our application backend. We need an architecture that prevents a tangled "big ball of mud" while avoiding the premature operational complexity, network latency, and distributed transaction overhead associated with a full microservices architecture.
+# ADR-002 — Modular Monolith Application
 
-## 2. Decision Drivers
-* Need for clear domain boundaries and high modular cohesion without the overhead of container orchestration for dozens of microservices.
-* Requirement to maintain development velocity and simplify local testing and debugging.
-* Flexibility to evolve individual modules or extract them into microservices later if scaling demands require it.
-* Seamless integration with Odoo 17 ERP as the master business backend.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Full Distributed Microservices Architecture.
-* **Option 2:** Traditional Tightly-Coupled Monolith.
-* **Option 3:** Modular Monolith Architecture.
+Accepted
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Modular Monolith)**. The system shall be implemented as a Modular Monolith, and microservices shall only be introduced when justified by scalability or organizational needs. Business domains shall remain isolated, and no module may directly manipulate another module's internal data.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Enforces strict domain separation and modular boundaries while maintaining a single deployment unit.
-* Eliminates distributed network latency and complex distributed transaction patterns for internal communication between domains.
-* Significantly reduces DevOps and infrastructure overhead during initial deployment and scaling phases.
+The commerce domain has multiple bounded capabilities but does not currently justify the operational cost of independently deployed microservices.
 
-### Negative Consequences / Trade-offs
-* Requires strict architectural governance and code reviews to prevent developers from bypassing module boundaries or creating direct cross-module database dependencies.
+## Decision
 
----
-**End of Document**
+Keep the FastAPI business application as a modular monolith with explicit domain modules, external adapters and one application PostgreSQL database.
+
+## Consequences
+
+- Module ownership must remain explicit.
+- Independent services may be extracted only when scale/team/reliability evidence justifies it.
+- Shared database transactions remain possible inside the application boundary.
+
+## Implementation evidence
+
+- `elitedom-store/backend/app/modules/`
+- `elitedom-store/backend/app/main.py`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

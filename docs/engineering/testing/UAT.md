@@ -1,44 +1,42 @@
-# User Acceptance Testing (UAT) Specification (UAT.md)
-
-**Document Classification:** Internal / Quality Assurance & Stakeholder Sign-Off  
-**Version:** 2.1  
-**Status:** Approved / Staging Execution Ready  
-**Target System:** Elitedom Storefront (`https://staging.elitedom.store`), FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "User Acceptance Testing"
+status: current
+owner: engineering
+document_type: testing
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "User Acceptance Testing behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Overview
-This document defines the User Acceptance Testing (UAT) strategy, stakeholder workflows, and formal sign-off criteria for the **Elitedom Store** e-commerce platform. UAT is executed on the staging environment (`https://staging.elitedom.store`) to validate that business processes, administrative workflows, inventory management via Odoo 17 ERP, and end-user experiences satisfy all functional and operational requirements prior to production deployment.
+# User Acceptance Testing
 
----
+## Purpose
 
-## 2. UAT Stakeholder Roles & Responsibilities
-Formal validation requires cross-functional sign-off from designated internal stakeholders:
+Defines release-level UAT gates for customer, staff and operational journeys.
 
-| Role / Stakeholder | Department | Core UAT Responsibilities |
-| :--- | :--- | :--- |
-| **Store Administrator** | Management / Sales | Validate pricing rules, 14% VAT calculations, discount campaigns, and overall storefront branding. |
-| **Warehouse Operator** | Logistics & Inventory | Verify Odoo 17 ERP order synchronization, stock picking lists, barcode scanning, and stock level depletions. |
-| **Support Agent** | Customer Service | Test RMA ticket creation, warranty claim processing, and Odoo Helpdesk communication flows. |
-| **QA Lead / Engineer** | Quality Assurance | Oversee test execution, monitor Sentry error tracking, and verify webhook signature authenticity. |
+## Current state
 
----
+Stage 10 introduced release/environment-scoped launch acceptance. UAT evidence must be recorded against the exact release reference and must not carry to a later build automatically.
 
-## 3. UAT Execution Matrix & Workflows
+## Invariants and controls
 
-| UAT ID | Module / Business Domain | Test Scenario & Business Workflow | Expected Business Outcome | Stakeholder Sign-Off Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **UAT-BUS-01** | Storefront Navigation | Browse hardware catalog, apply filters (e.g., RTX 50-series GPUs), and perform typo-tolerant search. | Products render instantly ($< 300\text{ ms}$) with accurate Egyptian Pound (`EGP`) pricing and specs. | Approved |
-| **UAT-BUS-02** | Customer Checkout | Complete end-to-end checkout flow with Cairo shipping address (El Matareya) and Cash on Delivery (COD) / Credit Card. | Order confirmation email/SMS dispatched; order logged correctly in FastAPI backend database. | Approved |
-| **UAT-BUS-03** | Odoo ERP Synchronization | Verify background processing of confirmed order inside Odoo 17 ERP backend. | Sales order payload successfully created in Odoo 17 with valid `X-Elitedom-Signature` and stock decremented. | Approved |
-| **UAT-BUS-04** | RMA & Warranty Claims | Submit a warranty support ticket with hardware Serial Number ($S/N$) and mock image attachment. | Odoo Helpdesk ticket generated successfully; user receives tracking ID and 24-48h SLA timeline confirmation. | Approved |
-| **UAT-BUS-05** | Administrative Dashboard | Log in as store administrator, review bulk RFQs, and manage product inventory adjustments. | Admin controls function smoothly with strict RBAC enforcement blocking unauthorized customer access. | Approved |
+- English and Arabic journeys, LTR/RTL and light/dark/system.
+- Mobile/tablet/desktop responsive behavior and keyboard/focus accessibility.
+- Authentication including phone OTP/social flows available in the target environment and staff MFA.
+- Catalogue/cart/checkout/Paymob success/failure/retry/refund paths.
+- Fulfillment/shipping/Odoo synchronization and service/RMA paths.
+- Admin permissions/audit/content/integration/launch-control workflows.
+- Backup/restore, monitoring/alert and rollback/operator acceptance.
 
----
+## Source of truth
 
-## 4. Defect Escalation & Production Release Sign-Off
-* **Defect Logging:** Any usability flaws or business logic discrepancies discovered during UAT must be logged immediately as internal Jira/Sentry tickets.
-* **Sign-Off Gate:** Production deployment to Oracle Cloud VPS requires 100% test case pass rate and explicit digital sign-off from all designated stakeholder roles (Store Admin, Warehouse Lead, and QA Lead).
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+- `elitedom-store/backend/app/modules/admin/launch_service.py`
+- `docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md`
 
----
-End of Document
+## Verification
+
+Record evidence references, operator identity and release/environment in the launch control plane.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

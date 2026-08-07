@@ -1,32 +1,40 @@
-# Observability Strategy (OBSERVABILITY.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, Oracle Cloud VPS  
-
+---
+title: "Observability Architecture"
+status: current
+owner: operations
+document_type: observability
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Observability Architecture behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary
-This document outlines the overarching Observability strategy for the Elitedom Store platform. True observability goes beyond simple monitoring; it empowers our engineering and DevOps teams to answer arbitrary questions about the system's internal state using external outputs (Logs, Metrics, and Traces).
+# Observability Architecture
 
-## 2. The Three Pillars of Observability
-To ensure high availability, rapid incident response, and performance optimization, Elitedom strictly enforces the integration of three core pillars across all microservices and ERP modules:
-* Logging: Immutable records of discrete events that happened over time (Detailed in `LOGGING.md`).
-* Metrics: Aggregated numeric representations of data measured over intervals of time (Detailed in `METRICS.md`).
-* Tracing: A representation of a series of causally related distributed events that encode the end-to-end request flow (Detailed in `TRACING.md`).
+## Purpose
 
-## 3. Core Tooling Stack
-* Error Tracking & APM: Sentry (Integrated into FastAPI and Odoo).
-* Time-Series Database (Metrics): Prometheus.
-* Visualization & Dashboards: Grafana.
-* Log Aggregation: Promtail + Loki (Grafana Stack) for lightweight log querying.
-* Distributed Tracing: OpenTelemetry SDKs outputting to Jaeger.
+Defines how logs, metrics, traces and health signals combine to explain platform behavior.
 
-## 4. Universal Observability Guidelines
-* Zero PII Policy: NEVER log Personally Identifiable Information (PII), raw passwords, JWTs, or sensitive financial payloads (e.g., Stripe tokens, user addresses).
-* Correlation IDs: Every HTTP request entering the FastAPI backend must be tagged with an `X-Request-ID`. This ID must be propagated to Odoo 17 during webhook dispatches to stitch logs and traces together.
-* Actionability: Telemetry should be designed for actionability. Do not collect metrics or logs that do not serve a dashboard, an alert, or a post-mortem debugging session.
+## Current state
 
----
-End of Document
+FastAPI configures request context/structured logging, Prometheus-compatible metrics and optional OpenTelemetry export. Liveness/readiness are explicit endpoints. Provider/worker/Odoo observability depends on application logs/tasks and deployment tooling.
+
+## Invariants and controls
+
+- Use request/event IDs for correlation across boundaries.
+- Mask secrets and minimize PII in logs/labels/traces.
+- Protect metrics with bearer auth when configured/required.
+- Do not use liveness as dependency readiness.
+- Sampling/export failure must not make business requests falsely succeed or fail unless intentionally configured.
+
+## Source of truth
+
+- `elitedom-store/backend/app/observability.py`
+- `elitedom-store/backend/app/health.py`
+- `elitedom-store/backend/app/config.py`
+
+## Verification
+
+Inspect generated metrics/logs/traces in staging and verify alert coverage.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

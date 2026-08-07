@@ -1,36 +1,40 @@
-# Logging Standards (LOGGING.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Logging Standard"
+status: current
+owner: operations
+document_type: observability
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Logging Standard behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the logging standards for all Elitedom Store applications. Consistent logging is critical for debugging, auditing, and monitoring system health.
+# Logging Standard
 
-## 2. Log Levels
-* ERROR: System is in distress, customers are affected, or a critical transaction failed (e.g., database connection loss, Stripe webhook failure). Requires immediate attention.
-* WARNING: Unexpected events that do not halt the application but warrant investigation (e.g., deprecated API usage, high response time).
-* INFO: Normal system operations and state changes (e.g., service startup, background job completion).
-* DEBUG: Detailed information useful only during development or deep troubleshooting. Disabled in production.
+## Purpose
 
-## 3. Structured Logging (JSON)
-* All production logs must be output in JSON format to allow seamless parsing and querying by log aggregation tools (e.g., Promtail/Loki).
-* Python's standard `logging` module in FastAPI must be configured with a JSON formatter (e.g., `python-json-logger`).
+Defines structured, safe logging requirements.
 
-## 4. Required Log Attributes
-Every log entry must include the following minimum fields:
-* `timestamp`: ISO 8601 UTC format.
-* `level`: Log level (INFO, ERROR, etc.).
-* `service_name`: Identifier for the microservice (e.g., `elitedom-fastapi`, `elitedom-odoo`).
-* `request_id`: For tracking a specific request across services.
-* `message`: A human-readable description of the event.
+## Current state
 
-## 5. Security & PII
-* Never log passwords, API keys, JWT tokens, credit card numbers, or full user addresses.
-* Mask or redact sensitive payload fields before logging webhook data between FastAPI and Odoo.
+Production logging is intended to be machine-readable with request correlation and masking. Logs support diagnosis/audit but are not an authorization or payment source of truth.
 
----
-End of Document
+## Invariants and controls
+
+- Include timestamp/severity/service/request or event identifier where available.
+- Never log passwords, JWTs, MFA seeds/recovery codes, provider secret keys or raw sensitive headers.
+- Mask/minimize email/phone and provider payload data.
+- Log state-transition failures with IDs, not entire sensitive objects.
+- Keep exception context sufficient for diagnosis without exposing stack traces to API clients.
+
+## Source of truth
+
+- `elitedom-store/backend/app/observability.py`
+- `elitedom-store/backend/app/middleware/`
+- `elitedom-store/backend/app/integrations/`
+
+## Verification
+
+Review staging logs during auth/payment/webhook/error scenarios and validate masking.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

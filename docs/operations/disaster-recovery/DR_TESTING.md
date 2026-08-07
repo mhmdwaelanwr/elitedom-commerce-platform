@@ -1,28 +1,39 @@
-# Disaster Recovery Testing & Simulation (DR_TESTING.md)
-
-Document Classification: Internal / Site Reliability Engineering & Compliance  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Disaster Recovery Testing"
+status: current
+owner: operations
+document_type: disaster-recovery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Disaster Recovery Testing behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-A disaster recovery plan is only as good as its last successful test. This document defines the mandatory cadence, procedures, and evaluation criteria for conducting disaster recovery simulations and game days for the Elitedom Store platform.
+# Disaster Recovery Testing
 
-## 2. Testing Cadence & Schedule
-* Quarterly Table-Top Exercises: Review and walk through disaster scenarios, credential access, and communication plans with the engineering team.
-* Semi-Annual Restore Drills: Execute a full database restore from encrypted backups onto an isolated staging environment to verify backup integrity and measure RPO/RTO.
-* Annual Full-Scale Game Day: Simulate a catastrophic primary VPS failure in an isolated staging network to test end-to-end failover procedures and DNS propagation.
+## Purpose
 
-## 3. DR Test Plan Structure
-1. Pre-Test Briefing: Define objectives, scope, and success criteria (e.g., verifying database restoration under 2 hours).
-2. Execution Phase: Simulate the disruption (e.g., terminating the primary database container or dropping test tables) without affecting live production traffic.
-3. Measurement: Track time-to-recovery against defined RTO and data completeness against RPO targets.
-4. Post-Mortem & Remediation: Document bottlenecks, update recovery scripts, and assign Jira tasks for any identified gaps.
+Defines recovery exercises required to turn backup/recovery plans into evidence.
 
-## 4. Success Criteria
-* A DR drill is considered successful if all critical services (FastAPI, Odoo 17, and PostgreSQL) are fully restored and verified operational within the defined RTO limits with zero unhandled data corruption.
+## Current state
 
----
-End of Document
+DR testing is release/environment operational evidence and should be repeated after material topology, database, backup or provider-callback changes.
+
+## Invariants and controls
+
+- Restore application DB and Odoo DB into controlled targets.
+- Validate migrations/readiness and representative commerce records after restore.
+- Validate media availability/recovery where object/local storage is in scope.
+- Measure recovery point and recovery time instead of asserting planned values.
+- Document discrepancies and corrective actions.
+
+## Source of truth
+
+- `docs/operations/disaster-recovery/RESTORE_PROCEDURES.md`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+
+## Verification
+
+Store evidence references in launch/release records without committing sensitive backup artifacts.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

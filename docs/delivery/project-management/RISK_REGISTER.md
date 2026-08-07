@@ -1,43 +1,41 @@
-# Risk Register (RISK_REGISTER.md)
-
-**Document Classification:** Internal / Project Management & Risk Mitigation  
-**Version:** 2.1  
-**Status:** Approved / Execution Ready  
-**Target System:** Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL, Oracle Cloud VPS  
-
+---
+title: "Risk Register"
+status: current
+owner: delivery
+document_type: delivery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Risk Register behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Objectives
-This document establishes the official Risk Register for the **Elitedom Store** e-commerce platform. It proactively identifies, evaluates, and establishes mitigation strategies for technical, operational, security, and integration risks across the FastAPI backend, Odoo 17 ERP, PostgreSQL database, and Oracle Cloud VPS hosting environment.
+# Risk Register
 
----
+## Purpose
 
-## 2. Risk Assessment Methodology
-Risks are evaluated based on two dimensions:
-* **Probability (Likelihood):** Low (1), Medium (2), High (3)
-* **Impact (Severity):** Low (1), Medium (2), High (3)
-* **Risk Score:** Probability $	imes$ Impact (Range: 1–9)
-  * *Critical (6–9):* Requires immediate active mitigation and continuous monitoring.
-  * *Moderate (3–4):* Managed through scheduled operational controls.
-  * *Low (1–2):* Accepted and periodically reviewed.
+Maintains engineering/launch risks that require explicit ownership or evidence.
 
----
+## Current state
 
-## 3. Comprehensive Risk Register
+Current high-value risks include external provider acceptance, production secret provisioning, asset licensing, deployment/backup/monitoring maturity, legacy payment compatibility and drift between documentation/configuration and real environments.
 
-| Risk ID | Category | Description | Prob. | Impact | Score | Mitigation Strategy | Owner |
-| :--- | :--- | :--- | :---: | :---: | :---: | :--- | :--- |
-| **R-01** | **Integration** | Odoo 17 webhook timeout or bidirectional sync failure during peak traffic. | 2 | 3 | **6 (Critical)** | Implement exponential backoff retry queues, webhook signature validation, and asynchronous Celery/Redis background worker tasks. | Backend Lead |
-| **R-02** | **Infrastructure** | Oracle Cloud VPS resource exhaustion (CPU/RAM spike) under sudden flash sale traffic. | 2 | 3 | **6 (Critical)** | Configure Prometheus/Grafana alerts, scale Nginx rate limiting, and optimize PostgreSQL connection pooling. | DevOps Lead |
-| **R-03** | **Security** | OWASP Top 10 vulnerabilities (e.g., SQL injection, broken auth) exploited on FastAPI endpoints. | 2 | 3 | **6 (Critical)** | Enforce strict Pydantic request validation, JWT token rotation, automated `pip-audit` scans, and Sentry APM tracking. | Security Lead |
-| **R-04** | **Data Loss** | PostgreSQL data corruption or storage failure without a valid point-in-time recovery. | 1 | 3 | **3 (Moderate)**| Automated daily encrypted backups pushed to external object storage with weekly test restoration drills. | DBA / DevOps |
-| **R-05** | **Operations** | Unplanned downtime during manual release deployments or broken Alembic DB migrations. | 2 | 2 | **4 (Moderate)**| Follow strict staging gate reviews, automated CI/CD checks, and maintain rollback container tag protocols. | Release Engineer |
+## Invariants and controls
 
----
+- Provider risk: Paymob/Twilio/OAuth/email/Odoo live credentials and account configuration require real acceptance.
+- Data risk: restore/rollback and provider/ERP reconciliation must be proven.
+- Security risk: secret exposure, privileged access, proxy/network misconfiguration and provider callback authenticity.
+- Operational risk: untested monitoring/alerts or unsupported automatic failover assumptions.
+- Legal/commercial risk: product media licensing, privacy/retention and merchant/compliance obligations require owner review.
+- Technical debt: legacy Stripe and planned/scaffold integrations must stay clearly isolated.
 
-## 4. Risk Monitoring & Escalation Protocol
-* **Review Frequency:** Reviewed bi-weekly during engineering syncs and prior to major production releases.
-* **Escalation Trigger:** Any risk scoring Critical (6–9) that materializes must be escalated immediately to the Technical Director and handled via the `INCIDENT_RESPONSE.md` protocol.
+## Source of truth
 
----
-End of Document
+- `docs/operations/`
+- `docs/architecture/integrations/`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+
+## Verification
+
+Review at release planning and after incidents/provider/topology changes; close risks only with evidence.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

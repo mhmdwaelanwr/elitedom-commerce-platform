@@ -1,28 +1,40 @@
-# Privacy Policy & User Data Protection (PRIVACY.md)
-
-Document Classification: External/Internal Compliance & Security  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Privacy Engineering"
+status: current
+owner: operations
+document_type: data-governance
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Privacy Engineering behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-Elitedom Store is committed to protecting the privacy and fundamental rights of our customers. This policy governs how customer data is collected, processed, and managed across our FastAPI APIs and Odoo 17 ERP backend.
+# Privacy Engineering
 
-## 2. Core Privacy Principles
-* Transparency: Users must be fully informed about what data is collected and how it is utilized for order processing and inventory fulfillment.
-* Lawful Basis: Data collection must be strictly tied to explicit user consent, contractual necessity (e.g., fulfilling a purchase order), or legal obligations.
-* Data Minimization: Only collect data that is strictly necessary for the operation of the Elitedom storefront and ERP sync workflows.
+## Purpose
 
-## 3. Data Subject Rights
-Users interacting with Elitedom maintain the right to:
-* Access: Request an export of all personal data held within PostgreSQL and Odoo 17.
-* Rectification: Correct inaccurate or outdated personal profile details via storefront settings.
-* Erasure ("Right to be Forgotten"): Request permanent deletion of personal accounts and associated PII, subject to financial record retention laws.
+Defines privacy-by-design expectations for Elitedom engineering. It is not a customer-facing legal privacy notice.
 
-## 4. Cross-Border Data Transfer
-* All customer data processed via FastAPI and stored in PostgreSQL / Odoo 17 must adhere to regional data protection regulations and reside in secure, encrypted storage tiers on our Oracle Cloud VPS infrastructure.
+## Current state
 
----
-End of Document
+The platform stores personal information needed for identity, commerce, delivery and service workflows. Privacy controls include access control, minimization, masked observability and explicit provider boundaries.
+
+## Invariants and controls
+
+- Design fields and provider payloads for purpose/minimization.
+- Do not expose one customer's orders/serials/RMA/address data to another customer.
+- Treat staff access as privileged/audited, not implicitly trusted.
+- Document new processors/providers and data categories before production enablement.
+- Customer legal notice/consent/rights procedures require business/legal approval and deployment-specific implementation where applicable.
+
+## Source of truth
+
+- `docs/operations/data-governance/PII_HANDLING.md`
+- `docs/operations/compliance/PRIVACY_COMPLIANCE.md`
+- `elitedom-store/backend/app/modules/customers/`
+
+## Verification
+
+Security/privacy review plus authorization tests and provider data-flow inspection.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

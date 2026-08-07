@@ -1,70 +1,40 @@
-# Maintenance & Patch Management Plan (MAINTENANCE.md)
-
-**Document Classification:** Internal / DevOps & System Maintenance  
-**Version:** 2.1  
-**Status:** Approved / Execution Ready  
-**Target System:** Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL, Oracle Cloud VPS  
-
+---
+title: "Maintenance Runbook"
+status: current
+owner: operations
+document_type: runbook
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Maintenance Runbook behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Objectives
-This document establishes the official Maintenance and Patch Management Plan for the **Elitedom Store** e-commerce platform. It outlines routine maintenance schedules, dependency upgrade workflows, security patching protocols, and system hygiene procedures designed to maintain optimal performance, stability, and security across the Oracle Cloud VPS hosting environment.
+# Maintenance Runbook
 
----
+## Purpose
 
-## 2. Maintenance Windows & Scheduling Policy
-* **Routine Maintenance Window:** Every Friday from **03:00 AM to 05:00 AM EET** (Low-traffic period).
-* **Emergency Maintenance:** Authorized immediately by the Lead DevOps or CTO in response to critical zero-day vulnerabilities or active security exploits.
-* **Downtime Notification:** Users and internal teams are notified via the status page (`status.elitedom.store`) at least 24 hours prior to scheduled invasive maintenance.
+Defines planned maintenance preparation, execution and verification.
 
----
+## Current state
 
-## 3. Patch Management & Update Workflows
+Maintenance includes dependency/image upgrades, database migrations, provider/config changes, certificate/host work and data cleanup. Changes must preserve rollback/recovery understanding.
 
-### 3.1 Operating System & Infrastructure Patches (Ubuntu on Oracle Cloud VPS)
-* **Frequency:** Monthly (Second Tuesday of each month).
-* **Procedure:**
-  1. Update system package lists and apply security upgrades:
-     ```bash
-     sudo apt update && sudo apt upgrade -y
-     sudo reboot
-     ```
-  2. Verify Docker and firewall (UFW) active status post-reboot:
-     ```bash
-     sudo systemctl status docker ufw
-     ```
+## Invariants and controls
 
-### 3.2 Backend Dependencies & Container Images (FastAPI & Odoo)
-* **Frequency:** Bi-weekly dependency review / Monthly image rebuilds.
-* **Procedure:**
-  1. Run vulnerability scans on Python dependencies using `pip-audit` or `safety`.
-  2. Rebuild Docker images with updated base tags and push to the container registry:
-     ```bash
-     docker compose build --no-cache
-     docker compose up -d --pull always
-     ```
+- Define scope, release ref, expected impact and rollback point.
+- Check backup/recovery state before destructive or schema-changing work.
+- Prefer rolling/reversible operations when architecture supports them.
+- Validate health/readiness/smoke and key commerce/provider paths after maintenance.
+- Document any temporary control change and restore it before closure.
 
----
+## Source of truth
 
-## 4. Routine System Hygiene & Database Maintenance
-* **PostgreSQL Maintenance:** Weekly automated `VACUUM ANALYZE` to reclaim storage and update query planner statistics.
-* **Log Rotation:** Configured via `logrotate` to prevent disk exhaustion from Docker container logs (`/var/lib/docker/containers/*`).
-* **Cache Cleanup:** Monthly pruning of unused Docker build cache and dangling volumes:
-  ```bash
-  docker system prune -f --volumes
-  ```
+- `elitedom-store/infrastructure/`
+- `docs/engineering/development/PULL_REQUEST_GUIDELINES.md`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
 
----
+## Verification
 
-## 5. Rollback & Contingency Protocol
-* If a patch or update causes service failure or unresolvable API errors during maintenance:
-  1. Immediately revert to the previous Git release tag or Docker image tag:
-     ```bash
-     docker compose down
-     git checkout <previous-stable-tag>
-     docker compose up -d
-     ```
-  2. Notify the engineering team via Slack and document root cause for post-mortem review.
+Use change-specific CI/staging verification and post-maintenance operational smoke.
 
----
-End of Document
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

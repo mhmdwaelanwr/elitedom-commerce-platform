@@ -1,56 +1,38 @@
-# Product Roadmap (ROADMAP.md)
-
-**Document Classification:** Internal / Project Management & Engineering Strategy  
-**Version:** 2.1  
-**Status:** Approved / Execution Ready  
-**Target System:** Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL, Oracle Cloud VPS  
-
+---
+title: "Engineering Roadmap"
+status: current
+owner: delivery
+document_type: delivery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Engineering Roadmap behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Vision
-This document outlines the strategic product roadmap for the **Elitedom Store** e-commerce platform. It defines the phased release timeline, key milestones, and architectural evolution from foundational MVP setup to scalable production deployment on Oracle Cloud VPS, tightly integrated with Odoo 17 ERP and PostgreSQL.
+# Engineering Roadmap
 
----
+## Purpose
 
-## 2. Product Development Phases & Timeline
+Records delivered roadmap milestones and the remaining path from repository readiness to live production.
 
-| Phase | Milestone / Focus Area | Core Deliverables & Features | Target Timeline | Status |
-| :--- | :--- | :--- | :--- | :--- |
-| **Phase 1** | Foundation & Core MVP | FastAPI backend setup, PostgreSQL database schema, basic storefront catalog, and initial user authentication. | Q1–Q2 2026 | Completed |
-| **Phase 2** | ERP Integration & Staging | Odoo 17 ERP synchronization, webhook signature validation, Algolia search integration, and staging deployment (`staging.elitedom.store`). | Q2–Q3 2026 | In Progress / Current |
-| **Phase 3** | UAT, Security & Hardening | Formal User Acceptance Testing (UAT), penetration testing, load/performance testing, and Sentry monitoring setup. | Q3 2026 | Execution Ready |
-| **Phase 4** | Production Launch & Scale | Go-live on Oracle Cloud VPS, automated daily backups, Grafana dashboards, and marketing campaign integration. | Q4 2026 | Planned |
-| **Phase 5** | Advanced Features & Expansion| AI-driven product recommendations, loyalty rewards program, and multi-warehouse inventory routing in Odoo. | Q1 2027+ | Roadmap Backlog |
+## Current state
 
----
+Stages 0–10 are implemented and merged into the repository: baseline, cleanup, design/storefront, identity, Paymob, fulfillment, RBAC/audit, catalog/media, security/performance/SEO, and launch acceptance. The next work is deployment/provider/merchant UAT and ongoing product evolution, not an undocumented Stage 11 assumption.
 
-## 3. Detailed Phase Objectives
+## Invariants and controls
 
-### Phase 1: Foundation & Core MVP
-* Establish the asynchronous FastAPI backend architecture.
-* Design and migrate core relational schemas (Users, Products, Orders, Inventory) in PostgreSQL.
-* Implement JWT-based authentication and Role-Based Access Control (RBAC).
+- Keep delivered stage history under `docs/delivery/releases/`.
+- Separate code-delivered capabilities from provider/live deployment acceptance.
+- Promote new roadmap items only with explicit scope, architecture/security impact and acceptance criteria.
+- Do not rewrite completed stages to match later implementation; use living docs for current truth.
 
-### Phase 2: ERP Integration & Staging
-* Establish bidirectional synchronization between FastAPI and Odoo 17 Community edition.
-* Implement secure webhook dispatching protected by `X-Elitedom-Signature` headers.
-* Deploy staging environment on Oracle Cloud VPS with Nginx and SSL certification.
+## Source of truth
 
-### Phase 3: UAT, Security & Hardening
-* Execute comprehensive testing suites (Unit, Integration, Security, Load, and UAT).
-* Perform vulnerability scans using `pip-audit` and review OWASP Top 10 mitigations.
-* Validate automated daily backup scripts and disaster recovery failover drills.
+- `docs/delivery/releases/`
+- `elitedom-store/docs/IMPLEMENTATION_STATUS.md`
 
-### Phase 4: Production Launch & Scale
-* Finalize production DNS configuration and CDN caching layers.
-* Activate Prometheus and Grafana telemetry for real-time infrastructure monitoring.
-* Conduct final stakeholder sign-off across Store Administration, Logistics, and QA leads.
+## Verification
 
----
+Compare roadmap claims with merged release records and current implementation status.
 
-## 4. Governance & Review Cycle
-* **Roadmap Updates:** Reviewed bi-weekly by the core engineering and product management team.
-* **Scope Adjustments:** Any feature additions or timeline modifications require formal change requests and approval from the technical director.
+## Change policy
 
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

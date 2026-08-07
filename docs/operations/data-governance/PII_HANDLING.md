@@ -1,30 +1,40 @@
-# Personally Identifiable Information (PII) Handling Standards (PII_HANDLING.md)
-
-Document Classification: Internal / Security & Compliance  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "PII Handling"
+status: current
+owner: operations
+document_type: data-governance
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "PII Handling behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the strict engineering and operational standards for handling Personally Identifiable Information (PII) within the Elitedom Store ecosystem. Safeguarding user privacy and preventing data leaks is a non-negotiable security requirement.
+# PII Handling
 
-## 2. Definition of PII in Elitedom
-Any data that can be used to identify a specific individual directly or indirectly, including:
-* Full legal name, email address, phone numbers.
-* Physical shipping and billing addresses.
-* IP addresses associated with user accounts.
-* Payment card metadata (raw card numbers are never stored; handled exclusively via Stripe).
+## Purpose
 
-## 3. Storage & Encryption Standards
-* Encryption at Rest: All database tables in PostgreSQL and Odoo 17 containing PII must be encrypted using enterprise-grade storage encryption.
-* Encryption in Transit: All PII transmitted between the FastAPI storefront, Odoo backend, and external clients must enforce TLS 1.3 encryption.
-* Tokenization & Masking: Logs, error tracking (Sentry), and monitoring systems must never capture raw PII. Fields such as emails or phone numbers must be masked (e.g., `j***@example.com`) in administrative UI displays and debugging logs.
+Defines engineering controls for personal data in requests, storage, logs, support and provider integrations.
 
-## 4. Access Control & Auditing
-* Principle of Least Privilege: Access to raw PII in production databases is strictly restricted to authorized system roles and automated services required for order fulfillment.
-* Audit Trails: All read and write operations targeting PII tables must be logged in audit tables to track who accessed or modified user data and when.
+## Current state
 
----
-End of Document
+Customer identity/profile/contact/address/order/RMA data may be personal data. The application enforces authenticated/object-level access in domain routes/services; logging/metrics should minimize personal identifiers.
+
+## Invariants and controls
+
+- Do not log full tokens, OTPs, recovery codes, passwords or unnecessary customer payloads.
+- Mask/minimize email and phone in operational logs.
+- Only send provider data required for the integration purpose.
+- Test fixtures use synthetic data.
+- Data exports/deletion/support operations require authorization and audit appropriate to the implemented workflow.
+
+## Source of truth
+
+- `elitedom-store/backend/app/modules/customers/`
+- `elitedom-store/backend/app/modules/auth/`
+- `elitedom-store/backend/app/observability.py`
+
+## Verification
+
+Review representative logs/provider requests and authorization tests for new PII-bearing flows.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

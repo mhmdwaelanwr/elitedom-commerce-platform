@@ -1,38 +1,38 @@
-# ADR-008: Selection of Twilio for SMS and Communication Notifications
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom Store & Odoo 17 ERP Integration  
-
+---
+title: "ADR-008 — Twilio SMS Delivery"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted as optional
 ---
 
-## 1. Context and Problem Statement
-The Elitedom Store platform requires a reliable, scalable, and globally capable communication infrastructure to handle critical transactional notifications, including One-Time Passwords (OTPs) for customer authentication, order status updates, shipping alerts, and customer support messages. Relying on custom telecommunications setups or direct integrations with individual local operators introduces high operational overhead, maintenance complexity, and unpredictable delivery rates. We need to select a standard, robust Communications Platform-as-a-Service (CPaaS) provider.
+# ADR-008 — Twilio SMS Delivery
 
-## 2. Decision Drivers
-* High message deliverability and global carrier network coverage.
-* Developer-friendly REST APIs, SDKs, and comprehensive documentation.
-* Asynchronous webhook support for tracking delivery statuses (sent, delivered, failed).
-* Security, compliance, and reliability for handling sensitive authentication and order notification triggers.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Direct integration with local telecommunication gateway providers.
-* **Option 2:** Alternative cloud communication APIs (e.g., Plivo, MessageBird/Sinch).
-* **Option 3:** Twilio communication platform.
+Accepted as optional
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Twilio)**. Twilio shall serve as the primary communication and SMS provider for dispatching transactional alerts, order updates, and authentication verification codes triggered by the Elitedom middleware and Odoo 17 workflows.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Industry-standard reliability and high message deliverability rates across regions.
-* Simplified API integration and robust webhook event logging for tracking message lifecycles.
-* Scalable infrastructure capable of handling traffic spikes during flash sales and peak shopping seasons.
+Phone-first authentication requires an SMS delivery provider while OTP correctness, expiry and abuse controls must remain application-owned.
 
-### Negative Consequences / Trade-offs
-* Variable per-message cost depending on destination regions and volume.
-* Dependency on a third-party cloud service provider uptime, requiring proper error logging and fallback notification strategies (e.g., email via SendGrid).
+## Decision
 
----
-**End of Document**
+Use Twilio as an optional SMS delivery adapter. OTP generation/validation and authentication policy stay inside the auth domain.
+
+## Consequences
+
+- Twilio credentials never reach the browser.
+- Provider failure must not mark an OTP as verified.
+- Live sender/messaging-service acceptance remains environment-specific.
+
+## Implementation evidence
+
+- `elitedom-store/backend/app/integrations/twilio/tasks.py`
+- `elitedom-store/backend/app/modules/auth/delivery.py`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

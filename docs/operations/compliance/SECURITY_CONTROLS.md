@@ -1,24 +1,40 @@
-# Security Controls & Hardening Standard (SECURITY_CONTROLS.md)
-
-Document Classification: Internal / Cybersecurity & Engineering  
-Version: 1.0  
-Status: Approved / Commercial Readiness  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, Oracle Cloud VPS  
-
+---
+title: "Security Controls Catalogue"
+status: current
+owner: operations
+document_type: compliance-readiness
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Security Controls Catalogue behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the baseline security controls implemented across the Elitedom Store infrastructure to protect against unauthorized access, data breaches, and service disruption during commercial operations.
+# Security Controls Catalogue
 
-## 2. Infrastructure Hardening (Oracle Cloud VPS)
-* SSH Access: Password authentication is strictly disabled; SSH access requires Ed25519 public keys.
-* Firewall & Network Segmentation: UFW (Uncomplicated Firewall) blocks all incoming traffic except ports 80 (HTTP), 443 (HTTPS), and restricted SSH management ports.
-* Docker Isolation: All microservices (FastAPI, Odoo 17, PostgreSQL, Redis) run in isolated Docker networks with restricted inter-container communication.
+## Purpose
 
-## 3. Application Security Controls
-* Input Validation: FastAPI strictly enforces Pydantic v2 validation models for all incoming HTTP payloads to prevent injection attacks.
-* Authentication & Authorization: Stateless JWT tokens with short expiration windows and secure refresh token rotation. Role-Based Access Control (RBAC) enforced on Odoo ERP endpoints.
-* Dependency Vulnerability Scanning: Automated `pip-audit` and GitHub Dependabot scans run on every CI/CD pipeline run.
+Summarizes implemented and operationally required security controls.
 
----
-End of Document
+## Current state
+
+Controls span secure configuration, authentication/MFA, authorization, integration authenticity/idempotency, rate limiting, headers/metrics protection, secret handling, audit and recovery.
+
+## Invariants and controls
+
+- Preventive: strong config validation, MFA, RBAC, TrustedHost/CORS, provider validation, least-exposed network topology.
+- Detective: structured logs, metrics, audit records and launch evidence.
+- Corrective: session/provider secret rotation, rollback, backup/restore and incident procedures.
+- Assurance: security/config tests, CI, repository/documentation validators.
+
+## Source of truth
+
+- `SECURITY.md`
+- `elitedom-store/backend/app/config.py`
+- `elitedom-store/backend/app/middleware/`
+- `elitedom-store/backend/app/tests/`
+
+## Verification
+
+Map each control to executable evidence and deployment evidence; mark gaps rather than assuming coverage.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

@@ -1,95 +1,63 @@
 # Contributing to Elitedom
 
-Elitedom is maintained as a production-oriented modular commerce platform. Changes should preserve clear ownership boundaries, reversible database evolution and a green release baseline.
-
-## Repository boundaries
-
-The repository has three intentional top-level areas:
-
-- `.github/` — automation and repository policy;
-- `docs/` — product, architecture, engineering, operations and delivery knowledge;
-- `elitedom-store/` — the canonical executable platform.
-
-Do not add a new top-level directory simply to hold one feature, report or script. Put runtime work in the owning platform subsystem and documentation in the matching `docs/` domain. A genuinely new top-level boundary should be justified as an architectural decision.
-
-## Runtime ownership
-
-Inside `elitedom-store/`:
-
-- `backend/` owns FastAPI, SQLAlchemy, Alembic, workers and backend tests;
-- `frontend/` owns the Next.js storefront and admin application;
-- `infrastructure/` owns Docker Compose and deployment topology;
-- `odoo/` owns Odoo 17 addons;
-- `scripts/` owns repository, smoke and integration validation tooling;
-- `docs/` owns implementation-coupled runbooks and operational reports.
-
-Keep business behavior inside its domain module. Avoid generic `utils` dumping grounds when the behavior has a clear owner.
-
-## Documentation ownership
-
-Use the semantic documentation tree described in [`docs/README.md`](docs/README.md). Do not recreate numbered root documentation directories. Historical delivery reports belong in `docs/delivery/releases/`.
-
-ADRs are immutable historical decisions. When a decision changes, mark the old ADR as superseded and add a new decision rather than rewriting history.
+Elitedom is maintained as a production-oriented monorepo. Contributions must preserve runtime correctness, migration safety, documentation accuracy, and operational recoverability.
 
 ## Branch and pull-request workflow
 
 1. Start from the latest green `main`.
-2. Use a focused branch such as `agent/<scope>`.
-3. Keep one architectural concern per pull request.
-4. Open the PR as Draft while implementation or CI repair is still in progress.
-5. Fix the root cause of CI failures; do not weaken linting, tests or migration checks.
-6. Rebase or refresh only when needed to resolve a real divergence from `main`.
+2. Use a focused branch such as `agent/<scope>`, `feature/<scope>`, `fix/<scope>`, or `docs/<scope>`.
+3. Keep unrelated behavior out of the same pull request.
+4. Open a draft PR once the change is coherent enough for CI.
+5. Fix root causes rather than weakening checks.
+6. Merge only after required checks are green and review/approval policy is satisfied.
 
-Never commit credentials, provider secrets, production tokens or customer data.
+## Architectural boundaries
 
-## Required validation
+- `elitedom-store/backend/` owns application APIs, business rules, persistence, provider adapters, workers, and migrations.
+- `elitedom-store/frontend/` owns browser UX and typed calls into backend contracts; it must not embed provider secrets or reimplement server-authoritative pricing/authorization.
+- `elitedom-store/odoo/` owns the Odoo addon and outbound ERP events.
+- `elitedom-store/infrastructure/` owns Docker Compose topology and deployment scripts.
+- `docs/` owns enterprise product, architecture, engineering, operations, governance, and release knowledge.
+- `elitedom-store/docs/` contains executable implementation/runbook documentation close to the runtime.
 
-From `elitedom-store/`, use the narrowest relevant checks during development and the complete gates before merge:
+## Backend expectations
 
-```bash
-python3 scripts/check_repository_hygiene.py
-python3 scripts/validate_launch_assets.py
-
-cd backend
-python -m ruff check .
-python -m pytest app/tests -q
-
-cd ../frontend
-npm ci
-npm run lint
-npx tsc --noEmit
-npm run build
-```
-
-The GitHub CI baseline additionally validates:
-
-- Backend on Python 3.11;
-- Frontend on Node 22;
-- Odoo 17 addon clean installation and tests;
-- PostgreSQL fresh upgrade, latest downgrade/replay and full downgrade/replay;
-- development and production Docker Compose topologies;
-- launch-acceptance assets.
-
-Repository Hygiene runs independently for structural policy.
+- Python 3.11; Ruff must pass.
+- Authorization is enforced in the backend, not inferred from UI visibility.
+- Money, stock, discounts, shipping, payment transitions, refunds, and order state are server-authoritative.
+- Webhooks require signature/HMAC verification where the provider supports it, idempotent receipt handling, and safe retry behavior.
+- Background delivery uses transactional/outbox patterns where cross-system consistency matters.
+- Sensitive endpoints and credentials fail closed.
 
 ## Database migrations
 
-Every schema change must be represented by Alembic and remain valid for:
+Every Alembic migration must support:
 
-1. fresh database upgrade to head;
-2. latest migration downgrade and replay;
-3. full downgrade and replay.
+- upgrade from a fresh database to `head`;
+- downgrade of the latest revision followed by replay;
+- full downgrade to `base` followed by replay;
+- deterministic constraints/index names;
+- no hidden dependency on production-only data.
 
-Do not edit an already-merged migration to change production history. Add a new revision.
+Schema migrations and ORM changes belong in the same PR.
 
-## Integrations and webhooks
+## Frontend expectations
 
-External callbacks must fail closed, verify signatures/HMAC where applicable, and be idempotent. Network/provider errors must not silently turn a failed operation into success.
+- Preserve English/Arabic, LTR/RTL, and light/dark/system preferences.
+- Preserve responsive, loading, empty, error, focus, and keyboard-accessible states.
+- Do not bypass typed backend adapters with provider-specific browser calls unless the architecture explicitly requires a public provider SDK.
+- `npm run lint`, type checking, design-system checks, and production build must pass.
 
-## Frontend quality
+## Documentation expectations
 
-Changes must preserve English/Arabic behavior, RTL/LTR, light/dark/system themes, responsive layouts, loading/empty/error states, accessibility basics and locale-aware formatting.
+Living documentation must match code and configuration. Historical release records must remain historical. Superseded ADRs remain in place and point to the replacing decision.
+
+Read `docs/governance/DOCUMENTATION_STANDARD.md` before changing the documentation corpus.
+
+## Security
+
+Do not put secrets in commits, PR descriptions, screenshots, fixtures, or documentation. Use placeholders and environment-variable names only. Security concerns should be reported through GitHub's private vulnerability reporting/security advisory flow when available; see `SECURITY.md`.
 
 ## Definition of done
 
-A change is complete when its code, tests, migrations, operational documentation and CI behavior agree. A merge is not equivalent to production go-live; live-provider and environment-specific acceptance is recorded through the launch-control workflow.
+A change is complete when implementation, tests, migrations, operational behavior, and documentation agree; all applicable CI jobs pass; rollback/recovery implications are understood; and no new secret, generated artifact, dead source tree, or misleading documentation is tracked.

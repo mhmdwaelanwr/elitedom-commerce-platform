@@ -1,37 +1,38 @@
-# ADR-005: Selection of Oracle Cloud Infrastructure (OCI) as Cloud Hosting Provider
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-005 — Oracle Cloud VPS Hosting"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted with deployment-specific scope
 ---
 
-## 1. Context and Problem Statement
-The Elitedom Store platform—comprising the Odoo 17 ERP backend, PostgreSQL database, custom Python middleware, reactive web storefront, and Flutter mobile API backend—requires a secure, scalable, and cost-effective cloud infrastructure provider. We need to select a cloud hosting environment that supports containerized workloads (Docker/Kubernetes), ensures high availability and low latency for our target users, and provides robust enterprise-grade reliability without excessive infrastructure overhead.
+# ADR-005 — Oracle Cloud VPS Hosting
 
-## 2. Decision Drivers
-* Need for a cloud-native environment supporting container orchestration and infrastructure as code.
-* High performance, predictable pricing, and cost-effectiveness for compute and database workloads.
-* Robust security, isolated virtual cloud networks (VCN), and strict access control mechanisms.
-* Low latency and reliable connectivity for regional operations.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Amazon Web Services (AWS).
-* **Option 2:** Microsoft Azure.
-* **Option 3:** Oracle Cloud Infrastructure (OCI).
+Accepted with deployment-specific scope
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Oracle Cloud Infrastructure - OCI)**. OCI shall serve as the primary cloud hosting provider for the Elitedom Store platform, providing high-performance compute instances, managed database support for PostgreSQL, and reliable container deployment capabilities that align with our cloud-native strategy.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Excellent price-to-performance ratio, particularly regarding compute resources, memory bandwidth, and low data egress fees.
-* Strong enterprise security controls, robust database optimization for PostgreSQL, and reliable infrastructure scaling.
-* Seamless integration with containerized Docker and Kubernetes deployment pipelines.
+The initial hosting plan selected an Oracle Cloud VPS. Hosting is an operational choice that does not define application semantics.
 
-### Negative Consequences / Trade-offs
-* Smaller community and ecosystem size compared to hyperscalers like AWS, requiring team adaptation to OCI-specific networking and IAM tooling.
+## Decision
 
----
-**End of Document**
+Retain Oracle Cloud VPS as the documented deployment target where used, but keep runtime containers and configuration portable. Do not bake cloud-specific credentials or private addresses into application code.
+
+## Consequences
+
+- Compose remains the portable deployment contract.
+- Cloud networking, DNS, TLS, backups and host hardening require environment-specific evidence.
+- A hosting migration does not require rewriting business/domain architecture.
+
+## Implementation evidence
+
+- `elitedom-store/infrastructure/`
+- `docs/operations/infrastructure/`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

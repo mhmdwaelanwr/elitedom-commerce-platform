@@ -1,36 +1,41 @@
-# Code Review Guidelines (CODE_REVIEW.md)
-
-Document Classification: Internal / Software Engineering & QA  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Code Review Standard"
+status: current
+owner: engineering
+document_type: development
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Code Review Standard behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-Code reviews are a mandatory part of the Elitedom Store development lifecycle. They ensure code quality, maintain security standards, prevent architectural drift, and foster knowledge sharing among the engineering team.
+# Code Review Standard
 
-## 2. Reviewer Responsibilities
-* Security First: Actively look for OWASP Top 10 vulnerabilities, ensure JWT tokens are handled securely, and verify Odoo webhook HMAC signatures are strictly validated.
-* Performance & Architecture: Check for asynchronous blocking calls, inefficient database queries (e.g., N+1 problems in SQLAlchemy), and adherence to the FastAPI and Odoo 17 ERP architecture.
-* Empathy & Clarity: Provide constructive, actionable, and respectful feedback. Explain *why* a change is requested, not just *what* needs changing.
+## Purpose
 
-## 3. Author Responsibilities
-* Self-Review: Review your own code before requesting a review from others. Ensure all debugging statements (e.g., `print()`, console logs) are removed.
-* Context: Provide a clear Pull Request description outlining what the code does, why the change is necessary, and how it was tested locally or on staging.
-* Responsiveness: Address all reviewer comments. If you disagree with a comment, discuss it respectfully in the PR thread.
+Defines what reviewers verify beyond formatting.
 
-## 4. The Review Process & Approvals
-* Minimum Approvals: Every Pull Request requires at least one (1) approval from a Lead Engineer before it can be merged into `staging` or `main`.
-* CI/CD Gates: All automated checks (Unit Tests, pip-audit, linting via Black, and isort) must pass before a review is officially completed and approved.
-* Stale PRs: Pull requests open for more than 5 days without activity will be marked as stale and eventually closed.
+## Current state
 
-## 5. Code Review Checklist
-- [ ] Logic: Does the code achieve the intended business requirement? Are edge cases handled?
-- [ ] Security: Are all API inputs validated via Pydantic? Are database operations parameterized?
-- [ ] Performance: Are database calls optimized? Is `async/await` utilized correctly without blocking the event loop?
-- [ ] Testing: Are there adequate unit/integration tests for the new feature or bug fix?
-- [ ] Readability: Is the code strictly typed? Are variables and functions named descriptively?
+Review focuses on correctness, security boundaries, state transitions, data migration, operational behavior, tests and documentation truth.
 
----
-End of Document
+## Invariants and controls
+
+- Confirm authorization at backend boundaries and object ownership where applicable.
+- Trace money/stock/payment/order/refund transitions for server authority and idempotency.
+- Review migrations both forward and downgrade behavior.
+- Review provider failure/timeout/retry and secret handling.
+- Check frontend EN/AR, RTL/LTR, theme, responsive, loading/error/accessibility behavior when UI changes.
+- Reject misleading docs or unsupported compliance/production claims.
+
+## Source of truth
+
+- `CONTRIBUTING.md`
+- `docs/governance/DOCUMENTATION_STANDARD.md`
+- `.github/workflows/ci.yml`
+
+## Verification
+
+Use PR diff, CI and targeted source/test inspection; green CI is necessary but not sufficient review.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

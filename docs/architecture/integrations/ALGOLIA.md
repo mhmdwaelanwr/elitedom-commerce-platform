@@ -1,87 +1,43 @@
-# Algolia Search Integration Specification (ALGOLIA.md)
-
-**Document Classification:** Internal  
-**Version:** 1.0  
-**Status:** Approved / Production Ready  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration (FastAPI Backend, Algolia Search API, PostgreSQL 15)  
-
+---
+title: "Algolia Search Integration"
+status: current
+owner: architecture
+document_type: integration
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Algolia Search Integration behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Architecture Overview
-This document defines the technical integration specification for **Algolia Search** within the **Elitedom Store** platform. Algolia provides ultra-fast, typo-tolerant search and instant filtering capabilities for the e-commerce product catalog, ensuring lightning-fast search responses (under 300ms) for web and mobile clients [cite: 7].
+# Algolia Search Integration
 
-In alignment with platform architecture principles (`AP-011 Event Driven Integration`), product data changes originating from Odoo 17 ERP or the FastAPI backend are asynchronously indexed into Algolia to maintain real-time consistency across stock quantities, pricing, and hardware specifications.
+## Purpose
 
----
+Documents the Algolia Search boundary, implementation status, security controls and operational enablement requirements.
 
-## 2. Data Synchronization & Indexing Pipeline
+## Current state
 
-To keep the search index synchronized with the PostgreSQL database and Odoo 17 ERP master records, a background worker (Celery/Redis) manages index updates:
+Algolia has an optional backend service/task implementation for external search indexing. Canonical catalogue data remains in PostgreSQL; Algolia is a derived search surface and may be unconfigured in environments that do not require it.
 
-* **Trigger Events:** 
-  * Product creation or update (`product.template` / `product.product`).
-  * Inventory adjustments via Odoo webhooks (`POST /webhooks/odoo/inventory-sync`) [cite: 10, 11].
-  * Price changes or tier pricelist modifications.
-* **Batch Re-indexing:** A scheduled cron job performs a full catalog synchronization nightly to resolve any drift between PostgreSQL and Algolia indices.
+## Invariants and controls
 
----
+- Admin/provider secrets remain server-side.
+- Indexing failure must not corrupt or block canonical catalogue persistence.
+- Reindex/update tasks should be retryable/idempotent by object identity.
+- Search availability requirements must be defined per environment.
 
-## 3. Search API Endpoints & Query Parameters
+## Enablement and failure mode
 
-The FastAPI backend acts as a secure proxy/wrapper for client search queries, handling authentication rate limits and request formatting before querying Algolia.
+Enablement requires an Algolia application/index and valid keys; production search relevance/latency is validated against the live index.
 
-### 3.1. Typo-Tolerant Product Search
-* **Endpoint (Internal FastAPI):** `GET /products/search` [cite: 7]
-* **Query Parameters:** 
-  * `q` (string): The user search query string (supports typo tolerance, synonym matching, and multi-word queries) [cite: 7].
-  * `category_id` (integer, optional): Filter results by specific category facet.
-  * `brand` (string, optional): Filter results by hardware brand (e.g., Intel, ASUS, Corsair).
-  * `min_price` / `max_price` (float, optional): Price range numerical facets.
-  * `page` / `limit` (integer, optional): Pagination parameters.
-* **Response Payload Example (200 OK):**
-  ```json
-  {
-    "total_count": 12,
-    "page": 1,
-    "limit": 20,
-    "processing_time_ms": 42,
-    "products": [
-      {
-        "id": 501,
-        "name": "Intel Core i7-14700K",
-        "sku": "CPU-INTEL-14700K",
-        "price": 18500.00,
-        "stock_qty": 14,
-        "highlight_result": {
-          "name": {
-            "value": "Intel Core i7-<em>14700K</em>",
-            "matchLevel": "full"
-          }
-        }
-      }
-    ]
-  }
-  ```
+## Source of truth
 
----
+- `elitedom-store/backend/app/integrations/algolia/service.py`
+- `elitedom-store/backend/app/integrations/algolia/tasks.py`
+- `elitedom-store/backend/app/config.py`
 
-## 4. Algolia Index Schema & Configuration
+## Verification
 
-The Algolia index (`elitedom_products_prod`) is structured with optimized attributes for e-commerce filtering and ranking:
+Run relevant unit/integration tests and configuration validation. Enablement requires an Algolia application/index and valid keys; production search relevance/latency is validated against the live index.
 
-* **Object ID (`objectID`):** Maps directly to the product database ID (`product_id`).
-* **Searchable Attributes:** `name`, `sku`, `brand`, `description`, `category_name`, `tags`.
-* **Custom Ranking:** Ranked descending by `stock_qty`, popularity score, and rating.
-* **Attributes for Faceting:** `category_id`, `brand`, `price`, `is_dropship_enabled`, `in_stock`.
-* **Typo Tolerance Settings:** Enabled by default with `minWordSizefor1Typo: 4` and `minWordSizefor2Typos: 8`.
+## Change policy
 
----
-
-## 5. Fault Tolerance & Fallback Strategy
-
-To ensure high availability in the event of Algolia API downtime or network partitions:
-* **Automatic Fallback:** If the Algolia API call fails or exceeds a 500ms timeout threshold, the FastAPI backend automatically falls back to PostgreSQL Full-Text Search (`ILIKE` / `to_tsvector`).
-* **Error Mapping:** Search failures map to standard platform error codes (`ERROR_CODES.md`), ensuring clients receive structured error responses without breaking application flow.
-
----
-End of Document
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.
