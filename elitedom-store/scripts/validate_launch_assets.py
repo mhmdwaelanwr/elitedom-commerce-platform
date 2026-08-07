@@ -1,0 +1,105 @@
+#!/usr/bin/env python3
+"""Validate that Stage 10 launch-control assets remain wired into the repository."""
+
+from __future__ import annotations
+
+import ast
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+STORE = ROOT / "elitedom-store"
+
+REQUIRED_FILES = (
+    ROOT / ".github/workflows/ci.yml",
+    ROOT / ".github/workflows/launch-smoke.yml",
+    ROOT / "docs/STAGE_10_UAT_GO_LIVE.md",
+    STORE / "docs/GO_LIVE_RUNBOOK.md",
+    STORE / "scripts/live_smoke.py",
+    STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py",
+    STORE / "backend/app/tests/integration/test_stage10_launch_acceptance.py",
+    STORE / "frontend/src/app/admin/launch/page.tsx",
+    STORE / "frontend/src/app/robots.ts",
+    STORE / "frontend/src/app/sitemap.ts",
+)
+
+REQUIRED_CI_MARKERS = (
+    "Backend (Python 3.11)",
+    "Frontend (Node 22)",
+    "Odoo 17 addon install and tests",
+    "PostgreSQL migration smoke test",
+    "Validate Docker Compose",
+    "Launch acceptance",
+)
+
+REQUIRED_RUNBOOK_MARKERS = (
+    "Pre-deployment",
+    "Database backup and restore",
+    "Provider acceptance",
+    "Smoke test",
+    "Rollback",
+    "Release sign-off",
+)
+
+
+def require(condition: bool, message: str, errors: list[str]) -> None:
+    if not condition:
+        errors.append(message)
+
+
+def main() -> int:
+    errors: list[str] = []
+
+    for path in REQUIRED_FILES:
+        require(path.is_file(), f"Missing required launch asset: {path.relative_to(ROOT)}", errors)
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}")
+        return 1
+
+    ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for marker in REQUIRED_CI_MARKERS:
+        require(marker in ci, f"CI is missing required job/marker: {marker}", errors)
+
+    smoke_workflow = (ROOT / ".github/workflows/launch-smoke.yml").read_text(encoding="utf-8")
+    require("workflow_dispatch:" in smoke_workflow, "Launch smoke must remain manually dispatched.", errors)
+    require("live_smoke.py" in smoke_workflow, "Launch smoke workflow must execute live_smoke.py.", errors)
+    require("--allow-local" not in smoke_workflow, "Remote launch smoke must never enable local/private targets.", errors)
+
+    smoke_source = (STORE / "scripts/live_smoke.py").read_text(encoding="utf-8")
+    try:
+        ast.parse(smoke_source)
+    except SyntaxError as exc:
+        errors.append(f"live_smoke.py is not valid Python: {exc}")
+    require("socket.getaddrinfo" in smoke_source, "Live smoke must resolve and reject private network targets.", errors)
+    require("health/ready" in smoke_source, "Live smoke must verify dependency readiness.", errors)
+    require("robots.txt" in smoke_source and "sitemap.xml" in smoke_source, "Live smoke must verify public SEO assets.", errors)
+
+    runbook = (STORE / "docs/GO_LIVE_RUNBOOK.md").read_text(encoding="utf-8")
+    for marker in REQUIRED_RUNBOOK_MARKERS:
+        require(marker in runbook, f"Go-live runbook is missing section: {marker}", errors)
+
+    stage_doc = (ROOT / "docs/STAGE_10_UAT_GO_LIVE.md").read_text(encoding="utf-8")
+    for marker in ("Launch Control Plane", "UAT matrix", "External smoke", "Known live-provider gates"):
+        require(marker in stage_doc, f"Stage 10 documentation is missing: {marker}", errors)
+
+    migration = (STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py").read_text(encoding="utf-8")
+    require('down_revision: str | None = "0013_staff_mfa"' in migration, "Launch migration must extend 0013_staff_mfa.", errors)
+    require("def downgrade()" in migration, "Launch acceptance migration must remain reversible.", errors)
+
+    launch_page = (STORE / "frontend/src/app/admin/launch/page.tsx").read_text(encoding="utf-8")
+    require("config.manage" in launch_page, "Launch UI must preserve config.manage write boundary.", errors)
+    require("evidence_ref" in launch_page, "Launch UI must capture evidence references.", errors)
+
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}")
+        return 1
+
+    print("Stage 10 launch assets validated successfully.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
