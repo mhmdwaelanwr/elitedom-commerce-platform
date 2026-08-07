@@ -1,5 +1,6 @@
 """Unit contracts for the Paymob provider boundary."""
 
+import json
 from decimal import Decimal
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
@@ -116,7 +117,7 @@ async def test_create_intention_uses_server_amount_and_provider_reference() -> N
 
     def handler(request: httpx.Request) -> httpx.Response:
         captured["authorization"] = request.headers["Authorization"]
-        captured["payload"] = __import__("json").loads(request.content)
+        captured["payload"] = json.loads(request.content)
         return httpx.Response(
             201,
             json={
