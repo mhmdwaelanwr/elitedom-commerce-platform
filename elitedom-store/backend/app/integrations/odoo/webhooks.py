@@ -418,7 +418,6 @@ async def odoo_order_status_webhook(
             "event_key": event_key,
             "order_reference": order.name,
             "order_state": order.state,
-            "fulfillment_status": lifecycle.status,
             "picking_id": picking.id if picking is not None else None,
             "tracking_number": (
                 picking.courier_tracking_ref if picking is not None else None
@@ -469,7 +468,10 @@ async def odoo_order_status_webhook(
             shipment.status = "shipped"
             shipment.shipped_at = shipment.shipped_at or payload.timestamp
         if previous_picking_state != "done" and picking.picking_type != "dropship":
-            await InventoryReservationService(db).mark_order_consumed(order.id)
+            await InventoryReservationService(db).mark_order_consumed(
+                order.id,
+                occurred_at=payload.timestamp,
+            )
     elif target_fulfillment == DELIVERED:
         shipment.status = "delivered"
         shipment.shipped_at = shipment.shipped_at or payload.timestamp
