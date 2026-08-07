@@ -20,7 +20,7 @@ class CatalogCategoryResponse(BaseModel):
     description: str | None = None
     image_url: str | None = None
     is_featured: bool = False
-    children: list["CatalogCategoryResponse"] = Field(default_factory=list)
+    children: list[CatalogCategoryResponse] = Field(default_factory=list)
 
 
 class CatalogAttributeResponse(BaseModel):
@@ -188,7 +188,7 @@ class CatalogAttributeValueInput(BaseModel):
     sort_order: int = Field(default=0, ge=-100_000, le=100_000)
 
     @model_validator(mode="after")
-    def require_one_value(self) -> "CatalogAttributeValueInput":
+    def require_one_value(self) -> CatalogAttributeValueInput:
         values = [self.value_text, self.value_number, self.value_boolean]
         if sum(value is not None for value in values) != 1:
             raise ValueError("Exactly one value field must be supplied.")
@@ -230,7 +230,7 @@ class CatalogMediaOrderRequest(BaseModel):
     images: list[CatalogMediaOrderItem] = Field(..., min_length=1, max_length=50)
 
     @model_validator(mode="after")
-    def validate_media_order(self) -> "CatalogMediaOrderRequest":
+    def validate_media_order(self) -> CatalogMediaOrderRequest:
         image_ids = [item.image_id for item in self.images]
         if len(image_ids) != len(set(image_ids)):
             raise ValueError("Each image may appear only once.")
