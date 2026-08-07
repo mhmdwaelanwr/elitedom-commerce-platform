@@ -1,34 +1,47 @@
-"""
-Elitedom Store — Rate Limiting Middleware
-Protects API endpoints from abuse per API_SECURITY.md.
-"""
+"""Distributed request rate limiting with stricter authentication budgets."""
 
+from __future__ import annotations
+
+import hashlib
+import logging
 import time
 from collections import defaultdict
 from collections.abc import Callable
 
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from app.config import get_settings
 
-# Simple in-memory sliding window rate limiter
-# For production, this should be backed by Redis
-_request_counts: dict[str, list[float]] = defaultdict(list)
-
-# Rate limit configuration
-RATE_LIMIT_WINDOW = 60  # seconds
-RATE_LIMIT_MAX_REQUESTS = 100  # max requests per window
-RATE_LIMIT_BURST = 20  # max burst in 10 seconds
-
-# Paths excluded from rate limiting
-EXCLUDED_PATHS = {"/health", "/docs", "/redoc", "/openapi.json"}
+logger = logging.getLogger(__name__)
 settings = get_settings()
+
+EXCLUDED_PATHS = {"/health", "/health/live", "/health/ready", "/docs", "/redoc", "/openapi.json"}
+_AUTH_LIMITS: tuple[tuple[str, int, int], ...] = (
+    ("/api/v1/auth/login", 10, 60),
+    ("/api/v1/auth/otp/request", 5, 600),
+    ("/api/v1/auth/otp/verify", 15, 600),
+    ("/api/v1/auth/mfa/confirm", 10, 300),
+    ("/api/v1/auth/mfa/verify", 10, 300),
+    ("/api/v1/auth/refresh", 30, 60),
+)
+_memory_counts: dict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
+_redis: Redis | None = None
+
+_REDIS_SCRIPT = """
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+  redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {current, ttl}
+"""
 
 
 def _client_ip(request: Request) -> str:
-    """Use forwarded client addresses only from a configured trusted proxy."""
     peer_ip = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded and peer_ip in settings.trusted_proxy_ip_set:
@@ -36,49 +49,96 @@ def _client_ip(request: Request) -> str:
     return peer_ip
 
 
+def _policy(path: str) -> tuple[int, int, str]:
+    for prefix, limit, window in _AUTH_LIMITS:
+        if path == prefix:
+            return limit, window, prefix
+    return settings.rate_limit_default_per_minute, 60, "default"
+
+
+def _redis_client() -> Redis:
+    global _redis
+    if _redis is None:
+        _redis = Redis.from_url(
+            settings.redis_url,
+            encoding="utf-8",
+            decode_responses=True,
+            socket_connect_timeout=settings.readiness_timeout_seconds,
+            socket_timeout=settings.readiness_timeout_seconds,
+        )
+    return _redis
+
+
+async def _redis_increment(key: str, window: int) -> tuple[int, int]:
+    result = await _redis_client().eval(_REDIS_SCRIPT, 1, key, window)
+    count = int(result[0])
+    ttl = max(int(result[1]), 1)
+    return count, ttl
+
+
+def _memory_increment(key: str, window: int) -> tuple[int, int]:
+    now = time.time()
+    count, reset_at = _memory_counts[key]
+    if reset_at <= now:
+        count = 0
+        reset_at = now + window
+    count += 1
+    _memory_counts[key] = (count, reset_at)
+    return count, max(int(reset_at - now), 1)
+
+
+def _error(status_code: int, message: str, *, retry_after: int | None = None) -> JSONResponse:
+    headers = {"Cache-Control": "no-store"}
+    if retry_after is not None:
+        headers["Retry-After"] = str(max(retry_after, 1))
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "error_code": "ELITE_9001" if status_code == 429 else "ELITE_9002",
+            "message": message,
+            **({"retry_after_seconds": max(retry_after, 1)} if retry_after is not None else {}),
+        },
+        headers=headers,
+    )
+
+
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """
-    Sliding window rate limiter.
-    100 requests per minute per IP address.
-    """
+    """Rate-limit requests by trusted client IP using Redis in production."""
 
     async def dispatch(self, request: Request, call_next: Callable):
-        # Skip rate limiting for health checks and docs
         if request.url.path in EXCLUDED_PATHS:
             return await call_next(request)
 
-        # Get client IP
+        limit, window, policy_name = _policy(request.url.path)
         client_ip = _client_ip(request)
+        window_bucket = int(time.time()) // window
+        identity = hashlib.sha256(client_ip.encode("utf-8")).hexdigest()[:24]
+        key = f"elitedom:rate:{policy_name}:{identity}:{window_bucket}"
 
-        now = time.time()
-        key = f"{client_ip}"
-
-        # Clean old entries outside the window
-        _request_counts[key] = [ts for ts in _request_counts[key] if now - ts < RATE_LIMIT_WINDOW]
-
-        # Check rate limit
-        if len(_request_counts[key]) >= RATE_LIMIT_MAX_REQUESTS:
-            retry_after = int(RATE_LIMIT_WINDOW - (now - _request_counts[key][0]))
-            return JSONResponse(
-                status_code=429,
-                content={
-                    "error_code": "ELITE_9001",
-                    "message": "Rate limit exceeded. Please try again later.",
-                    "retry_after_seconds": max(retry_after, 1),
-                },
-                headers={"Retry-After": str(max(retry_after, 1))},
+        try:
+            if settings.rate_limit_backend == "redis":
+                count, retry_after = await _redis_increment(key, window)
+            else:
+                count, retry_after = _memory_increment(key, window)
+        except RedisError:
+            logger.exception("rate_limit_backend_unavailable")
+            return _error(
+                503,
+                "Request protection is temporarily unavailable. Please try again shortly.",
+                retry_after=5,
             )
 
-        # Record this request
-        _request_counts[key].append(now)
+        remaining = max(limit - count, 0)
+        if count > limit:
+            response = _error(
+                429,
+                "Rate limit exceeded. Please try again later.",
+                retry_after=retry_after,
+            )
+        else:
+            response = await call_next(request)
 
-        # Add rate limit headers to response
-        response = await call_next(request)
-        remaining = RATE_LIMIT_MAX_REQUESTS - len(_request_counts[key])
-        response.headers["X-RateLimit-Limit"] = str(RATE_LIMIT_MAX_REQUESTS)
-        response.headers["X-RateLimit-Remaining"] = str(max(remaining, 0))
-        response.headers["X-RateLimit-Reset"] = str(
-            int(_request_counts[key][0] + RATE_LIMIT_WINDOW)
-        )
-
+        response.headers["X-RateLimit-Limit"] = str(limit)
+        response.headers["X-RateLimit-Remaining"] = str(remaining)
+        response.headers["X-RateLimit-Reset"] = str(int(time.time()) + retry_after)
         return response
