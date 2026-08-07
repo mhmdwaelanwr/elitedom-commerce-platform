@@ -1,4 +1,4 @@
-"""Add auditable launch acceptance gates.
+"""Add release-scoped auditable launch acceptance gates.
 
 Revision ID: 0014_launch_acceptance
 Revises: 0013_staff_mfa
@@ -20,6 +20,9 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.create_table(
         "elitedom_launch_acceptance",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("release_ref", sa.String(length=128), nullable=False),
+        sa.Column("environment", sa.String(length=16), nullable=False),
         sa.Column("key", sa.String(length=64), nullable=False),
         sa.Column("status", sa.String(length=16), server_default="pending", nullable=False),
         sa.Column("evidence_ref", sa.String(length=512), nullable=True),
@@ -37,12 +40,24 @@ def upgrade() -> None:
             name="ck_launch_acceptance_status",
         ),
         sa.ForeignKeyConstraint(["verified_by"], ["res_partner.id"], ondelete="SET NULL"),
-        sa.PrimaryKeyConstraint("key"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "release_ref",
+            "environment",
+            "key",
+            name="uq_launch_acceptance_release_environment_key",
+        ),
+    )
+    op.create_index(
+        "ix_launch_acceptance_release_environment",
+        "elitedom_launch_acceptance",
+        ["release_ref", "environment"],
+        unique=False,
     )
     op.create_index(
         "ix_launch_acceptance_status",
         "elitedom_launch_acceptance",
-        ["status"],
+        ["release_ref", "environment", "status"],
         unique=False,
     )
     op.create_index(
@@ -56,4 +71,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_launch_acceptance_verified", table_name="elitedom_launch_acceptance")
     op.drop_index("ix_launch_acceptance_status", table_name="elitedom_launch_acceptance")
+    op.drop_index(
+        "ix_launch_acceptance_release_environment",
+        table_name="elitedom_launch_acceptance",
+    )
     op.drop_table("elitedom_launch_acceptance")
