@@ -56,8 +56,6 @@ class LoginRequest(BaseModel):
 
 class LoginResponse(BaseModel):
     access_token: str
-    # The router reads this value to issue an HttpOnly cookie. It is excluded
-    # from JSON so browser JavaScript never receives the refresh credential.
     refresh_token: str = Field(exclude=True)
     expires_in: int = 3600
     token_type: str = "bearer"
@@ -66,6 +64,9 @@ class LoginResponse(BaseModel):
     session_id: str
     email: str
     name: str
+    mfa_required: bool = False
+    mfa_enrolled: bool = False
+    mfa_verified: bool = False
 
 
 class OAuthRequest(BaseModel):
@@ -102,6 +103,27 @@ class OtpVerifyRequest(BaseModel):
         return normalize_egyptian_mobile(value)
 
 
+class MfaCodeRequest(BaseModel):
+    code: str = Field(..., min_length=6, max_length=32)
+
+
+class MfaStatusResponse(BaseModel):
+    required: bool
+    enrolled: bool
+    verified: bool
+    remaining_recovery_codes: int = 0
+
+
+class MfaEnrollmentResponse(BaseModel):
+    secret: str
+    provisioning_uri: str
+
+
+class MfaEnrollmentConfirmResponse(BaseModel):
+    status: MfaStatusResponse
+    recovery_codes: list[str]
+
+
 class SessionResponse(BaseModel):
     id: str
     auth_method: str
@@ -110,6 +132,7 @@ class SessionResponse(BaseModel):
     created_at: datetime
     last_used_at: datetime | None
     current: bool = False
+    mfa_verified: bool = False
 
 
 class SessionListResponse(BaseModel):
