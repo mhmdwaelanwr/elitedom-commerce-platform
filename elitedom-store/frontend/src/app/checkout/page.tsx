@@ -14,6 +14,8 @@ import { formatPrice } from "@/lib/format";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
 import type { CheckoutDetails, CheckoutResult, Currency } from "@/types/store";
 
+const PAYMENT_ORDER_STORAGE_KEY = "elitedom:last-payment-order";
+
 export default function CheckoutPage() {
   const { locale, t } = usePreferences();
   const { cart, clearCart, currency, guestSessionId, notify, session } = useStore();
@@ -84,8 +86,19 @@ export default function CheckoutPage() {
     try {
       const nextResult = await submitCheckout(form, session, guestSessionId);
       clearCart();
-      setResult(nextResult);
       notify(`${nextResult.orderNumber}: ${t("checkout", "orderCreatedNotice")}`);
+
+      if (nextResult.paymentGatewayUrl) {
+        const paymentUrl = new URL(nextResult.paymentGatewayUrl);
+        if (paymentUrl.protocol !== "https:") {
+          throw new ApiError(t("checkout", "orderError"));
+        }
+        window.sessionStorage.setItem(PAYMENT_ORDER_STORAGE_KEY, nextResult.orderNumber);
+        window.location.assign(paymentUrl.toString());
+        return;
+      }
+
+      setResult(nextResult);
     } catch (requestError) {
       setError(requestError instanceof ApiError ? requestError.message : t("checkout", "orderError"));
     } finally {
@@ -386,11 +399,6 @@ function CheckoutSuccess({ hasAccount, result }: { hasAccount: boolean; result: 
           {t("checkout", "orderReference")} <strong className="font-mono text-foreground">{result.orderNumber}</strong>. {t("checkout", "orderUpdateText")}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
-          {result.paymentGatewayUrl && (
-            <a className="button-primary" href={result.paymentGatewayUrl} rel="noreferrer" target="_blank">
-              {t("checkout", "continuePayment")}
-            </a>
-          )}
           <Link className="button-secondary" href={hasAccount ? "/account" : "/signup"}>
             {hasAccount ? t("checkout", "viewAccount") : t("checkout", "createAccountHistory")}
           </Link>
