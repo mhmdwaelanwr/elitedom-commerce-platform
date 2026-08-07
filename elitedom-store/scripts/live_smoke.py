@@ -14,11 +14,11 @@ import ipaddress
 import json
 import socket
 import sys
-from dataclasses import dataclass, asdict
+from dataclasses import asdict, dataclass
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urljoin, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
 @dataclass
@@ -27,6 +27,16 @@ class CheckResult:
     ok: bool
     detail: str
     status_code: int | None = None
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    """Fail closed on redirects so a public URL cannot bounce to a private host."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001,ANN201
+        return None
+
+
+_NO_REDIRECT_OPENER = build_opener(_NoRedirectHandler())
 
 
 def _is_local_hostname(hostname: str) -> bool:
@@ -45,6 +55,42 @@ def _is_public_ip(value: str) -> bool:
     )
 
 
+def _assert_allowed_network_target(
+    hostname: str,
+    port: int,
+    *,
+    allow_local: bool,
+) -> None:
+    local = _is_local_hostname(hostname)
+    if allow_local and local:
+        return
+    try:
+        addresses = {item[4][0] for item in socket.getaddrinfo(hostname, port)}
+    except socket.gaierror as exc:
+        raise ValueError(f"Unable to resolve {hostname!r}: {exc}") from exc
+    if not addresses or not all(_is_public_ip(address) for address in addresses):
+        raise ValueError(
+            f"Origin {hostname!r} resolves to a non-public address and is blocked."
+        )
+
+
+def _validate_request_target(url: str, *, allow_local: bool) -> None:
+    parsed = urlsplit(url)
+    if not parsed.scheme or not parsed.netloc or not parsed.hostname:
+        raise ValueError(f"Invalid request target: {url!r}")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("Request targets must not contain embedded credentials.")
+    local = _is_local_hostname(parsed.hostname)
+    if parsed.scheme != "https":
+        if not (allow_local and local and parsed.scheme == "http"):
+            raise ValueError("Smoke-test request targets must use HTTPS.")
+    _assert_allowed_network_target(
+        parsed.hostname,
+        parsed.port or (443 if parsed.scheme == "https" else 80),
+        allow_local=allow_local,
+    )
+
+
 def validate_origin(value: str, *, allow_local: bool) -> str:
     parsed = urlsplit(value.strip())
     if not parsed.scheme or not parsed.netloc or not parsed.hostname:
@@ -56,28 +102,20 @@ def validate_origin(value: str, *, allow_local: bool) -> str:
     if parsed.path not in {"", "/"}:
         raise ValueError("Origins must not contain an application path.")
 
-    local = _is_local_hostname(parsed.hostname)
-    if parsed.scheme != "https":
-        if not (allow_local and local and parsed.scheme == "http"):
-            raise ValueError("Smoke-test origins must use HTTPS.")
-
-    if not (allow_local and local):
-        try:
-            addresses = {
-                item[4][0]
-                for item in socket.getaddrinfo(parsed.hostname, parsed.port or 443)
-            }
-        except socket.gaierror as exc:
-            raise ValueError(f"Unable to resolve {parsed.hostname!r}: {exc}") from exc
-        if not addresses or not all(_is_public_ip(address) for address in addresses):
-            raise ValueError(
-                f"Origin {parsed.hostname!r} resolves to a non-public address and is blocked."
-            )
-
-    return f"{parsed.scheme}://{parsed.netloc}/"
+    normalized = f"{parsed.scheme}://{parsed.netloc}/"
+    _validate_request_target(normalized, allow_local=allow_local)
+    return normalized
 
 
-def fetch(url: str, *, timeout: float) -> tuple[int, dict[str, str], bytes]:
+def fetch(
+    url: str,
+    *,
+    timeout: float,
+    allow_local: bool,
+) -> tuple[int, dict[str, str], bytes]:
+    # Resolve and validate immediately before every network request. Redirects
+    # are disabled below, so no unvalidated destination can be followed.
+    _validate_request_target(url, allow_local=allow_local)
     request = Request(
         url,
         headers={
@@ -86,7 +124,7 @@ def fetch(url: str, *, timeout: float) -> tuple[int, dict[str, str], bytes]:
         },
         method="GET",
     )
-    with urlopen(request, timeout=timeout) as response:  # noqa: S310 - URL validated above
+    with _NO_REDIRECT_OPENER.open(request, timeout=timeout) as response:
         return (
             int(response.status),
             {key.casefold(): value for key, value in response.headers.items()},
@@ -111,9 +149,19 @@ def run_check(name: str, callback) -> CheckResult:
         return CheckResult(name=name, ok=False, detail=f"Unexpected error: {exc}")
 
 
-def expect_page(url: str, *, timeout: float, contains: str | None = None):
+def expect_page(
+    url: str,
+    *,
+    timeout: float,
+    allow_local: bool,
+    contains: str | None = None,
+):
     def check() -> tuple[int, str]:
-        status, _headers, body = fetch(url, timeout=timeout)
+        status, _headers, body = fetch(
+            url,
+            timeout=timeout,
+            allow_local=allow_local,
+        )
         if status != 200:
             raise ValueError(f"Expected HTTP 200, received {status}.")
         text = body.decode("utf-8", errors="replace")
@@ -128,10 +176,15 @@ def expect_json_health(
     url: str,
     *,
     timeout: float,
+    allow_local: bool,
     readiness: bool,
 ):
     def check() -> tuple[int, str]:
-        status, headers, body = fetch(url, timeout=timeout)
+        status, headers, body = fetch(
+            url,
+            timeout=timeout,
+            allow_local=allow_local,
+        )
         payload: dict[str, Any] = json.loads(body.decode("utf-8"))
         if status != 200:
             raise ValueError(f"Expected HTTP 200, received {status}.")
@@ -147,10 +200,14 @@ def expect_json_health(
             "referrer-policy": "no-referrer",
         }
         missing = [
-            key for key, expected in required_headers.items() if headers.get(key) != expected
+            key
+            for key, expected in required_headers.items()
+            if headers.get(key) != expected
         ]
         if missing:
-            raise ValueError("Missing or unexpected security headers: " + ", ".join(missing))
+            raise ValueError(
+                "Missing or unexpected security headers: " + ", ".join(missing)
+            )
         return status, f"HTTP {status}; status={payload.get('status')}"
 
     return check
@@ -159,7 +216,11 @@ def expect_json_health(
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--site-url", required=True, help="Public storefront origin")
-    parser.add_argument("--api-url", required=True, help="Public API origin, without /api/v1")
+    parser.add_argument(
+        "--api-url",
+        required=True,
+        help="Public API origin, without /api/v1",
+    )
     parser.add_argument("--timeout", type=float, default=10.0)
     parser.add_argument(
         "--allow-local",
@@ -176,22 +237,49 @@ def main() -> int:
         return 2
 
     checks = [
-        run_check("storefront", expect_page(site, timeout=args.timeout)),
+        run_check(
+            "storefront",
+            expect_page(
+                site,
+                timeout=args.timeout,
+                allow_local=args.allow_local,
+            ),
+        ),
         run_check(
             "robots",
-            expect_page(urljoin(site, "robots.txt"), timeout=args.timeout, contains="Sitemap:"),
+            expect_page(
+                urljoin(site, "robots.txt"),
+                timeout=args.timeout,
+                allow_local=args.allow_local,
+                contains="Sitemap:",
+            ),
         ),
         run_check(
             "sitemap",
-            expect_page(urljoin(site, "sitemap.xml"), timeout=args.timeout, contains="<urlset"),
+            expect_page(
+                urljoin(site, "sitemap.xml"),
+                timeout=args.timeout,
+                allow_local=args.allow_local,
+                contains="<urlset",
+            ),
         ),
         run_check(
             "api_liveness",
-            expect_json_health(urljoin(api, "health/live"), timeout=args.timeout, readiness=False),
+            expect_json_health(
+                urljoin(api, "health/live"),
+                timeout=args.timeout,
+                allow_local=args.allow_local,
+                readiness=False,
+            ),
         ),
         run_check(
             "api_readiness",
-            expect_json_health(urljoin(api, "health/ready"), timeout=args.timeout, readiness=True),
+            expect_json_health(
+                urljoin(api, "health/ready"),
+                timeout=args.timeout,
+                allow_local=args.allow_local,
+                readiness=True,
+            ),
         ),
     ]
     ok = all(item.ok for item in checks)
