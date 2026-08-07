@@ -1,87 +1,53 @@
-# Elitedom Store Platform
+# Elitedom Store Runtime
 
-`elitedom-store/` is the canonical executable boundary of the repository. It contains the storefront, API, ERP connector, deployment topology and the tooling required to validate them together.
+`elitedom-store/` is the canonical executable commerce platform in this repository.
 
 ## Components
 
 ```text
 elitedom-store/
-├── backend/             FastAPI application, workers, migrations and tests
-├── frontend/            Next.js storefront and admin console
-├── infrastructure/      Docker Compose development/production topology
-├── odoo/                Odoo 17 addons
-├── scripts/             Repository, integration, smoke and launch validators
-├── docs/                Implementation-coupled runbooks and status reports
-├── .env.example         Environment-variable contract
-└── Makefile             Development and operational shortcuts
+├── backend/          FastAPI application, workers, SQLAlchemy/Alembic and tests
+├── frontend/         Next.js storefront and administration application
+├── infrastructure/   Docker Compose topology and operational scripts
+├── odoo/             Odoo 17 addons
+├── scripts/          Validation, smoke and repository tooling
+├── docs/             Runtime-adjacent runbooks and implementation status
+├── .env.example      Configuration contract with placeholders only
+└── Makefile          Developer/operator shortcuts
 ```
 
-## Stack
-
-- Python 3.11, FastAPI, Pydantic and async SQLAlchemy
-- PostgreSQL 15 and Alembic
-- Next.js 16, React 19, TypeScript and Tailwind CSS 4
-- Odoo 17 Community
-- Redis and Celery
-- Paymob payments
-- Phone OTP plus Google/Apple authentication
-- Staff MFA and backend-enforced RBAC/audit controls
-- Docker Compose development and production overlays
-- S3-compatible media storage/CDN support with local development fallback
-
-## Quick start
-
-For the complete environment-variable reference, see [`SETUP_AND_ENV_GUIDE.md`](SETUP_AND_ENV_GUIDE.md).
+## Local bootstrap
 
 ```bash
 cp .env.example .env
 python3 scripts/check_repository_hygiene.py
+python3 scripts/validate_documentation.py
 make dev
 make migrate
 make seed
-make admin-bootstrap
 ```
 
-Local endpoints:
+Use `make admin-bootstrap` to create a development administrator interactively. There is no default production administrator password.
 
-- Storefront: `http://localhost:3000`
-- API: `http://localhost:8000`
-- Swagger: `http://localhost:8000/docs`
-- Liveness: `http://localhost:8000/health/live`
-- Readiness: `http://localhost:8000/health/ready`
-- Odoo: `http://localhost:8069`
-- Admin: `http://localhost:3000/admin`
+## Current runtime
 
-## Developer commands
+- Next.js 16.2 / React 19.2 / TypeScript / Tailwind 4 storefront and admin.
+- FastAPI on Python 3.11 with PostgreSQL 15 application persistence.
+- Odoo 17 Community with `elitedom_connector` 17.0.2.0.0.
+- Redis 7 and Celery worker/beat.
+- Paymob primary payment integration; isolated Stripe legacy compatibility.
+- Phone OTP, Google/Apple identity paths, persisted sessions and staff TOTP MFA.
+- Backend RBAC/audit and launch control plane.
+- Local or S3-compatible media with CDN configuration.
+- Health/readiness, protected metrics and optional OpenTelemetry export.
 
-```bash
-make help
-make dev
-make stop
-make test
-make lint
-make migrate
-make seed
-make admin-bootstrap
-make validate-odoo
-```
-
-`make clean` removes Docker volumes and local data. Use it only for an intentional destructive reset.
-
-## Architecture rules
-
-- The backend is a modular monolith: domain behavior belongs in its owning module; shared code is reserved for genuinely cross-cutting contracts.
-- PostgreSQL schema changes go through Alembic and must support fresh upgrade, latest downgrade/replay and full downgrade/replay.
-- External callbacks are signature/HMAC verified, idempotent and fail closed.
-- Staff authorization is evaluated against persisted backend state; privileged sessions are subject to MFA policy.
-- The frontend preserves English/Arabic, RTL/LTR, responsive behavior and light/dark/system preferences.
-- Production secrets are deployment-managed and never stored in source control.
-
-## Validation
+## Quality commands
 
 ```bash
+# from elitedom-store/
 python3 scripts/check_repository_hygiene.py
-python3 scripts/validate_launch_assets.py
+python3 scripts/validate_documentation.py
+make validate-odoo
 
 cd backend
 python -m ruff check .
@@ -89,19 +55,26 @@ python -m pytest app/tests -q
 
 cd ../frontend
 npm ci
-npm run lint
-npx tsc --noEmit
+npm run verify
 npm run build
 ```
 
-GitHub Actions additionally performs native Odoo 17 installation/tests, PostgreSQL migration replay, Docker Compose validation and the launch-acceptance gate.
+GitHub CI additionally replays migrations against PostgreSQL 15, installs/tests the Odoo addon in a clean Odoo 17 container, validates Compose overlays and validates launch assets.
 
-## Documentation
+## Environment safety
 
-- Repository knowledge base: [`../docs/README.md`](../docs/README.md)
+`.env.example` is documentation, not a production secret file. In staging/production the backend rejects unsafe configuration including debug mode, wildcard hosts/CORS, disabled staff MFA, in-memory rate limiting, weak core secrets and invalid enabled integrations.
+
+Production Paymob, OAuth, Twilio/email, Odoo, object storage, metrics and other provider values must be provisioned out-of-band and verified for the exact environment.
+
+## Operations
+
+- Liveness: `/health` and `/health/live`
+- Readiness: `/health/ready`
+- API base: `/api/v1`
+- Metrics: `/metrics` when enabled/protected
+- Launch runbook: [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md)
 - Implementation status: [`docs/IMPLEMENTATION_STATUS.md`](docs/IMPLEMENTATION_STATUS.md)
-- Go-live runbook: [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md)
-- Go-live checklist: [`docs/GO_LIVE_CHECKLIST.md`](docs/GO_LIVE_CHECKLIST.md)
-- Odoo connector runbook: [`docs/ODOO_CONNECTOR_RUNBOOK.md`](docs/ODOO_CONNECTOR_RUNBOOK.md)
+- Enterprise knowledge base: [`../docs/README.md`](../docs/README.md)
 
-Merging code is not the same as a live production release. Use the release-scoped Launch Control Plane and external smoke workflow for target-environment acceptance.
+Passing CI means the repository is deployable/tested; it does not replace live provider acceptance, UAT, backup/restore, monitoring and rollback evidence.

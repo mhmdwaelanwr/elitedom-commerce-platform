@@ -1,37 +1,40 @@
-# Coding Standards (CODING_STANDARDS.md)
-
-Document Classification: Internal / Software Engineering & Development Standards  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL  
-
+---
+title: "Coding Standards"
+status: current
+owner: engineering
+document_type: development
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Coding Standards behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. General Python Standards
-* PEP 8 Compliance: All Python code must strictly adhere to PEP 8 guidelines.
-* Formatting Tools: Code must be formatted using `black` (line length: 88) and imports sorted using `isort` prior to committing.
-* Type Hinting: Every function, method, and API endpoint MUST include explicit Python type hints for arguments and return types to ensure type safety.
+# Coding Standards
 
-## 2. FastAPI & Pydantic Standards
-* Validation: Always use Pydantic v2 models (`BaseModel`) for validating incoming request bodies, query parameters, and serializing outgoing responses.
-* Dependency Injection: Leverage FastAPI's `Depends` for reusable logic like database session management, JWT authentication, and pagination.
-* Route Organization: Modularize API endpoints using `APIRouter`. Group related endpoints in separate files (e.g., `routers/products.py`, `routers/orders.py`).
+## Purpose
 
-## 3. Odoo 17 ERP Standards
-* Standard Structure: Adhere to standard Odoo module architecture (models/, views/, security/, data/, controllers/).
-* ORM Overrides: When overriding core ORM methods (`create`, `write`, `unlink`), always call `super()` and handle the returned recordset appropriately.
-* Security & Access: Every new model must have corresponding access rights defined in `security/ir.model.access.csv`.
-* Webhooks Controllers: Odoo controllers receiving payloads from FastAPI must validate the `X-Elitedom-Signature` header before processing.
+Defines repository-wide implementation conventions that improve reviewability and safety.
 
-## 4. Database & SQLAlchemy Standards
-* Async Paradigm: Use `AsyncSession` for all database interactions to prevent blocking the ASGI server.
-* Query Syntax: Utilize SQLAlchemy 2.0+ modern syntax (e.g., `select(Model).where(...)` instead of legacy `.query()` methods).
-* Migrations: Never alter the database schema manually. All schema changes must be applied via Alembic auto-generated scripts (`alembic revision --autogenerate`).
+## Current state
 
-## 5. Naming Conventions
-* Variables & Functions: `snake_case`
-* Classes & Models: `PascalCase`
-* Constants & Environment Variables: `UPPER_SNAKE_CASE`
+Python backend code is linted with Ruff and tested with pytest. TypeScript/React is linted with ESLint, type-checked and production-built. Formatting conventions are normalized by `.editorconfig`; domain correctness is more important than stylistic cleverness.
 
----
-End of Document
+## Invariants and controls
+
+- Prefer explicit types, small domain-focused functions/services and stable names.
+- Keep HTTP/provider parsing at boundaries; keep business transitions in domain/service code.
+- Do not catch broad exceptions merely to hide failures; classify/retry/fail closed intentionally.
+- Use structured/masked logging; never log secrets or raw authentication material.
+- Frontend hooks/components must avoid duplicated business authority and preserve accessibility/localization states.
+
+## Source of truth
+
+- `.editorconfig`
+- `elitedom-store/backend/`
+- `elitedom-store/frontend/`
+
+## Verification
+
+Run Ruff/pytest, frontend lint/types/build and review diffs for hidden contract changes.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

@@ -1,79 +1,57 @@
-# Release Plan (RELEASE_PLAN.md)
-
-**Document Classification:** Internal / Project Management & Release Engineering  
-**Version:** 2.1  
-**Status:** Approved / Execution Ready  
-**Target System:** Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL, Oracle Cloud VPS  
-
+---
+title: "Release Plan"
+status: current
+owner: delivery
+document_type: delivery
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Release gates, launch evidence semantics, deployment/rollback process, or provider/UAT acceptance requirements change."
 ---
 
-## 1. Executive Summary & Objectives
-This document defines the official Release Plan for the **Elitedom Store** e-commerce platform. It outlines the release lifecycle, versioning strategy, gate reviews, pre-deployment checklists, execution steps, and rollback protocols to ensure seamless code promotions from development to staging and production environments on Oracle Cloud VPS.
+# Release Plan
 
----
+## Purpose
 
-## 2. Versioning Strategy & Release Types
-* **Semantic Versioning (SemVer):** Releases follow the `MAJOR.MINOR.PATCH` format (e.g., `v2.1.0`).
-  * **MAJOR (`x.0.0`):** Incompatible API changes, major architectural refactors, or breaking database migrations.
-  * **MINOR (`0.x.0`):** New functional features, Odoo integration enhancements, or backward-compatible API additions.
-  * **PATCH (`0.0.x`):** Bug fixes, security patches, performance tuning, and minor dependency updates.
+Defines how a code-complete candidate becomes an approved environment release while keeping repository correctness, environment readiness, and launch authorization as separate evidence classes.
 
----
+## Release lifecycle
 
-## 3. Release Lifecycle & Verification Gates
+1. **Candidate selection** — choose an immutable commit SHA/tag from a green `main` baseline and identify the target environment.
+2. **Repository qualification** — require backend, frontend, PostgreSQL migration replay, Odoo, Docker Compose, launch-asset, repository-hygiene, and documentation-quality gates as applicable.
+3. **Deployment preparation** — validate production configuration, secrets delivery, DNS/TLS, image/build inputs, migration graph, backup/restore plan, monitoring, and rollback ownership.
+4. **Environment deployment** — deploy the exact candidate, apply migrations with the matching code, and verify runtime dependency readiness.
+5. **External acceptance** — run public HTTPS smoke plus provider, EN/AR/RTL, responsive/accessibility, commerce, fulfillment/refund, Odoo, backup/restore, monitoring, and rollback evidence.
+6. **Release sign-off** — record required manual evidence for the exact release/environment in the launch control plane and resolve blockers/waivers explicitly.
+7. **Traffic opening and observation** — open traffic only after sign-off and keep rollback ownership active during the stabilization window.
 
-| Stage | Environment | Purpose & Gate Criteria | Approver / Owner |
-| :--- | :--- | :--- | :--- |
-| **1. Integration** | Local / CI (`main`) | Automated unit tests, linting, security vulnerability scans (`pip-audit`). | CI/CD Pipeline / Automated |
-| **2. Staging** | `staging.elitedom.store` | End-to-end integration testing, Odoo webhook verification, UAT sign-off. | QA Lead / Backend Lead |
-| **3. Production** | `elitedom.store` | Live deployment on Oracle Cloud VPS, final health check validation, DNS routing. | DevOps Lead / CTO |
+## Evidence model
 
----
+Automated CI proves properties of the repository/release candidate. It does not prove merchant credentials, public DNS/TLS, provider-account behavior, real alert routing, or successful recovery drills in a target environment. Manual launch gates store those environment-specific results by `release_ref`, environment, gate, verifier, timestamp, evidence reference, and notes.
 
-## 4. Pre-Deployment Checklist
-* [ ] All pull requests merged into `main` branch and passing GitHub Actions CI checks.
-* [ ] Database migration scripts (`Alembic`) verified and tested against a staging database clone.
-* [ ] Environment variables (`.env`, secrets, API keys) audited and synced securely.
-* [ ] Automated database backup verified (`/var/backups/elitedom/`).
-* [ ] Stakeholders and support teams notified of maintenance/release window via status page.
+Evidence from one release must not be reused implicitly for another release. Reuse is acceptable only when the gate definition explicitly permits external evidence to remain valid and the operator records a new decision for the new release.
 
----
+## Release blockers
 
-## 5. Deployment Execution Workflow
-1. **Maintenance Mode Activation (if required):**
-   ```bash
-   sudo nginx -s reload # Route traffic to maintenance landing page if major DB schema changes occur
-   ```
-2. **Code Pull & Image Build:**
-   ```bash
-   git pull origin main
-   docker compose build --no-cache
-   ```
-3. **Database Migrations:**
-   ```bash
-   docker exec -it elitedom-api alembic upgrade head
-   ```
-4. **Service Restart & Health Verification:**
-   ```bash
-   docker compose up -d --force-recreate
-   curl -s https://elitedom.store/api/v1/health
-   ```
+Examples include failed required CI, unresolved migration failure, dependency readiness failure, unsafe production configuration, missing required MFA/rate-limit/security configuration, failed Paymob/OAuth/OTP/Odoo acceptance, missing backup/restore proof, failed critical UAT, or an unowned rollback plan.
 
----
+A waiver is a documented risk decision and is not semantically equivalent to a pass.
 
-## 6. Emergency Rollback Protocol
-If critical failures occur post-deployment:
-1. Revert Docker container tags to the previous stable release:
-   ```bash
-   docker compose down
-   docker tag elitedom/api:previous elitedom/api:latest
-   docker compose up -d --force-recreate
-   ```
-2. If database schema rollback is required, execute down-migration:
-   ```bash
-   docker exec -it elitedom-api alembic downgrade -1
-   ```
-3. Notify engineering team via Slack and log incident in Sentry.
+## Rollback planning
 
----
-End of Document
+Every candidate must identify the previous known-good application ref and database compatibility assumptions before deployment. If migrations or new writes make the previous version incompatible, rollback may require a forward fix or controlled recovery rather than an automatic schema downgrade.
+
+## Source of truth
+
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/launch-smoke.yml`
+- `elitedom-store/scripts/validate_launch_assets.py`
+- `elitedom-store/backend/app/modules/admin/control_service.py`
+- `elitedom-store/backend/app/tests/integration/test_stage10_launch_acceptance.py`
+
+## Verification
+
+Use the launch control plane, deployment/runbook evidence, CI runs on the exact candidate, and the target environment's external smoke/provider/recovery/UAT evidence. Release notes should reference evidence identifiers without copying secrets or customer data into Git.
+
+## Change policy
+
+Update this document with any change to required release gates, launch-evidence persistence, deployment sequencing, rollback expectations, or production acceptance responsibilities.

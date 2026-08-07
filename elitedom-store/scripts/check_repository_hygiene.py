@@ -27,17 +27,23 @@ ALLOWED_ROOT_FILES = {
 
 CANONICAL_PATHS = (
     "docs/README.md",
+    "docs/governance/DOCUMENTATION_STANDARD.md",
     "docs/product/foundation/PROJECT_FOUNDATION.md",
     "docs/product/requirements/BUSINESS_REQUIREMENTS.md",
     "docs/architecture/overview/SOLUTION_ARCHITECTURE.md",
     "docs/architecture/decisions/ADR-001-Odoo.md",
+    "docs/architecture/decisions/ADR-011-Paymob.md",
+    "docs/architecture/integrations/PAYMOB.md",
     "docs/engineering/development/DEVELOPMENT_GUIDELINES.md",
     "docs/operations/runbooks/RUNBOOK.md",
+    "docs/delivery/releases/STAGE_0_BASELINE.md",
+    "docs/delivery/releases/STAGE_1_CLEANUP_REPORT.md",
     "docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md",
     "elitedom-store/backend/app/main.py",
     "elitedom-store/frontend/package.json",
     "elitedom-store/infrastructure/docker-compose.yml",
     "elitedom-store/odoo/addons/elitedom_connector/__manifest__.py",
+    "elitedom-store/scripts/validate_documentation.py",
 )
 
 RETIRED_PREFIXES = (
@@ -48,6 +54,8 @@ LEGACY_DOCUMENTATION_PREFIXES = tuple(f"{index:02d}_" for index in range(19))
 
 RETIRED_EXACT_FILES = {
     "DOCUMENTATION_INDEX.md",
+    "elitedom-store/docs/STAGE_0_BASELINE.md",
+    "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md",
     "elitedom-store/frontend/public/file.svg",
     "elitedom-store/frontend/public/globe.svg",
     "elitedom-store/frontend/public/next.svg",

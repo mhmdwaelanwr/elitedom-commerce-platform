@@ -1,33 +1,39 @@
-# Service Level Objectives & Indicators (SLO_SLI.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "SLI and SLO Policy"
+status: current
+owner: operations
+document_type: observability
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "SLI and SLO Policy behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the Service Level Indicators (SLIs) and Service Level Objectives (SLOs) for the Elitedom Store platform. These metrics align engineering efforts with customer experience and business reliability goals.
+# SLI and SLO Policy
 
-## 2. Key Definitions
-* SLI (Service Level Indicator): A carefully defined quantitative measure of service quality (e.g., successful request rate, request latency).
-* SLO (Service Level Objective): A target value or range of values for a service level measured by an SLI over a specific time window.
-* Error Budget: The allowable amount of unreliability a service can accumulate before users are significantly impacted. Calculated as `100% - SLO`.
+## Purpose
 
-## 3. Elitedom Store Core SLOs
-* API Availability (FastAPI Backend):
-  - SLI: Percentage of valid non-5xx HTTP requests handled by the FastAPI application.
-  - SLO: 99.9% availability measured over a 30-day rolling window.
-* API Latency (FastAPI Backend):
-  - SLI: Percentage of HTTP requests completed in under 500ms (p95).
-  - SLO: 95% of requests must meet the latency threshold over a 30-day rolling window.
-* Odoo Sync Reliability:
-  - SLI: Percentage of successfully processed webhooks and background inventory synchronizations between FastAPI and Odoo 17.
-  - SLO: 99.5% success rate over a 30-day rolling window.
+Defines how service indicators/objectives are established without inventing production guarantees.
 
-## 4. Error Budget Policy
-* When the error budget is exhausted (e.g., due to an outage or a bad deployment), feature releases for the affected service are frozen until reliability is restored and post-mortem actions are completed.
+## Current state
 
----
-End of Document
+The repository does not treat unmeasured example percentages as established SLAs. SLOs must be approved with business/operational owners and backed by production-like measurement.
+
+## Invariants and controls
+
+- Define SLIs for customer-visible availability, API success/latency and critical checkout/payment paths.
+- Define measurement source/window/exclusions before setting an objective.
+- Separate optional-provider degradation from core service availability where product behavior supports fallback.
+- Track error budget policy only after a stable SLO is agreed.
+- RTO/RPO are recovery objectives and must align with backup/restore evidence.
+
+## Source of truth
+
+- `docs/operations/observability/`
+- `docs/operations/disaster-recovery/RTO_RPO.md`
+
+## Verification
+
+Approve targets and demonstrate measurement queries/dashboards; do not mark planned values as achieved.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

@@ -1,27 +1,40 @@
-# Compliance Matrix & Regulatory Mapping (COMPLIANCE_MATRIX.md)
-
-Document Classification: Internal / Legal & Regulatory Compliance  
-Version: 1.0  
-Status: Approved / Commercial Readiness  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, Stripe  
-
+---
+title: "Compliance Readiness Matrix"
+status: current
+owner: operations
+document_type: compliance-readiness
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Compliance Readiness Matrix behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-As Elitedom Store transitions into a fully commercial e-commerce platform, maintaining legal and regulatory compliance is mandatory. This compliance matrix maps our technical implementations and business workflows against recognized international and regional standards.
+# Compliance Readiness Matrix
 
-## 2. Regulatory Frameworks & Applicability
-* GDPR (General Data Protection Regulation): Applicable for handling customer PII, data subject rights, and user consent tracking.
-* PCI-DSS (Payment Card Industry Data Security Standard): Applicable for secure payment processing via Stripe integration.
-* Consumer Protection & E-commerce Laws: Applicable for transparent pricing, clear refund policies, and transactional record-keeping.
+## Purpose
 
-## 3. Compliance Mapping Table
-| Requirement / Standard | Control ID | System Component | Implementation Status | Verification Method |
-| :--- | :--- | :--- | :--- | :--- |
-| Data Minimization (GDPR) | REG-01 | FastAPI / PostgreSQL | Implemented | Pydantic v2 strict schema validation |
-| Right to be Forgotten (GDPR) | REG-02 | Odoo 17 / PostgreSQL | Implemented | Automated PII anonymization scripts |
-| Secure Card Processing (PCI) | SEC-01 | Stripe SDK / FastAPI | Implemented | Targeted SAQ A eligibility via Stripe Elements, subject to validation of the final payment integration and applicable requirements |
-| Transaction Auditability | FIN-01 | Odoo 17 Accounting | Implemented | 7-year encrypted log retention |
+Maps engineering controls to common privacy/payment/security concerns without claiming formal certification.
 
----
-End of Document
+## Current state
+
+Elitedom can document technical controls relevant to privacy and payment-security obligations, but legal applicability, PCI scope and certification depend on the operating entity, provider contracts and external assessment.
+
+## Invariants and controls
+
+- Identity/access: backend RBAC, staff MFA, sessions and audit controls.
+- Payment: hosted Paymob flow/provider identifiers; no intended raw card storage in application.
+- Data protection: secret handling, PII minimization, authorization and retention governance.
+- Operational security: hardened production config, TLS/host/CORS expectations, monitoring/recovery procedures.
+- Software assurance: CI, migrations, Odoo tests, repository/documentation hygiene.
+
+## Source of truth
+
+- `docs/operations/compliance/SECURITY_CONTROLS.md`
+- `docs/operations/compliance/PCI_DSS_SCOPE.md`
+- `docs/operations/data-governance/`
+
+## Verification
+
+Compliance claims require external/legal assessment; this matrix is engineering evidence preparation only.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

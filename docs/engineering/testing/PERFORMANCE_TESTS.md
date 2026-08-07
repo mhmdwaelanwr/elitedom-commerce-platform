@@ -1,52 +1,39 @@
-# Performance & Load Testing Specification (PERFORMANCE_TESTS.md)
-
-**Document Classification:** Internal / Quality Assurance & Performance Engineering  
-**Version:** 2.1  
-**Status:** Approved / Execution Ready  
-**Target System:** Elitedom Storefront, FastAPI Backend, Odoo 17 ERP, PostgreSQL, Algolia Search  
-
+---
+title: "Performance Testing"
+status: current
+owner: engineering
+document_type: testing
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Performance Testing behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Executive Summary & Overview
-This document defines the performance benchmarks, load testing scenarios, and concurrency thresholds for the **Elitedom Store** e-commerce platform. It ensures that the FastAPI backend, PostgreSQL database, Algolia search engine, and Odoo 17 ERP integration can seamlessly handle high-traffic spikes (such as high-end RTX 50-series hardware launches) without degradation in user experience or system stability.
+# Performance Testing
 
----
+## Purpose
 
-## 2. Key Performance Indicators (KPIs) & Thresholds
-System performance is evaluated against strict latency and resource utilization benchmarks prior to production deployment on Oracle Cloud VPS:
+Defines how performance claims are measured and prevents unmeasured targets from becoming fictional SLAs.
 
-| Metric Category | Target Threshold | Description & Context |
-| :--- | :--- | :--- |
-| **Search Latency** | $< 300	ext{ ms}$ | Algolia search and keyword filtering response time under concurrent load. |
-| **API Read Latency** | $< 200	ext{ ms}$ (p95) | FastAPI product catalog and detail page (PDP) fetch requests. |
-| **API Write Latency** | $< 500	ext{ ms}$ (p95) | Secure checkout submission and cart updates. |
-| **Database Concurrency** | $\le 1,000$ active connections | PostgreSQL connection pooling efficiency under peak load simulation. |
-| **VPS CPU Utilization** | $< 85\%$ | Oracle Cloud VPS resource usage during stress testing. |
-| **VPS Memory Usage** | $< 80\%$ | Preventing memory exhaustion and container restarts. |
+## Current state
 
----
+The application includes performance-oriented controls such as Next.js image optimization, Redis production rate limiting, bounded provider/readiness timeouts and optional external search/media services. Production throughput/latency capacity is not established by unit CI.
 
-## 3. Load Testing Scenarios (k6 / JMeter)
-Automated load test scripts simulate real-world user behavior across two primary stress vectors:
+## Invariants and controls
 
-### Scenario A: Flash Sale Traffic Spike (Product Discovery)
-* **Objective:** Test system stability during high-volume browsing and search queries.
-* **Concurrency Profile:** Ramp up from 0 to 5,000 virtual users (VUs) over 5 minutes, sustain for 15 minutes, and ramp down over 2 minutes.
-* **Target Endpoints:** `/api/v1/products/search`, `/api/v1/catalog`, and Algolia integration endpoints.
-* **Success Criteria:** 99.9% successful HTTP responses ($200	ext{ OK}$), zero timeout errors, and search response times remaining below $300	ext{ ms}$.
+- Define workload mix, data volume, concurrency, geography and acceptance percentile before a load test.
+- Measure API latency/error rate, database/Redis saturation, worker queue behavior and frontend/web vitals separately.
+- Do not benchmark with debug mode, development media assumptions or fake zero-latency providers and call it production capacity.
+- Record release/environment/tool/config with results.
 
-### Scenario B: Concurrent Checkout & ERP Webhook Synchronization
-* **Objective:** Test database transaction locking and Odoo 17 ERP webhook delivery under heavy purchase volume.
-* **Concurrency Profile:** Sustained load of 500 concurrent checkouts processing orders with calculated 14% VAT and EGP 150 shipping fees.
-* **Target Endpoints:** `/api/v1/checkout`, `/api/v1/orders`, and Odoo webhook receiver.
-* **Success Criteria:** Zero double-decrement errors on inventory stock counts, successful unique serial number ($S/N$) assignment, and valid HMAC-SHA256 signature verification on webhooks.
+## Source of truth
 
----
+- `docs/operations/observability/`
+- `elitedom-store/backend/app/config.py`
+- `elitedom-store/frontend/`
 
-## 4. Monitoring & Error Tracking Infrastructure
-* **Infrastructure Monitoring:** Real-time resource tracking via DataDog agents deployed on Oracle Cloud VPS containers.
-* **Exception Logging:** Application errors, HTTP 5xx faults, and database bottlenecks are automatically captured in Sentry.
-* **Sign-off Gate:** Any performance test resulting in a p95 write latency $> 500	ext{ ms}$ or server memory leaks will block staging sign-off and require optimization.
+## Verification
 
----
-End of Document
+Execute controlled staging load/performance tests and attach results to release evidence; do not commit real credentials in test tooling.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

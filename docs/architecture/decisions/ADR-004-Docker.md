@@ -1,38 +1,38 @@
-# ADR-004: Adoption of Docker for Containerization
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-004 — Containerized Deployment"
+status: current
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Accepted
 ---
 
-## 1. Context and Problem Statement
-The Elitedom Store platform relies on a diverse set of components—including the Odoo 17 ERP backend, PostgreSQL database, custom Python middleware, reactive web storefront, and integration services. We need to define a standardized method for packaging and running these applications to ensure complete environment consistency across local development, staging, and production environments, while avoiding configuration drift and dependency conflicts.
+# ADR-004 — Containerized Deployment
 
-## 2. Decision Drivers
-* Need for identical operating environments across development, testing, and production stages.
-* Requirement for cloud-native infrastructure that supports container orchestration (Kubernetes).
-* Isolation of service dependencies (Python packages, Odoo modules, database drivers) to prevent conflicts.
-* Simplified deployment and CI/CD pipeline automation.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Direct manual installation on bare-metal servers or virtual machines.
-* **Option 2:** Virtual Machine-based provisioning (e.g., Vagrant/VMware).
-* **Option 3:** Containerization using Docker.
+Accepted
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Docker)**. Infrastructure shall remain containerized and environment independent. All core application services, Odoo 17 ERP instances, and supporting middleware components shall be packaged into standardized Docker containers.
+## Context
 
-## 5. Consequences
-### Positive Consequences
-* Eliminates "it works on my machine" discrepancies by bundling applications with their exact dependencies.
-* Provides a seamless bridge to container orchestration platforms like Kubernetes for horizontal scaling and high availability.
-* Standardizes local development setups and accelerates onboarding for new developers.
+Development and deployment require reproducible service topology across application, ERP, database, cache/workers and ingress tooling.
 
-### Negative Consequences / Trade-offs
-* Requires proper multi-stage image building to keep container sizes minimal and secure.
-* Demands operational discipline in managing container logs, persistent volumes, and network security policies.
+## Decision
 
----
-**End of Document**
+Use Docker images and Docker Compose overlays as the repository deployment contract.
+
+## Consequences
+
+- Compose config is CI-validated.
+- Production secrets remain external to images/source.
+- Container hardening is applied where supported, but host/network security is still an operator responsibility.
+
+## Implementation evidence
+
+- `elitedom-store/infrastructure/docker-compose.yml`
+- `elitedom-store/infrastructure/docker-compose.prod.yml`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

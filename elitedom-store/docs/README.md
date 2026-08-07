@@ -1,12 +1,19 @@
-# Platform-Local Documentation
+---
+title: "Runtime Documentation"
+status: current
+owner: operations
+document_type: documentation-index
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Runtime-adjacent runbooks or implementation status changes."
+---
+# Runtime Documentation
 
-This directory contains documentation coupled directly to the executable `elitedom-store/` platform.
+These documents stay next to the executable platform because operators and developers use them directly during deployment/integration work.
 
-- [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) — current implementation/runtime notes.
-- [`GO_LIVE_RUNBOOK.md`](GO_LIVE_RUNBOOK.md) — production deployment, provider acceptance, rollback and sign-off procedure.
-- [`GO_LIVE_CHECKLIST.md`](GO_LIVE_CHECKLIST.md) — operational launch checklist.
-- [`ODOO_CONNECTOR_RUNBOOK.md`](ODOO_CONNECTOR_RUNBOOK.md) — Odoo connector operations.
-- [`CATALOG_AND_ODOO.md`](CATALOG_AND_ODOO.md) — catalog/Odoo implementation notes.
-- [`STAGE_0_BASELINE.md`](STAGE_0_BASELINE.md) and [`STAGE_1_CLEANUP_REPORT.md`](STAGE_1_CLEANUP_REPORT.md) — early implementation history retained near the original cleanup tooling.
+- [`IMPLEMENTATION_STATUS.md`](IMPLEMENTATION_STATUS.md) — current delivered versus live-provider/deployment status.
+- [`GO_LIVE_RUNBOOK.md`](GO_LIVE_RUNBOOK.md) — authoritative go-live/rollback procedure.
+- [`GO_LIVE_CHECKLIST.md`](GO_LIVE_CHECKLIST.md) — compact release checklist.
+- [`ODOO_CONNECTOR_RUNBOOK.md`](ODOO_CONNECTOR_RUNBOOK.md) — Odoo synchronization operations.
+- [`CATALOG_AND_ODOO.md`](CATALOG_AND_ODOO.md) — catalogue/ERP ownership reference.
 
-Cross-project product, architecture, engineering, operations and delivery documentation lives in [`../../docs/`](../../docs/README.md).
+Historical Stage 0 and Stage 1 records have moved to the enterprise release history under `../../docs/delivery/releases/` so all Stages 0–10 live in one place.

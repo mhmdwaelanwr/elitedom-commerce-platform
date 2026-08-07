@@ -1,22 +1,40 @@
-# PCI-DSS Scope Reduction & Payment Security (PCI_DSS_SCOPE.md)
-
-Document Classification: Internal / Financial Security & Compliance  
-Version: 1.0  
-Status: Approved / Commercial Readiness  
-Target System: Elitedom Storefront, FastAPI Backend, Stripe Integration  
-
+---
+title: "PCI DSS Scope Guidance"
+status: current
+owner: operations
+document_type: compliance-readiness
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "PCI DSS Scope Guidance behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-To ensure maximum security and minimize regulatory compliance overhead for commercial operations, the Elitedom Store platform strictly scopes out the Cardholder Data Environment (CDE) by leveraging tokenized payment gateways.
+# PCI DSS Scope Guidance
 
-## 2. The SAQ A Architecture
-* Zero Card Storage Policy: Under no circumstances does Elitedom store, process, or transmit raw Primary Account Numbers (PAN), expiration dates, or CVV codes on our servers, PostgreSQL databases, or Odoo 17 ERP modules.
-* Third-Party Tokenization (Stripe): All credit card data entry is handled securely via Stripe Elements (hosted fields), returning only encrypted, non-sensitive payment tokens and transaction IDs to the FastAPI backend.
+## Purpose
 
-## 3. Security Requirements for Payment Workflows
-* TLS 1.3 Encryption: Enforced on all communication channels between the storefront client, FastAPI backend, and Stripe APIs.
-* Webhook Signature Verification: All Stripe webhook events dispatched to FastAPI must validate cryptographic HMAC signatures to prevent payload spoofing and fraudulent order fulfillment.
+Documents engineering choices intended to reduce payment-card data exposure; it is not a PCI attestation.
 
----
-End of Document
+## Current state
+
+Paymob hosted/unified checkout is intended to keep raw card entry outside Elitedom. The application stores order/payment/provider identifiers and state, not raw PAN/CVV. Legacy Stripe code remains but is not the primary payment architecture.
+
+## Invariants and controls
+
+- Never log/store raw card number, CVV or full sensitive authentication data.
+- Keep provider secret/HMAC keys server-side.
+- Use public HTTPS provider callback/redirect URLs.
+- Document any future change that embeds/collects card data because it can materially change PCI scope.
+- SAQ type/scope must be confirmed with the merchant/acquirer/QSA/provider; do not infer certification from architecture alone.
+
+## Source of truth
+
+- `docs/architecture/integrations/PAYMOB.md`
+- `elitedom-store/backend/app/integrations/paymob/`
+- `elitedom-store/backend/app/modules/payments/`
+
+## Verification
+
+Review real Paymob checkout integration and merchant PCI responsibilities before production.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

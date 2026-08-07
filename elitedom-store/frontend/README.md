@@ -1,68 +1,62 @@
-# Elitedom Storefront
+# Elitedom Storefront and Admin
 
-This directory is the canonical Next.js 16 storefront and administration application for Elitedom. It uses React 19, TypeScript, Tailwind CSS 4, and the FastAPI service under `../backend`.
+This directory is the canonical Next.js 16.2 / React 19.2 frontend for Elitedom. It contains customer storefront journeys and the staff administration/control-plane UI.
 
-## Run locally
+## Local development
 
 ```bash
 npm ci
 NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1 npm run dev
 ```
 
-If `NEXT_PUBLIC_API_URL` is omitted in development, the client defaults to `http://localhost:8000/api/v1`.
+Quality gates:
 
 ```bash
+npm run check:design-system
 npm run lint
-npx tsc --noEmit
+npm run check:types
 npm run build
-```
-
-## Production container
-
-The multi-stage `Dockerfile` uses Next.js standalone output. The final image contains the traced runtime, static files, and public assets, and runs as the unprivileged `nextjs` user.
-
-`NEXT_PUBLIC_API_URL` is a build-time public browser value. It must point to the customer-visible HTTPS API address, not the internal Docker hostname. Rebuild the frontend image after changing it.
-
-```bash
-docker build \
-  --build-arg NEXT_PUBLIC_API_URL=https://api.store.example.com/api/v1 \
-  -t elitedom-storefront:local \
-  .
-```
-
-To run it through the repository Compose files:
-
-```bash
-cd ../infrastructure
-docker compose --env-file ../.env \
-  -f docker-compose.yml \
-  -f docker-compose.prod.yml \
-  up -d --build frontend
 ```
 
 ## Source organization
 
 ```text
 src/
-├── app/          Next.js routes, layouts and route-level composition
-├── components/   Reusable storefront and administration components
-├── lib/          API adapter, domain helpers, catalogue and session utilities
-└── types/        Shared TypeScript domain and API types
+├── app/          Routes, layouts, SEO routes and route composition
+├── components/   Reusable storefront/admin UI
+├── lib/          Typed API/auth/catalog/session/preferences helpers
+└── types/        Shared TypeScript/API types
 ```
 
-Route components should compose existing services and UI components rather than duplicate request, pricing, session, or mapping logic. New provider integrations belong in the backend and must be exposed through typed API adapters.
+## Product guarantees
 
-## Current flows
+New UI must preserve:
 
-- Responsive landing, catalogue, search, filtering and product detail pages.
-- Guest and authenticated carts with safe guest-to-account merging.
-- Checkout, account, saved addresses, orders, B2B RFQ, warranty and RMA journeys.
-- Staff catalogue, product media, inventory and administration screens.
+- English and Arabic;
+- LTR and RTL;
+- light, dark and system theme preference;
+- responsive mobile/tablet/desktop behavior;
+- loading, empty, error and disabled states;
+- keyboard/focus/accessibility behavior;
+- server-authoritative money, stock, payment, permission and order state.
 
-The main API adapter is `src/lib/api.ts`. Production pages must use live API data. The optional development catalogue fallback is controlled by `NEXT_PUBLIC_DEMO_CATALOG_FALLBACK` and stays disabled by default.
+The browser must never contain private Paymob/Odoo/Twilio/email/database credentials. `NEXT_PUBLIC_*` values are browser-visible by design.
 
-## Vendored visual assets
+## Main journeys
 
-Visual assets required by the current storefront are self-contained under `public/template/images`. The standalone reference application that originally accompanied those assets was removed during Stage 1 because it was not part of the build, tests, Docker topology, or runtime dependency graph.
+The current App Router includes storefront discovery/product/shop, cart, checkout, account, B2B and staff administration paths, plus authentication/MFA and SEO assets (`robots.ts`, `sitemap.ts`). Staff launch controls live under the admin application and rely on backend permissions/MFA.
 
-The retained assets are referenced by the active storefront and local development seed data. Their origin and production usage rights must be reviewed before public launch; removing the unused source application does not itself grant asset rights.
+## Production build
+
+The Dockerfile uses Next.js standalone output and a non-root runtime. Public API/site/media URLs are build inputs; changing them requires rebuilding the frontend image.
+
+```bash
+cd ../infrastructure
+docker compose --env-file ../.env   -f docker-compose.yml   -f docker-compose.prod.yml   up -d --build frontend
+```
+
+Use a browser-reachable **HTTPS** API URL in production, not the internal Docker service hostname.
+
+## Assets
+
+Retained visual assets under `public/template/images` are referenced by the active UI and local seed/catalog paths. Production usage rights remain a commercial/legal launch item; repository inclusion is not a license grant.

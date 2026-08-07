@@ -1,38 +1,41 @@
-# ADR-006: Selection of Stripe as Primary Payment Gateway
-
-**Document Classification:** Internal  
-**Status:** Accepted  
-**Date:** 2026  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "ADR-006 — Stripe Payment Provider"
+status: superseded
+owner: architecture
+document_type: adr
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "The architectural decision, its replacement, or implementation evidence materially changes."
+decision_status: Superseded
+superseded_by: ADR-011-Paymob.md
 ---
 
-## 1. Context and Problem Statement
-The Elitedom Store platform requires a secure, reliable, and globally scalable payment gateway to handle online credit card transactions, digital wallets, and checkout sessions. We need to select a payment processor that offloads PCI-DSS compliance burdens, provides seamless multi-currency transaction handling, and integrates reliably with our order fulfillment and Odoo 17 ERP accounting workflows via webhooks and APIs.
+# ADR-006 — Stripe Payment Provider
 
-## 2. Decision Drivers
-* High security and PCI DSS scope reduction through Stripe-hosted payment processing to protect customer financial data.
-* Robust support for multi-currency transactions and diverse payment methods.
-* Developer-friendly APIs, SDKs, and reliable asynchronous webhook event notifications.
-* Idempotent transaction handling to prevent duplicate charges and ensure financial data integrity.
+## Status
 
-## 3. Considered Options
-* **Option 1:** Custom direct integration with local bank payment gateways.
-* **Option 2:** Alternative global payment aggregators (e.g., PayPal, Braintree).
-* **Option 3:** Stripe payment platform.
+Superseded
 
-## 4. Decision Outcome
-**Chosen Option:** **Option 3 (Stripe)**. Stripe shall serve as the primary payment gateway for processing online transactions, handling secure checkout sessions, and triggering asynchronous payment events via webhooks integrated with the Elitedom middleware and Odoo 17 ERP.
+Superseded by: `ADR-011-Paymob.md`.
 
-## 5. Consequences
-### Positive Consequences
-* Out-of-the-box compliance with highest security standards (PCI-DSS Level 1), minimizing direct liability for cardholder data.
-* Excellent developer ergonomics, comprehensive documentation, and reliable webhook infrastructure for event-driven payment status updates.
-* Seamless support for multi-currency pricing and international expansion.
+## Context
 
-### Negative Consequences / Trade-offs
-* Standard processing fees per transaction.
-* Dependency on third-party service availability, requiring robust error handling, circuit breakers, and fallback payment methods (such as Cash on Delivery).
+Stripe was the original card-payment decision and created schema/webhook compatibility that still exists in repository history and legacy code.
 
----
-**End of Document**
+## Decision
+
+Retain the historical decision and isolated compatibility implementation, but do not treat Stripe as the primary target payment provider.
+
+## Consequences
+
+- Legacy Stripe webhook/configuration paths must be clearly labeled.
+- Existing migration history is never rewritten to erase Stripe.
+- New target-market payment work follows the Paymob ADR.
+
+## Implementation evidence
+
+- `elitedom-store/backend/app/integrations/stripe/`
+- `elitedom-store/backend/alembic/versions/20260806_0003_stripe_payment_events.py`
+
+## Review rule
+
+ADRs preserve decision history. Do not rewrite the original decision to match a newer implementation; supersede it with a new ADR and link the records.

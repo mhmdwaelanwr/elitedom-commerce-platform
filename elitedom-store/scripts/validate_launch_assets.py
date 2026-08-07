@@ -38,7 +38,7 @@ REQUIRED_RUNBOOK_MARKERS = (
     "Pre-deployment",
     "Database backup and restore",
     "Provider acceptance",
-    "Smoke test",
+    "External smoke test",
     "Rollback",
     "Release sign-off",
 )

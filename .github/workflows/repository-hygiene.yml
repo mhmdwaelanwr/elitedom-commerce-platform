@@ -5,26 +5,42 @@ on:
     paths:
       - ".editorconfig"
       - ".gitignore"
+      - "CODE_OF_CONDUCT.md"
       - "CONTRIBUTING.md"
       - "README.md"
+      - "SECURITY.md"
       - "docs/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
       - ".github/workflows/repository-hygiene.yml"
       - "nextjs-ecommerce-template-main/**"
       - "elitedom-store/.gitignore"
+      - "elitedom-store/README.md"
+      - "elitedom-store/SETUP_AND_ENV_GUIDE.md"
+      - "elitedom-store/docs/**"
+      - "elitedom-store/frontend/README.md"
       - "elitedom-store/frontend/public/**"
       - "elitedom-store/scripts/check_repository_hygiene.py"
+      - "elitedom-store/scripts/validate_documentation.py"
   pull_request:
     paths:
       - ".editorconfig"
       - ".gitignore"
+      - "CODE_OF_CONDUCT.md"
       - "CONTRIBUTING.md"
       - "README.md"
+      - "SECURITY.md"
       - "docs/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
       - ".github/workflows/repository-hygiene.yml"
       - "nextjs-ecommerce-template-main/**"
       - "elitedom-store/.gitignore"
+      - "elitedom-store/README.md"
+      - "elitedom-store/SETUP_AND_ENV_GUIDE.md"
+      - "elitedom-store/docs/**"
+      - "elitedom-store/frontend/README.md"
       - "elitedom-store/frontend/public/**"
       - "elitedom-store/scripts/check_repository_hygiene.py"
+      - "elitedom-store/scripts/validate_documentation.py"
 
 permissions:
   contents: read
@@ -35,7 +51,7 @@ concurrency:
 
 jobs:
   repository-hygiene:
-    name: Validate tracked repository files
+    name: Validate repository and documentation
     runs-on: ubuntu-latest
 
     steps:
@@ -44,3 +60,6 @@ jobs:
 
       - name: Validate canonical source and generated-file policy
         run: python3 elitedom-store/scripts/check_repository_hygiene.py
+
+      - name: Validate enterprise documentation contract
+        run: python3 elitedom-store/scripts/validate_documentation.py

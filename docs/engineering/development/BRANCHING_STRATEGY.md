@@ -1,42 +1,39 @@
-# Branching Strategy (BRANCHING_STRATEGY.md)
-
-Document Classification: Internal / Software Engineering & Version Control  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Branching Strategy"
+status: current
+owner: engineering
+document_type: development
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Branching Strategy behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document defines the formal branching strategy for the Elitedom Store repositories. We utilize a simplified variant of GitFlow, optimized for Continuous Integration and Continuous Deployment (CI/CD) environments.
+# Branching Strategy
 
-## 2. Long-Lived Branches
-* main: 
-  - Purpose: Represents the absolute source of truth for the production environment.
-  - Deployment: Automatically triggers deployment to the production Oracle Cloud VPS (elitedom.store).
-  - Restriction: Direct commits are permanently disabled. Code enters only via approved Pull Requests from staging or hotfix branches.
+## Purpose
 
-* staging: 
-  - Purpose: The primary integration branch for the next release. Used for QA testing, UAT, and verifying bidirectional sync with Odoo 17.
-  - Deployment: Automatically triggers deployment to the staging environment (staging.elitedom.store).
+Defines a lightweight trunk-oriented branch model suitable for the repository's current team/workflow.
 
-## 3. Short-Lived Branches
-* feature/*: Created from main. Used for developing new features. Must be merged into staging for testing before final promotion to main.
-* bugfix/*: Created from main. Used to fix non-critical bugs found in development or staging.
-* hotfix/*: Created from main. Used strictly for critical, production-breaking issues (e.g., Odoo webhook failures, security patches). Must be merged directly into main and backported to staging.
+## Current state
 
-## 4. Branch Naming Conventions
-All temporary branches must follow strict naming conventions, optionally including the ticketing system ID:
-* feature/add-stripe-webhooks
-* feature/TICKET-102-algolia-search
-* bugfix/fix-odoo-inventory-sync
-* hotfix/patch-jwt-validation
+Long-lived environment branches are not required by the repository. `main` is the integration branch; releases are identified by immutable refs/tags/SHAs and environment launch evidence.
 
-## 5. Branch Protection Rules (GitHub)
-* Require Pull Request reviews before merging (Minimum 1 lead engineer approval).
-* Require status checks to pass before merging (e.g., CI tests, pip-audit, linting).
-* Enforce linear history (Squash and Merge only).
-* Restrict direct pushes to main and staging.
+## Invariants and controls
 
----
-End of Document
+- Prefer short-lived `feature/`, `fix/`, `docs/`, or automation/agent branches.
+- Never use a branch name as production evidence; use immutable release refs.
+- Keep migration sequences linear unless a deliberate multi-head strategy is reviewed.
+- Delete/retire merged branches according to repository policy; do not reuse stale branches for unrelated work.
+
+## Source of truth
+
+- `CONTRIBUTING.md`
+- `.github/workflows/ci.yml`
+- `.github/workflows/repository-hygiene.yml`
+
+## Verification
+
+Compare branch against `main` before review; ensure it is not unexpectedly behind or carrying unrelated commits.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

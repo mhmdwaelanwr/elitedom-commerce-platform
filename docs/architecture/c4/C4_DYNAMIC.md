@@ -1,59 +1,87 @@
-# C4 Dynamic Architecture - Elitedom Store
-
-Document Classification: Internal  
-Version: 1.0  
-Status: Approved  
-Owner: Solution Architecture  
-Target System: Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "C4 Dynamic Flows"
+status: current
+owner: architecture
+document_type: c4
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Cross-component sequence ordering, trust boundaries, idempotency, or release-control behavior changes."
 ---
 
-## 1. Introduction & Purpose
-This document defines the **Level 4 Dynamic (C4 Dynamic)** architectural model for the **Elitedom Store** platform. It illustrates how the containers and components collaborate at runtime to execute a specific, critical business scenario: **End-to-End Checkout, Payment Processing, Odoo ERP Order Creation, and Notification Dispatch**.
+# C4 Dynamic Flows
 
----
+## Purpose
 
-## 2. Dynamic Diagram (Mermaid) - Checkout & Order Fulfillment Scenario
+Captures cross-component runtime sequences where ordering, trust, durability, or idempotency matters. Static C4 container/component views describe ownership; this page describes how critical transactions move between those boundaries.
 
-```mermaid
-C4Dynamic
-    title Dynamic diagram for End-to-End Checkout and Order Fulfillment Scenario (Elitedom Store)
+## Current state
 
-    Person(customer, "Customer", "Submits cart and executes online payment.")
-    Container(web_app, "Web Storefront / Mobile App", "Next.js / Flutter", "User interface for shopping and checkout.")
-    Container(api_gateway, "API Gateway & Middleware", "Python, FastAPI", "Orchestrates order flow, payment webhooks, and ERP integration.")
-    System_Ext(stripe, "Stripe Payment Gateway", "Authorizes and captures online card transactions.")
-    Container(odoo_erp, "Odoo 17 ERP Backbone", "Python, Odoo 17", "Master system of record for sales orders, inventory, and accounting.")
-    ContainerDb(postgresql, "PostgreSQL Database", "PostgreSQL 16", "Persists transactional data and stock records.")
-    System_Ext(notifications, "Twilio & SendGrid", "Dispatches customer SMS and email receipts.")
+Critical dynamic flows are identity/session creation, checkout/payment, Paymob callbacks, Odoo inbound/outbound synchronization, notification tasks, refund transitions, RMA intake, and launch approval.
 
-    Rel(customer, web_app, "1. Clicks 'Place Order' and submits payment info", "HTTPS")
-    Rel(web_app, api_gateway, "2. Forwards checkout payload and cart tokens", "HTTPS / JSON")
-    Rel(api_gateway, stripe, "3. Creates Payment Intent / Charge request", "REST API")
-    Rel(stripe, api_gateway, "4. Dispatches payment success webhook event", "Webhook / REST API")
-    Rel(api_gateway, odoo_erp, "5. Instantiates official Sales Order & Invoice", "XML-RPC / REST")
-    Rel(odoo_erp, postgresql, "6. Commits order rows, reserves stock, updates ledger", "SQL / TCP")
-    Rel(api_gateway, notifications, "7. Triggers order confirmation SMS and email", "REST API")
-```
+## Sequence invariants
 
----
+- Provider callbacks are verified before domain mutation.
+- Duplicate external delivery must not produce duplicate business effects.
+- Database commit precedes asynchronous external delivery when transactional outbox semantics are used.
+- Frontend redirect/callback UX is not authoritative evidence of payment success.
+- Server-side authorization is evaluated at protected API boundaries rather than inferred from frontend state.
+- Launch evidence is scoped by release reference and environment and cannot be reused implicitly across releases.
 
-## 3. Step-by-Step Scenario Walkthrough
+## Checkout and Paymob sequence
 
-### Step 1 & 2: Order Submission
-* The **Customer** reviews their cart on the **Web Storefront or Mobile App** and initiates checkout.
-* The client application transmits the encrypted order payload and cart items to the **API Gateway & Middleware** (FastAPI).
+1. Customer submits checkout intent from the storefront.
+2. FastAPI validates identity/session where required, cart contents, server-authoritative prices, discounts, shipping, stock rules, currency, and payable total.
+3. Application state and a provider payment attempt are persisted.
+4. The Paymob adapter initiates provider checkout using server-held configuration and the configured public notification/redirection URLs.
+5. Browser navigation may reflect UX progress, but it does not authorize a paid state.
+6. Paymob callback enters the dedicated webhook boundary, is authenticated using the provider verification contract, and is processed idempotently.
+7. Payment/order state transitions occur only after verified server-side processing.
+8. Repeated callbacks resolve to the existing receipt/attempt state rather than replaying business effects.
 
-### Step 3 & 4: Payment Processing & Webhook
-* The **API Gateway** communicates with **Stripe** to authorize and capture the payment via a secure Payment Intent.
-* Upon successful payment capture, **Stripe** asynchronously pushes a payment success webhook notification back to the **API Gateway**.
+## Odoo synchronization sequence
 
-### Step 5 & 6: ERP Order Creation & Inventory Reservation
-* Upon receiving the payment confirmation webhook, the **API Gateway** calls the **Odoo 17 ERP Backbone** via secure XML-RPC/REST APIs to create an official Sales Order and generate a digital invoice.
-* **Odoo 17** processes the business rules, triggers the multi-warehouse stock routing (supporting the hybrid stock model), and commits the transaction rows to the **PostgreSQL Database**.
+1. A committed application event creates or advances outbox/delivery state where external ERP delivery is required.
+2. Worker logic sends the contract to Odoo with the repository-defined authentication/signing behavior.
+3. Retry state is persisted for transient failure rather than hiding delivery loss.
+4. Odoo-originated product, inventory, order, or shipment events enter the dedicated webhook boundary.
+5. Signature/HMAC verification and delivery-receipt/idempotency checks occur before applying the event.
+6. The application maps ERP identifiers to its own domain records without using cross-database transactions.
 
-### Step 7: Notification Dispatch
-* Simultaneously, the **API Gateway** invokes the **Notification Dispatcher** module to send a real-time order confirmation SMS via **Twilio** and an itemized invoice email via **SendGrid** to the customer.
+## Authentication/session sequence
 
----
-End of Document
+1. A password, phone OTP, or supported social flow establishes an authenticated identity through backend code.
+2. Session/refresh state is persisted so revocation and device/session controls are not derived from a role claim alone.
+3. Staff entering privileged administration is additionally gated by persisted role/permission state and staff MFA requirements.
+4. Sensitive MFA enrollment/verification responses use defensive caching behavior.
+
+## Release-acceptance sequence
+
+1. Operator selects an immutable release reference.
+2. Backend control-plane service evaluates automatic configuration/provider gates for the current environment.
+3. Required manual gates are loaded only for the selected release/environment pair.
+4. A `passed` manual gate requires an evidence reference; a waiver requires operator rationale.
+5. Audit metadata records verifier/time and preserves previous release evidence separately.
+6. Overall readiness remains blocked while required blockers exist.
+
+## Failure semantics
+
+- Invalid or unverifiable provider callbacks fail before trusted state transition.
+- Outbox/provider transient failure remains retryable and observable rather than becoming an implicit success.
+- Rate-limit/metrics/readiness failures use explicit HTTP failure behavior.
+- Launch evidence missing for the current release remains pending/blocking even if another release passed the same gate.
+
+## Source of truth
+
+- `elitedom-store/backend/app/integrations/`
+- `elitedom-store/backend/app/shared/outbox.py`
+- `elitedom-store/backend/app/modules/payments/`
+- `elitedom-store/backend/app/modules/auth/`
+- `elitedom-store/backend/app/modules/admin/control_service.py`
+- `elitedom-store/backend/app/tests/integration/test_stage10_launch_acceptance.py`
+
+## Verification
+
+Use payment/webhook/Odoo integration tests, authentication/session tests, migration tests, and Stage 10 release-scoping tests to verify sequence invariants. Provider/live execution remains environment-specific acceptance evidence.
+
+## Change policy
+
+Update this document in the same pull request as changes to callback trust, outbox ordering, payment authority, authentication/session boundaries, Odoo event sequencing, or launch-readiness evidence semantics.

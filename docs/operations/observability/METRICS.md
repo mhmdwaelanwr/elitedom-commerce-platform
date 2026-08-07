@@ -1,36 +1,39 @@
-# Metrics Standards (METRICS.md)
-
-Document Classification: Internal / Site Reliability Engineering (SRE)  
-Version: 1.0  
-Status: Approved / Active  
-Target System: Elitedom Storefront, FastAPI Backend, Odoo 17 ERP  
-
+---
+title: "Metrics Standard"
+status: current
+owner: operations
+document_type: observability
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Metrics Standard behavior, evidence, or source-of-truth changes."
 ---
 
-## 1. Overview
-This document specifies the metrics collection strategy using Prometheus. Metrics provide numerical time-series data to understand the system's behavior, trigger alerts, and power Grafana dashboards.
+# Metrics Standard
 
-## 2. Core Metric Types
-* Counters: A cumulative metric that only goes up (e.g., total HTTP requests, total database errors).
-* Gauges: A single numerical value that can arbitrarily go up and down (e.g., active database connections, current memory usage).
-* Histograms: Samples observations and counts them in configurable buckets (e.g., HTTP request latency, query execution time).
+## Purpose
 
-## 3. The USE Method (Infrastructure)
-For infrastructure resources (Oracle Cloud VPS, Docker containers), track:
-* Utilization: % of resource time spent doing work (e.g., CPU utilization).
-* Saturation: The amount of extra work queued up (e.g., load average).
-* Errors: The count of error events (e.g., network interface drops).
+Defines metrics exposure and safe metric design.
 
-## 4. The RED Method (Services)
-For the FastAPI backend and Odoo APIs, track:
-* Rate: The number of requests per second.
-* Errors: The number of failed requests per second (HTTP 5xx).
-* Duration: The amount of time those requests take (Latency/Response time).
+## Current state
 
-## 5. Implementation Standards
-* FastAPI: Use `prometheus-fastapi-instrumentator` to automatically expose default RED metrics at the `/metrics` endpoint.
-* Odoo 17: Utilize Odoo Prometheus exporter modules.
-* Custom Business Metrics: Explicitly define counters for key events (e.g., `orders_placed_total`, `sync_failures_odoo_total`).
+FastAPI metrics can be enabled and are protected by a bearer token in hardened environments. Metrics should describe rate, errors, duration and dependency/work queues without high-cardinality secrets/PII.
 
----
-End of Document
+## Invariants and controls
+
+- Protect `/metrics`; production config requires a strong token when metrics are enabled.
+- Prefer bounded labels such as route/method/status, not customer/order IDs.
+- Track readiness/dependency/provider/work-queue symptoms without exposing credentials.
+- Treat metrics absence/export failure separately from application readiness unless policy explicitly couples them.
+
+## Source of truth
+
+- `elitedom-store/backend/app/observability.py`
+- `elitedom-store/backend/app/middleware/security_headers.py`
+- `elitedom-store/backend/app/config.py`
+
+## Verification
+
+Query metrics in staging using authorized scraper credentials and verify dashboards/alerts.
+
+## Change policy
+
+Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.

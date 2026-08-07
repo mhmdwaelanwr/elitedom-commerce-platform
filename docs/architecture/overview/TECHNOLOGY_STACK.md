@@ -1,45 +1,63 @@
-# Technology Stack - Elitedom Store
-
-**Document Classification:** Internal  
-**Version:** 1.0  
-**Status:** Approved  
-**Owner:** Solution Architecture  
-**Target System:** Elitedom E-Commerce & Odoo 17 ERP Integration  
-
+---
+title: "Technology Stack"
+status: reference
+owner: architecture
+document_type: technology-reference
+verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+review_trigger: "Technology Stack scope or referenced implementation sources change."
 ---
 
-## 1. Introduction & Purpose
-This document defines the approved technology stack for the **Elitedom Store** platform. It outlines the core frameworks, programming languages, databases, infrastructure, and integration tools required to build a robust, scalable, and secure modular monolith architecture integrated with Odoo 17 ERP.
+# Technology Stack
 
----
+## Purpose
 
-## 2. Core Technology Layers
+Records the currently selected runtime technologies and their architectural role; package manifests and container tags are authoritative for exact versions.
 
-### 2.1 Backend & ERP Backbone
-* **Enterprise Resource Planning (ERP):** Odoo 17 acting as the master system of record for inventory, procurement, sales orders, accounting, and warehouse operations.
-* **Backend Programming Language:** Python (leveraged natively within the Odoo framework and custom modular services).
-* **Database Management System:** PostgreSQL supporting strict traceability, multi-currency pricing, and hardware compatibility engines.
+## Reference
 
-### 2.2 Frontend & Client Applications
-* **Web Storefront:** Modern reactive web framework optimized for fast rendering, high-performance product catalog browsing, and secure checkout.
-* **Mobile Application:** Flutter-based cross-platform mobile application for Android and iOS.
-  **Status:** Planned / Future.
-  **Target Phase:** Phase 5.
-  The mobile application is not part of the current production deployment.
+### Web
 
-### 2.3 Integration & Middleware
-* **API Protocol:** Versioned RESTful APIs (`https://api.elitedom.store/v1`) secured via JWT and HMAC signatures.
-* **Event Streaming & Webhooks:** Asynchronous event notifications and webhooks for external integrations including Stripe, Algolia, Twilio, SendGrid, and Zoho.
+Next.js 16.2.12, React 19.2.4, TypeScript 5, Tailwind CSS 4.
 
-### 2.4 Infrastructure & DevOps
-* **Containerization:** Docker for packaging application services and ensuring cloud-native environment independence.
-* **Orchestration:** Kubernetes for container orchestration, automated scaling, and high availability deployment.
-* **CI/CD Pipelines:** Automated build, testing, and deployment workflows ensuring continuous delivery.
+### API
 
-### 2.5 Security & Compliance
-* **Transport Security:** TLS 1.3 encryption enforced for all data in transit.
-* **Data Encryption:** AES-256 encryption applied for data at rest.
-* **Access Control:** JSON Web Tokens (JWT) combined with strict Role-Based Access Control (RBAC).
+Python 3.11, FastAPI, Pydantic, SQLAlchemy async, Alembic.
 
----
-**End of Document**
+### Application data
+
+PostgreSQL 15; separate application and Odoo databases.
+
+### ERP
+
+Odoo 17 Community with `elitedom_connector` 17.0.2.0.0.
+
+### Async/cache
+
+Redis 7 and Celery worker/beat.
+
+### Payments
+
+Paymob current primary integration; Stripe legacy compatibility remains in code/migration history.
+
+### Media
+
+Local filesystem mode or S3-compatible object storage with explicit CDN URL.
+
+### Observability
+
+Structured request context, Prometheus-compatible metrics, optional OpenTelemetry export.
+
+### Deployment
+
+Docker Compose base + environment overlays; Nginx Proxy Manager and Portainer included in topology.
+
+## Source of truth
+
+- `elitedom-store/frontend/package.json`
+- `elitedom-store/backend/requirements.txt`
+- `elitedom-store/infrastructure/docker-compose.yml`
+- `elitedom-store/odoo/addons/elitedom_connector/__manifest__.py`
+
+## Maintenance rule
+
+This page is a curated reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.
