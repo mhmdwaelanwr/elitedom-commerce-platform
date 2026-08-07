@@ -9,14 +9,12 @@ import pytest
 from sqlalchemy import select
 
 from app.config import Settings
+from app.middleware import security_headers
 from app.models import Partner
 from app.modules.auth import mfa
 from app.modules.auth.errors import InvalidMfaError
 from app.modules.auth.mfa_service import AdminMfaService
 from app.modules.auth.models import AdminMfaCredential, AuthSession
-from app.middleware import security_headers
-
-pytestmark = pytest.mark.asyncio
 
 
 async def _staff_with_session(db_session) -> tuple[Partner, AuthSession]:
@@ -59,6 +57,7 @@ def test_recovery_codes_are_hashed_and_single_use():
     assert accepted_again is False
 
 
+@pytest.mark.asyncio
 async def test_staff_mfa_enrollment_encrypts_seed_and_verifies_recovery(
     db_session,
 ):
@@ -86,7 +85,10 @@ async def test_staff_mfa_enrollment_encrypts_seed_and_verifies_recovery(
     assert confirmed.status.enrolled is True
     assert confirmed.status.verified is True
     assert len(confirmed.recovery_codes) == 8
-    assert all(recovery not in credential.recovery_code_hashes for recovery in confirmed.recovery_codes)
+    assert all(
+        recovery not in credential.recovery_code_hashes
+        for recovery in confirmed.recovery_codes
+    )
 
     session.mfa_verified_at = None
     recovery_code = confirmed.recovery_codes[0]
@@ -136,6 +138,7 @@ def test_production_configuration_requires_mfa_redis_and_metrics_secret():
         _production_settings(metrics_bearer_token="")
 
 
+@pytest.mark.asyncio
 async def test_metrics_endpoint_requires_configured_bearer_token(client, monkeypatch):
     token = "metrics-test-token-that-is-long-enough-for-stage-nine"
     monkeypatch.setattr(security_headers.settings, "metrics_bearer_token", token)
@@ -151,6 +154,7 @@ async def test_metrics_endpoint_requires_configured_bearer_token(client, monkeyp
     assert "text/plain" in allowed.headers.get("content-type", "")
 
 
+@pytest.mark.asyncio
 async def test_security_headers_apply_to_api_responses(client):
     response = await client.get("/health/live")
     assert response.status_code == 200
