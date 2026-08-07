@@ -19,17 +19,51 @@ import {
 } from "@/config/preferences";
 import { AppPreferencesProvider } from "@/providers/AppPreferencesProvider";
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
-  title: "Elitedom Store — Technology built around trust",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Elitedom Store — Technology built around trust",
+    template: "%s | Elitedom Store",
+  },
   description:
     "Egypt's enterprise commerce storefront for hardware, workstations, and B2B procurement, synchronized with Odoo 17.",
+  applicationName: "Elitedom Store",
+  alternates: { canonical: "/" },
   keywords: [
     "elitedom",
     "egypt hardware",
-    "odoo erp",
     "gaming pc egypt",
     "workstations cairo",
+    "business technology egypt",
   ],
+  openGraph: {
+    type: "website",
+    url: "/",
+    siteName: "Elitedom Store",
+    title: "Elitedom Store — Technology built around trust",
+    description:
+      "Hardware, workstations, and B2B technology procurement for customers in Egypt.",
+    locale: "en_EG",
+    alternateLocale: ["ar_EG"],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Elitedom Store",
+    description: "Technology retail and B2B procurement built around trust.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
 };
 
 export default async function RootLayout({
@@ -57,10 +91,7 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: PREFERENCE_BOOTSTRAP_SCRIPT }} />
       </head>
       <body className="min-h-screen bg-background text-foreground antialiased selection:bg-accent selection:text-foreground">
-        <AppPreferencesProvider
-          initialLocale={initialLocale}
-          initialTheme={initialTheme}
-        >
+        <AppPreferencesProvider initialLocale={initialLocale} initialTheme={initialTheme}>
           <StoreProvider>
             <div className="flex min-h-screen flex-col">
               <PreferenceBar />
