@@ -15,6 +15,7 @@ from app.modules.auth import mfa
 from app.modules.auth.errors import InvalidMfaError
 from app.modules.auth.mfa_service import AdminMfaService
 from app.modules.auth.models import AdminMfaCredential, AuthSession
+from app.shared import security as shared_security
 
 
 async def _staff_with_session(db_session) -> tuple[Partner, AuthSession]:
@@ -38,6 +39,18 @@ async def _staff_with_session(db_session) -> tuple[Partner, AuthSession]:
     db_session.add(session)
     await db_session.flush()
     return partner, session
+
+
+def _authorization(partner: Partner, session: AuthSession) -> dict[str, str]:
+    token = shared_security.create_access_token(
+        {
+            "sub": str(partner.id),
+            "email": partner.email,
+            "role": partner.role,
+            "sid": session.id,
+        }
+    )
+    return {"Authorization": f"Bearer {token}"}
 
 
 def test_totp_matches_rfc_vector_and_rejects_wrong_code():
@@ -108,6 +121,24 @@ async def test_staff_mfa_enrollment_encrypts_seed_and_verifies_recovery(
         )
 
 
+@pytest.mark.asyncio
+async def test_privileged_permission_requires_verified_mfa_when_policy_enabled(
+    client,
+    db_session,
+    monkeypatch,
+):
+    partner, session = await _staff_with_session(db_session)
+    monkeypatch.setattr(shared_security.settings, "staff_mfa_required", True)
+
+    response = await client.get(
+        "/api/v1/admin/access/me",
+        headers=_authorization(partner, session),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"]["error_code"] == "ELITE_1008"
+
+
 def _production_settings(**overrides) -> Settings:
     values = {
         "environment": "production",
@@ -136,6 +167,34 @@ def test_production_configuration_requires_mfa_redis_and_metrics_secret():
         _production_settings(rate_limit_backend="memory")
     with pytest.raises(ValueError, match="METRICS_BEARER_TOKEN"):
         _production_settings(metrics_bearer_token="")
+
+
+def test_s3_media_configuration_requires_bucket_and_https_cdn():
+    with pytest.raises(ValueError, match="S3_BUCKET"):
+        _production_settings(
+            media_storage_provider="s3",
+            media_cdn_base_url="https://media.elitedom.store",
+        )
+    with pytest.raises(ValueError, match="MEDIA_CDN_BASE_URL"):
+        _production_settings(
+            media_storage_provider="s3",
+            s3_bucket="elitedom-media",
+            media_cdn_base_url="http://media.elitedom.store",
+        )
+
+
+@pytest.mark.asyncio
+async def test_mfa_enrollment_responses_are_not_cacheable(client, db_session):
+    partner, session = await _staff_with_session(db_session)
+    response = await client.post(
+        "/api/v1/auth/mfa/enroll",
+        headers=_authorization(partner, session),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["pragma"] == "no-cache"
+    assert "secret" in response.json()
 
 
 @pytest.mark.asyncio
