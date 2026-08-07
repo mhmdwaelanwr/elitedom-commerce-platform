@@ -7,7 +7,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.database import get_db
 from app.modules.admin.access import AdminPermission
 from app.modules.admin.access_service import AdminAccessService
@@ -35,7 +34,6 @@ from app.modules.admin.schemas import (
     AdminStockAdjustmentResponse,
 )
 from app.modules.admin.service import AdminService
-from app.modules.auth.mfa_service import AdminMfaService
 from app.modules.b2b.schemas import B2BRFQResponse, IssueQuoteRequest
 from app.modules.b2b.service import B2BService
 from app.modules.products.media import delete_product_image_file, store_product_image
@@ -57,7 +55,6 @@ from app.shared.schemas import OrderState, PaymentStatus, RFQStatus, RMAStatus
 from app.shared.security import get_current_user, require_permission
 
 router = APIRouter()
-settings = get_settings()
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
 CurrentUser = Annotated[dict, Depends(get_current_user)]
 
@@ -105,11 +102,6 @@ async def get_my_admin_access(
     role, permissions = await AdminAccessService(db).resolve_permissions(current_user["user_id"])
     if role is None:
         raise InsufficientPermissionsError()
-    if settings.staff_mfa_required:
-        await AdminMfaService(db).require_verified_staff_session(
-            partner_id=current_user["user_id"],
-            session_id=current_user.get("session_id"),
-        )
     return AdminAccessResponse(role=role, permissions=sorted(permissions))
 
 
@@ -189,17 +181,17 @@ async def list_orders(
     db: DatabaseSession,
     current_user: OrderViewer,
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
-    state: OrderState | None = Query(default=None),
-    payment_status: PaymentStatus | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=25, ge=1, le=100),
+    state: Annotated[OrderState | None, Query()] = None,
+    payment_status: Annotated[PaymentStatus | None, Query()] = None,
+    q: str | None = Query(default=None, min_length=1, max_length=128),
 ) -> AdminOrderListResponse:
     return await AdminService(db).list_orders(
         page=page,
         limit=limit,
         state=state,
         payment_status=payment_status,
-        search=search,
+        query=q,
     )
 
 
@@ -220,12 +212,19 @@ async def update_order_state(
     db: DatabaseSession,
     current_user: OrderManager,
 ) -> AdminOrderDetail:
-    return await AdminService(db).update_order_state(
-        order_id=order_id,
-        payload=payload,
+    service = AdminService(db)
+    before = await service.get_order(order_id)
+    result = await service.update_order_state(order_id, payload.state)
+    await AdminAccessService(db).record_audit(
         actor=current_user,
+        action="order.state.update",
+        entity_type="order",
+        entity_id=order_id,
+        before={"state": before.state.value, "payment_status": before.payment_status.value},
+        after={"state": result.state.value, "payment_status": result.payment_status.value},
         request=request,
     )
+    return result
 
 
 @router.get("/products", response_model=AdminProductListResponse)
@@ -233,20 +232,45 @@ async def list_products(
     db: DatabaseSession,
     current_user: CatalogViewer,
     page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
-    search: str | None = Query(default=None, max_length=128),
+    limit: int = Query(default=25, ge=1, le=100),
+    q: str | None = Query(default=None, min_length=1, max_length=128),
+    low_stock: bool = Query(default=False),
+    active: bool | None = Query(default=None),
 ) -> AdminProductListResponse:
-    return await AdminService(db).list_products(page=page, limit=limit, search=search)
+    return await AdminService(db).list_products(
+        page=page,
+        limit=limit,
+        query=q,
+        low_stock_only=low_stock,
+        active=active,
+    )
+
+
+@router.get("/products/categories")
+async def list_product_categories(
+    db: DatabaseSession,
+    current_user: CatalogViewer,
+):
+    return await ProductService(db).get_category_tree(include_inactive=True)
+
+
+@router.get("/products/{product_id}", response_model=ProductDetailResponse)
+async def get_admin_product(
+    product_id: int,
+    db: DatabaseSession,
+    current_user: CatalogViewer,
+) -> ProductDetailResponse:
+    return await ProductService(db).get_product_detail(product_id, include_inactive=True)
 
 
 @router.post("/products", response_model=ProductDetailResponse, status_code=201)
-async def create_product(
+async def create_admin_product(
     payload: ProductCreateRequest,
     request: Request,
     db: DatabaseSession,
     current_user: CatalogManager,
 ) -> ProductDetailResponse:
-    result = await ProductService(db).create(payload)
+    result = await ProductService(db).create_product(payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="catalog.product.create",
@@ -259,15 +283,16 @@ async def create_product(
 
 
 @router.put("/products/{product_id}", response_model=ProductDetailResponse)
-async def update_product(
+async def update_admin_product(
     product_id: int,
     payload: ProductUpdateRequest,
     request: Request,
     db: DatabaseSession,
     current_user: CatalogManager,
 ) -> ProductDetailResponse:
-    before = await ProductService(db).get_by_id(product_id)
-    result = await ProductService(db).update(product_id, payload)
+    service = ProductService(db)
+    before = await service.get_product_detail(product_id, include_inactive=True)
+    result = await service.update_product(product_id, payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="catalog.product.update",
@@ -280,15 +305,16 @@ async def update_product(
     return result
 
 
-@router.post("/products/{product_id}/archive", status_code=204)
-async def archive_product(
+@router.delete("/products/{product_id}", status_code=204)
+async def archive_admin_product(
     product_id: int,
     request: Request,
     db: DatabaseSession,
     current_user: CatalogArchiver,
 ):
-    before = await ProductService(db).get_by_id(product_id)
-    await ProductService(db).archive(product_id)
+    service = ProductService(db)
+    before = await service.get_product_detail(product_id, include_inactive=True)
+    await service.delete_product(product_id)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="catalog.product.archive",
@@ -301,26 +327,140 @@ async def archive_product(
     return None
 
 
-@router.post("/products/{product_id}/images", response_model=ProductImageResponse, status_code=201)
-async def upload_product_image(
+@router.post(
+    "/products/{product_id}/images",
+    response_model=ProductImageResponse,
+    status_code=201,
+)
+async def upload_admin_product_image(
     product_id: int,
     request: Request,
     db: DatabaseSession,
     current_user: CatalogManager,
     image: UploadFile = File(...),
+    alt_text: str | None = Form(default=None, max_length=255),
+    is_primary: bool = Form(default=False),
 ) -> ProductImageResponse:
-    stored = await store_product_image(image)
+    product = await ProductService(db).get_product_detail(product_id, include_inactive=True)
+    url = await store_product_image(image, product_id)
     try:
-        result = await ProductService(db).add_image(product_id, stored.url)
+        result = await ProductService(db).add_product_image(
+            product_id,
+            url=url,
+            alt_text=alt_text or product.name,
+            is_primary=is_primary,
+        )
     except Exception:
-        delete_product_image_file(stored.url)
+        delete_product_image_file(url)
         raise
     await AdminAccessService(db).record_audit(
         actor=current_user,
-        action="catalog.product.image.create",
+        action="catalog.image.create",
+        entity_type="product",
+        entity_id=product_id,
+        after=result,
+        request=request,
+    )
+    return result
+
+
+@router.delete("/products/{product_id}/images/{image_id}", status_code=204)
+async def delete_admin_product_image(
+    product_id: int,
+    image_id: int,
+    request: Request,
+    db: DatabaseSession,
+    current_user: CatalogManager,
+):
+    url = await ProductService(db).delete_product_image(product_id, image_id)
+    delete_product_image_file(url)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="catalog.image.delete",
         entity_type="product_image",
-        entity_id=result.id,
-        after={"product_id": product_id, "url": result.url},
+        entity_id=image_id,
+        before={"product_id": product_id, "url": url},
+        request=request,
+    )
+    return None
+
+
+@router.post(
+    "/products/{product_id}/stock-adjustments",
+    response_model=AdminStockAdjustmentResponse,
+)
+async def adjust_product_stock(
+    product_id: int,
+    payload: AdminStockAdjustmentRequest,
+    request: Request,
+    db: DatabaseSession,
+    current_user: InventoryAdjuster,
+) -> AdminStockAdjustmentResponse:
+    result = await AdminService(db).adjust_product_stock(product_id, payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="inventory.stock.adjust",
+        entity_type="product",
+        entity_id=product_id,
+        before={"stock_qty": result.previous_stock_qty},
+        after={
+            "stock_qty": result.stock_qty,
+            "quantity_delta": result.quantity_delta,
+            "reason": payload.reason,
+        },
+        request=request,
+    )
+    return result
+
+
+@router.get("/customers", response_model=AdminCustomerListResponse)
+async def list_customers(
+    db: DatabaseSession,
+    current_user: CustomerViewer,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    q: str | None = Query(default=None, min_length=1, max_length=128),
+    active: bool | None = Query(default=None),
+) -> AdminCustomerListResponse:
+    return await AdminService(db).list_customers(page=page, limit=limit, query=q, active=active)
+
+
+@router.get("/customers/{customer_id}", response_model=AdminCustomerDetail)
+async def get_customer(
+    customer_id: int,
+    db: DatabaseSession,
+    current_user: CustomerViewer,
+) -> AdminCustomerDetail:
+    return await AdminService(db).get_customer(customer_id)
+
+
+@router.get("/rma", response_model=AdminRMAListResponse)
+async def list_rmas(
+    db: DatabaseSession,
+    current_user: SupportViewer,
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    status: Annotated[RMAStatus | None, Query()] = None,
+    q: str | None = Query(default=None, min_length=1, max_length=128),
+) -> AdminRMAListResponse:
+    return await AdminService(db).list_rmas(page=page, limit=limit, status=status, query=q)
+
+
+@router.put("/rma/{ticket_number}/review", response_model=AdminRMAItem)
+async def review_rma(
+    ticket_number: str,
+    payload: RMAReviewRequest,
+    request: Request,
+    db: DatabaseSession,
+    current_user: SupportManager,
+) -> AdminRMAItem:
+    result = await AdminService(db).review_rma(ticket_number, current_user["user_id"], payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="support.rma.review",
+        entity_type="rma",
+        entity_id=ticket_number,
+        after=result,
         request=request,
     )
     return result
@@ -330,55 +470,44 @@ async def upload_product_image(
 async def list_rfqs(
     db: DatabaseSession,
     current_user: RfqViewer,
-    status: RFQStatus | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=128),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    status: Annotated[RFQStatus | None, Query()] = None,
+    q: str | None = Query(default=None, min_length=1, max_length=128),
 ) -> AdminRFQListResponse:
-    return await AdminService(db).list_rfqs(status=status, search=search)
+    return await AdminService(db).list_rfqs(page=page, limit=limit, status=status, query=q)
 
 
-@router.post("/rfqs/{rfq_id}/quote", response_model=B2BRFQResponse)
-async def quote_rfq(
-    rfq_id: int,
+@router.put("/rfqs/{rfq_code}/quote", response_model=B2BRFQResponse)
+async def issue_rfq_quote(
+    rfq_code: str,
     payload: IssueQuoteRequest,
+    request: Request,
     db: DatabaseSession,
     current_user: RfqQuoter,
 ) -> B2BRFQResponse:
-    return await B2BService(db).issue_quote(rfq_id=rfq_id, payload=payload)
-
-
-@router.get("/rmas", response_model=AdminRMAListResponse)
-async def list_rmas(
-    db: DatabaseSession,
-    current_user: SupportViewer,
-    status: RMAStatus | None = Query(default=None),
-    search: str | None = Query(default=None, max_length=128),
-) -> AdminRMAListResponse:
-    return await AdminService(db).list_rmas(status=status, search=search)
-
-
-@router.post("/rmas/{rma_id}/review", response_model=AdminRMAItem)
-async def review_rma(
-    rma_id: int,
-    payload: RMAReviewRequest,
-    request: Request,
-    db: DatabaseSession,
-    current_user: SupportManager,
-) -> AdminRMAItem:
-    return await AdminService(db).review_rma(
-        rma_id=rma_id,
-        payload=payload,
+    result = await B2BService(db).issue_quote(rfq_code, payload, current_user)
+    await AdminAccessService(db).record_audit(
         actor=current_user,
+        action="rfq.quote.issue",
+        entity_type="rfq",
+        entity_id=rfq_code,
+        after=result,
         request=request,
     )
+    return result
 
 
 @router.get("/shipments", response_model=AdminShipmentListResponse)
 async def list_shipments(
     db: DatabaseSession,
     current_user: ShipmentViewer,
-    search: str | None = Query(default=None, max_length=128),
+    page: int = Query(default=1, ge=1),
+    limit: int = Query(default=25, ge=1, le=100),
+    state: str | None = Query(default=None, min_length=1, max_length=32),
+    q: str | None = Query(default=None, min_length=1, max_length=128),
 ) -> AdminShipmentListResponse:
-    return await AdminService(db).list_shipments(search=search)
+    return await AdminService(db).list_shipments(page=page, limit=limit, state=state, query=q)
 
 
 @router.post("/shipments/{order_id}/dispatch", response_model=DispatchOrderResponse)
@@ -389,34 +518,13 @@ async def dispatch_order(
     db: DatabaseSession,
     current_user: ShipmentDispatcher,
 ) -> DispatchOrderResponse:
-    result = await ShippingService(db).dispatch(order_id, payload)
+    result = await ShippingService(db).dispatch_order(order_id, payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="shipment.dispatch",
-        entity_type="sale_order",
+        entity_type="order",
         entity_id=order_id,
         after=result,
         request=request,
     )
     return result
-
-
-@router.get("/stock", response_model=AdminProductListResponse)
-async def list_stock(
-    db: DatabaseSession,
-    current_user: InventoryViewer,
-    page: int = Query(default=1, ge=1),
-    limit: int = Query(default=50, ge=1, le=100),
-    search: str | None = Query(default=None, max_length=128),
-) -> AdminProductListResponse:
-    return await AdminService(db).list_products(page=page, limit=limit, search=search)
-
-
-@router.post("/stock/adjust", response_model=AdminStockAdjustmentResponse)
-async def adjust_stock(
-    payload: AdminStockAdjustmentRequest,
-    request: Request,
-    db: DatabaseSession,
-    current_user: InventoryAdjuster,
-) -> AdminStockAdjustmentResponse:
-    return await AdminService(db).adjust_stock(payload=payload, actor=current_user, request=request)
