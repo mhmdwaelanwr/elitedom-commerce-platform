@@ -38,16 +38,27 @@ export default function AdminSuppliersPage() {
       setSuppliers(supplierResponse.suppliers);
       setPurchaseOrders(purchaseOrderResponse.purchase_orders);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Unable to load procurement data.");
+      setError(
+        requestError instanceof Error
+          ? requestError.message
+          : locale === "ar"
+            ? "تعذر تحميل بيانات التوريد."
+            : "Unable to load procurement data.",
+      );
     } finally {
       setLoading(false);
     }
-  }, [session]);
+  }, [locale, session]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
+  const ratingLabel = locale === "ar" ? "التقييم" : "Rating";
+  const defectLabel = locale === "ar" ? "نسبة العيوب" : "Defect rate";
+  const supplierLabel = locale === "ar" ? "المورد" : "Supplier";
+  const dayLabel = locale === "ar" ? "يوم" : "days";
 
   return (
     <>
@@ -79,10 +90,10 @@ export default function AdminSuppliersPage() {
                         <StatusPill value={supplier.is_verified ? "verified" : "unverified"} />
                       </div>
                       <dl className="mt-4 grid grid-cols-2 gap-3 text-xs">
-                        <Fact label={t("admin", "leadTime")} value={`${supplier.lead_time_days} d`} />
+                        <Fact label={t("admin", "leadTime")} value={`${supplier.lead_time_days} ${dayLabel}`} />
                         <Fact label={t("admin", "order")} value={String(supplier.total_orders)} />
-                        <Fact label="Rating" value={supplier.performance_rating == null ? "—" : String(supplier.performance_rating)} />
-                        <Fact label="Defect" value={`${supplier.defect_rate_percent}%`} />
+                        <Fact label={ratingLabel} value={supplier.performance_rating == null ? "—" : String(supplier.performance_rating)} />
+                        <Fact label={defectLabel} value={`${supplier.defect_rate_percent}%`} />
                       </dl>
                       <p className="mt-3 text-[11px] text-muted">{formatAdminDateTime(supplier.created_at)}</p>
                     </article>
@@ -103,7 +114,7 @@ export default function AdminSuppliersPage() {
                         <th className="border-b border-border px-3 py-3 text-start">PO</th>
                         <th className="border-b border-border px-3 py-3 text-start">{t("admin", "status")}</th>
                         <th className="border-b border-border px-3 py-3 text-start">{t("admin", "amount")}</th>
-                        <th className="border-b border-border px-3 py-3 text-start">Supplier</th>
+                        <th className="border-b border-border px-3 py-3 text-start">{supplierLabel}</th>
                         <th className="border-b border-border px-3 py-3 text-start">{t("admin", "created")}</th>
                       </tr>
                     </thead>
