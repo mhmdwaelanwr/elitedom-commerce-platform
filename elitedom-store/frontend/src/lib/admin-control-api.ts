@@ -118,6 +118,8 @@ export type AdminLaunchGate = {
 };
 
 export type AdminLaunchReadinessResponse = {
+  release_ref: string;
+  environment: string;
   overall_status: "ready" | "conditional" | "blocked";
   blocker_count: number;
   warning_count: number;
@@ -248,12 +250,19 @@ export function fetchControlIntegrations(session: CustomerSession) {
   return request<AdminIntegrationStatusResponse>("/integrations", session);
 }
 
-export function fetchLaunchReadiness(session: CustomerSession) {
-  return request<AdminLaunchReadinessResponse>("/launch-readiness", session);
+export function fetchLaunchReadiness(
+  releaseRef: string,
+  session: CustomerSession,
+) {
+  return request<AdminLaunchReadinessResponse>(
+    `/launch-readiness${queryString({ release_ref: releaseRef })}`,
+    session,
+  );
 }
 
 export function updateLaunchGate(
   gateKey: string,
+  releaseRef: string,
   payload: {
     status: LaunchAcceptanceStatus;
     evidence_ref?: string | null;
@@ -262,7 +271,7 @@ export function updateLaunchGate(
   session: CustomerSession,
 ) {
   return request<AdminLaunchReadinessResponse>(
-    `/launch-readiness/${encodeURIComponent(gateKey)}`,
+    `/launch-readiness/${encodeURIComponent(gateKey)}${queryString({ release_ref: releaseRef })}`,
     session,
     {
       method: "PATCH",
