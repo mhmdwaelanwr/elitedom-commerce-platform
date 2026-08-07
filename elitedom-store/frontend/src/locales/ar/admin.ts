@@ -10,6 +10,7 @@ export const admin = {
   payments: "المدفوعات والاستردادات",
   suppliers: "الموردون وأوامر الشراء",
   integrations: "التكاملات والإعدادات",
+  launchReadiness: "جاهزية الإطلاق",
   staffAccess: "صلاحيات الموظفين",
   auditLog: "سجل التدقيق",
   activePermissions: "صلاحية فعالة",
