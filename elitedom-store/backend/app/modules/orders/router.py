@@ -314,6 +314,7 @@ async def cancel_order(
     order = await db.scalar(select(SaleOrder).where(SaleOrder.id == order_id))
     if order is None:
         raise ResourceNotFoundError("SaleOrder", order_id)
+    before = {"state": order.state, "payment_status": order.payment_status}
     privileged = order.partner_id != current_user["user_id"]
     if privileged:
         role, permissions = await AdminAccessService(db).require(
@@ -327,7 +328,7 @@ async def cancel_order(
             action="order.cancel",
             entity_type="order",
             entity_id=order_id,
-            before={"state": order.state, "payment_status": order.payment_status},
+            before=before,
             after={"reason": reason, "result": result},
             request=request,
         )
