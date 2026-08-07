@@ -18,6 +18,3 @@
 *.woff binary
 *.woff2 binary
 *.zip binary
-
-# Lockfiles and generated snapshots should not receive language heuristics.
-package-lock.json -diff
