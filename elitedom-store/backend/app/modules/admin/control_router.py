@@ -1,4 +1,4 @@
-"""Finance, procurement, integration, and safe runtime configuration admin routes."""
+"""Finance, procurement, integration, configuration, and launch-readiness admin routes."""
 
 from __future__ import annotations
 
@@ -12,6 +12,8 @@ from app.modules.admin.access import AdminPermission
 from app.modules.admin.access_service import AdminAccessService
 from app.modules.admin.control_schemas import (
     AdminIntegrationStatusResponse,
+    AdminLaunchGateUpdate,
+    AdminLaunchReadinessResponse,
     AdminPaymentAttemptListResponse,
     AdminPurchaseOrderListResponse,
     AdminPurchaseOrderSummary,
@@ -41,6 +43,9 @@ IntegrationViewer = Annotated[
 ]
 ConfigViewer = Annotated[
     dict, Depends(require_permission(AdminPermission.CONFIG_VIEW.value))
+]
+ConfigManager = Annotated[
+    dict, Depends(require_permission(AdminPermission.CONFIG_MANAGE.value))
 ]
 
 
@@ -168,3 +173,53 @@ async def get_admin_runtime_configuration(
     # Configuration is deployment-managed. The control plane exposes readiness
     # only and never returns secret values or supports in-app secret mutation.
     return AdminControlPlaneService(db).integration_status()
+
+
+@router.get("/launch-readiness", response_model=AdminLaunchReadinessResponse)
+async def get_admin_launch_readiness(
+    db: DatabaseSession,
+    current_user: ConfigViewer,
+    release_ref: str = Query(..., min_length=7, max_length=128),
+) -> AdminLaunchReadinessResponse:
+    return await AdminControlPlaneService(db).launch_readiness(
+        release_ref=release_ref,
+    )
+
+
+@router.patch(
+    "/launch-readiness/{gate_key}",
+    response_model=AdminLaunchReadinessResponse,
+)
+async def update_admin_launch_gate(
+    gate_key: str,
+    payload: AdminLaunchGateUpdate,
+    request: Request,
+    db: DatabaseSession,
+    current_user: ConfigManager,
+    release_ref: str = Query(..., min_length=7, max_length=128),
+) -> AdminLaunchReadinessResponse:
+    service = AdminControlPlaneService(db)
+    record, before = await service.update_launch_gate(
+        release_ref=release_ref,
+        gate_key=gate_key,
+        payload=payload,
+        verified_by=int(current_user["user_id"]),
+    )
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="launch.gate.update",
+        entity_type="launch_gate",
+        entity_id=gate_key,
+        before=before,
+        after={
+            "release_ref": record.release_ref,
+            "environment": record.environment,
+            "status": record.status,
+            "evidence_ref": record.evidence_ref,
+            "notes": record.notes,
+            "verified_by": record.verified_by,
+            "verified_at": record.verified_at,
+        },
+        request=request,
+    )
+    return await service.launch_readiness(release_ref=release_ref)

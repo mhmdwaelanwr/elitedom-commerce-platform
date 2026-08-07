@@ -1,4 +1,4 @@
-"""Persistence for staff permission overrides and immutable-style audit records."""
+"""Persistence for staff overrides, launch acceptance, and administrative audit records."""
 
 from __future__ import annotations
 
@@ -48,6 +48,59 @@ class StaffPermissionOverride(Base):
         ),
         CheckConstraint("effect IN ('allow', 'deny')", name="ck_staff_permission_override_effect"),
         Index("ix_staff_permission_override_partner", "partner_id"),
+    )
+
+
+class LaunchAcceptance(Base):
+    """Auditable operator sign-off scoped to one release candidate and environment."""
+
+    __tablename__ = "elitedom_launch_acceptance"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    release_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, server_default="pending"
+    )
+    evidence_ref: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    notes: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    verified_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("res_partner.id", ondelete="SET NULL"), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "release_ref",
+            "environment",
+            "key",
+            name="uq_launch_acceptance_release_environment_key",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'passed', 'failed', 'waived')",
+            name="ck_launch_acceptance_status",
+        ),
+        Index(
+            "ix_launch_acceptance_release_environment",
+            "release_ref",
+            "environment",
+        ),
+        Index(
+            "ix_launch_acceptance_status",
+            "release_ref",
+            "environment",
+            "status",
+        ),
+        Index("ix_launch_acceptance_verified", "verified_by", "verified_at"),
     )
 
 
