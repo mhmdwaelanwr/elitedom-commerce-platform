@@ -3,26 +3,28 @@ name: Repository Hygiene
 on:
   push:
     paths:
+      - ".editorconfig"
       - ".gitignore"
+      - "CONTRIBUTING.md"
       - "README.md"
+      - "docs/**"
       - ".github/workflows/repository-hygiene.yml"
       - "nextjs-ecommerce-template-main/**"
       - "elitedom-store/.gitignore"
-      - "elitedom-store/frontend/README.md"
       - "elitedom-store/frontend/public/**"
       - "elitedom-store/scripts/check_repository_hygiene.py"
-      - "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md"
   pull_request:
     paths:
+      - ".editorconfig"
       - ".gitignore"
+      - "CONTRIBUTING.md"
       - "README.md"
+      - "docs/**"
       - ".github/workflows/repository-hygiene.yml"
       - "nextjs-ecommerce-template-main/**"
       - "elitedom-store/.gitignore"
-      - "elitedom-store/frontend/README.md"
       - "elitedom-store/frontend/public/**"
       - "elitedom-store/scripts/check_repository_hygiene.py"
-      - "elitedom-store/docs/STAGE_1_CLEANUP_REPORT.md"
 
 permissions:
   contents: read
