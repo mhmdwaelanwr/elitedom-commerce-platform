@@ -15,6 +15,7 @@ export function StoreProductCard({ product, variant = "grid" }: StoreProductCard
   const available = product.stockQty > 0 || product.dropshipEnabled;
   const isSaved = wishlist.includes(product.id);
   const isList = variant === "list";
+  const productHref = `/products/${encodeURIComponent(product.slug ?? product.id)}`;
   const stockLabel = product.stockQty > 0
     ? `${product.stockQty} ${t("storefront", "inStock")}`
     : product.dropshipEnabled
@@ -39,7 +40,7 @@ export function StoreProductCard({ product, variant = "grid" }: StoreProductCard
       <Link
         aria-label={`${t("storefront", "details")}: ${product.name}`}
         className={`focus-ring relative block shrink-0 overflow-hidden bg-elevated ${isList ? "aspect-[16/10] sm:min-h-64 sm:w-64 sm:aspect-auto" : "aspect-square"}`}
-        href={`/products/${product.id}`}
+        href={productHref}
       >
         <Image
           alt={product.name}
@@ -58,7 +59,7 @@ export function StoreProductCard({ product, variant = "grid" }: StoreProductCard
         </div>
         <Link
           className={`focus-ring mt-2 rounded-md font-bold leading-6 text-foreground hover:text-primary ${isList ? "text-lg sm:text-xl" : "line-clamp-2 min-h-12 text-base"}`}
-          href={`/products/${product.id}`}
+          href={productHref}
         >
           {product.name}
         </Link>
@@ -79,7 +80,7 @@ export function StoreProductCard({ product, variant = "grid" }: StoreProductCard
           </div>
           <div className="flex items-center gap-2">
             {isList ? (
-              <Link className="focus-ring hidden rounded-md text-sm font-bold text-primary hover:brightness-110 sm:inline" href={`/products/${product.id}`}>
+              <Link className="focus-ring hidden rounded-md text-sm font-bold text-primary hover:brightness-110 sm:inline" href={productHref}>
                 {t("storefront", "details")}
               </Link>
             ) : null}
