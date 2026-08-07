@@ -1,0 +1,52 @@
+name: Launch Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      site_url:
+        description: Public HTTPS storefront origin, for example https://store.example.com
+        required: true
+        type: string
+      api_url:
+        description: Public HTTPS API origin, without /api/v1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  external-smoke:
+    name: External launch smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: ${{ inputs.site_url }}
+      API_URL: ${{ inputs.api_url }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Run public launch smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python elitedom-store/scripts/live_smoke.py \
+            --site-url "$SITE_URL" \
+            --api-url "$API_URL" \
+            | tee launch-smoke.json
+
+      - name: Preserve smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: launch-smoke-${{ github.run_id }}
+          path: launch-smoke.json
+          if-no-files-found: warn
+          retention-days: 30

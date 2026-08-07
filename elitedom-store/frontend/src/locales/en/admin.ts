@@ -10,6 +10,7 @@ export const admin = {
   payments: "Payments & refunds",
   suppliers: "Suppliers & POs",
   integrations: "Integrations & config",
+  launchReadiness: "Launch readiness",
   staffAccess: "Staff access",
   auditLog: "Audit log",
   activePermissions: "active permissions",

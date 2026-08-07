@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   AdminError,
@@ -55,6 +56,7 @@ export default function AdminIntegrationsPage() {
         cors: "مصادر CORS",
         proxies: "الوكلاء الموثوقون",
         media: "مسار الوسائط",
+        launch: "فتح بوابة جاهزية الإطلاق",
       }
     : {
         version: "Version",
@@ -64,6 +66,7 @@ export default function AdminIntegrationsPage() {
         cors: "CORS origins",
         proxies: "Trusted proxies",
         media: "Media path",
+        launch: "Open launch readiness gate",
       };
 
   return (
@@ -73,6 +76,11 @@ export default function AdminIntegrationsPage() {
         eyebrow={t("admin", "operations")}
         title={t("admin", "integrationsTitle")}
       />
+      <div className="mt-4 flex justify-end">
+        <Link className="button-primary" href="/admin/launch">
+          {labels.launch}
+        </Link>
+      </div>
       <div className="mt-7">
         {isLoading ? (
           <AdminLoading label={t("admin", "loadingAdminData")} />

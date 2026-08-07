@@ -1,4 +1,4 @@
-"""Contracts for finance, procurement, integration, and safe configuration control-plane views."""
+"""Contracts for finance, procurement, integration, configuration, and launch control-plane views."""
 
 from __future__ import annotations
 
@@ -101,6 +101,42 @@ class AdminRuntimeConfiguration(BaseModel):
 class AdminIntegrationStatusResponse(BaseModel):
     integrations: list[AdminIntegrationStatus]
     runtime: AdminRuntimeConfiguration
+
+
+LaunchAcceptanceStatus = Literal["pending", "passed", "failed", "waived"]
+LaunchGateResult = Literal["pass", "warn", "block"]
+LaunchOverallStatus = Literal["ready", "conditional", "blocked"]
+
+
+class AdminLaunchGateUpdate(BaseModel):
+    status: LaunchAcceptanceStatus
+    evidence_ref: str | None = Field(default=None, max_length=512)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class AdminLaunchGate(BaseModel):
+    key: str
+    label: str
+    category: str
+    source: Literal["configuration", "operator"]
+    required: bool
+    status: LaunchAcceptanceStatus | Literal["automatic"]
+    result: LaunchGateResult
+    detail: str
+    evidence_ref: str | None = None
+    notes: str | None = None
+    verified_by: int | None = None
+    verified_at: datetime | None = None
+
+
+class AdminLaunchReadinessResponse(BaseModel):
+    release_ref: str
+    environment: str
+    overall_status: LaunchOverallStatus
+    blocker_count: int
+    warning_count: int
+    generated_at: datetime
+    gates: list[AdminLaunchGate]
 
 
 class AdminSupplierSummary(BaseModel):
