@@ -19,7 +19,7 @@ def apply_authoritative_quantity_sync(
     source_quantity: int,
     source: str,
 ) -> tuple[int, int]:
-    """Project an absolute source quantity into available-to-sell safely."""
+    """Project a current Odoo physical-stock snapshot into availability."""
     if source_quantity < 0:
         raise ValueError("source_quantity must be non-negative")
 
@@ -29,63 +29,44 @@ def apply_authoritative_quantity_sync(
         .with_for_update()
     )
     previous_available = product.stock_qty
-    now = datetime.now(UTC)
-
-    if balance is None:
-        withheld = int(
-            db.scalar(
-                select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
-                    InventoryReservation.product_id == product.id,
-                    InventoryReservation.status.in_({RESERVED, CONSUMED_PENDING_SOURCE}),
-                )
+    snapshot_at = datetime.now(UTC)
+    reserved_quantity = int(
+        db.scalar(
+            select(func.coalesce(func.sum(InventoryReservation.quantity), 0)).where(
+                InventoryReservation.product_id == product.id,
+                InventoryReservation.status == RESERVED,
             )
-            or 0
         )
-        product.stock_qty = max(source_quantity - withheld, 0)
+        or 0
+    )
+    pending = list(
+        db.scalars(
+            select(InventoryReservation)
+            .where(
+                InventoryReservation.product_id == product.id,
+                InventoryReservation.status == CONSUMED_PENDING_SOURCE,
+            )
+            .with_for_update()
+        )
+    )
+    for reservation in pending:
+        reservation.status = CONSUMED
+        reservation.source_reconciled_quantity = reservation.quantity
+        reservation.source_reconciled_at = snapshot_at
+
+    product.stock_qty = max(source_quantity - reserved_quantity, 0)
+    if balance is None:
         db.add(
             InventorySourceBalance(
                 product_id=product.id,
                 source_on_hand_qty=source_quantity,
                 source=source,
-                source_updated_at=now,
+                source_updated_at=snapshot_at,
             )
         )
-        db.flush()
-        return previous_available, product.stock_qty
-
-    delta = source_quantity - balance.source_on_hand_qty
-    if delta < 0:
-        remaining_decrease = -delta
-        pending = list(
-            db.scalars(
-                select(InventoryReservation)
-                .where(
-                    InventoryReservation.product_id == product.id,
-                    InventoryReservation.status == CONSUMED_PENDING_SOURCE,
-                )
-                .order_by(InventoryReservation.consumed_at, InventoryReservation.id)
-                .with_for_update()
-            )
-        )
-        for reservation in pending:
-            unreconciled = reservation.quantity - reservation.source_reconciled_quantity
-            if unreconciled <= 0:
-                continue
-            applied = min(unreconciled, remaining_decrease)
-            reservation.source_reconciled_quantity += applied
-            remaining_decrease -= applied
-            if reservation.source_reconciled_quantity >= reservation.quantity:
-                reservation.status = CONSUMED
-                reservation.source_reconciled_at = now
-            if remaining_decrease == 0:
-                break
-        if remaining_decrease:
-            product.stock_qty = max(product.stock_qty - remaining_decrease, 0)
-    elif delta > 0:
-        product.stock_qty += delta
-
-    balance.source_on_hand_qty = source_quantity
-    balance.source = source
-    balance.source_updated_at = now
+    else:
+        balance.source_on_hand_qty = source_quantity
+        balance.source = source
+        balance.source_updated_at = snapshot_at
     db.flush()
     return previous_available, product.stock_qty
