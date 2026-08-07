@@ -3,12 +3,12 @@
 import { useEffect, useState } from "react";
 import { ProductSkeleton, ProductUnavailable } from "@/components/store/ProductDetailStates";
 import { ProductDetailView } from "@/components/store/ProductDetailView";
-import { fetchCatalog, fetchProduct } from "@/lib/api";
+import { fetchRichCatalog, fetchRichProduct } from "@/lib/catalog-api";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
 import type { Product } from "@/types/store";
 
 export function ProductDetail({ productId }: { productId: string }) {
-  const { t } = usePreferences();
+  const { locale, t } = usePreferences();
   const [product, setProduct] = useState<Product | null>(null);
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -22,7 +22,7 @@ export function ProductDetail({ productId }: { productId: string }) {
       setProduct(null);
       setRelatedProducts([]);
 
-      void fetchProduct(productId)
+      void fetchRichProduct(productId, locale)
         .then(async (nextProduct) => {
           if (!active) return;
           if (!nextProduct) {
@@ -32,12 +32,14 @@ export function ProductDetail({ productId }: { productId: string }) {
 
           setProduct(nextProduct);
           try {
-            const catalogue = await fetchCatalog();
+            const catalogue = await fetchRichCatalog({
+              locale,
+              category: nextProduct.category,
+              limit: 12,
+            });
             if (active) {
               setRelatedProducts(
-                catalogue
-                  .filter((item) => item.category === nextProduct.category && item.id !== nextProduct.id)
-                  .slice(0, 3),
+                catalogue.filter((item) => item.id !== nextProduct.id).slice(0, 3),
               );
             }
           } catch {
@@ -46,7 +48,11 @@ export function ProductDetail({ productId }: { productId: string }) {
         })
         .catch((requestError: unknown) => {
           if (!active) return;
-          setError(requestError instanceof Error ? requestError.message : t("storefront", "productLoadError"));
+          setError(
+            requestError instanceof Error
+              ? requestError.message
+              : t("storefront", "productLoadError"),
+          );
         })
         .finally(() => {
           if (active) setIsLoading(false);
@@ -57,12 +63,22 @@ export function ProductDetail({ productId }: { productId: string }) {
       active = false;
       window.clearTimeout(timer);
     };
-  }, [productId, t]);
+  }, [locale, productId, t]);
 
   if (isLoading) return <ProductSkeleton />;
   if (error || !product) {
-    return <ProductUnavailable message={error ?? t("storefront", "productNoLongerAvailable")} />;
+    return (
+      <ProductUnavailable
+        message={error ?? t("storefront", "productNoLongerAvailable")}
+      />
+    );
   }
 
-  return <ProductDetailView key={product.id} product={product} relatedProducts={relatedProducts} />;
+  return (
+    <ProductDetailView
+      key={`${product.id}-${locale}`}
+      product={product}
+      relatedProducts={relatedProducts}
+    />
+  );
 }
