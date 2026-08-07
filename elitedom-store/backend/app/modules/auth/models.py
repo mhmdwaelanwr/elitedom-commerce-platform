@@ -1,8 +1,8 @@
-"""Persistent authentication state for identities, sessions, and phone OTP."""
+"""Persistent authentication state for identities, sessions, phone OTP, and staff MFA."""
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -59,6 +59,7 @@ class AuthSession(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoke_reason: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    mfa_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     partner = relationship("Partner")
 
@@ -87,3 +88,29 @@ class OtpChallenge(Base):
     __table_args__ = (
         Index("ix_otp_challenge_mobile_created", "mobile", "created_at"),
     )
+
+
+class AdminMfaCredential(Base):
+    """Encrypted TOTP seed and single-use recovery-code hashes for one staff user."""
+
+    __tablename__ = "elitedom_admin_mfa_credential"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    partner_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("res_partner.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+    secret_ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    recovery_code_hashes: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    partner = relationship("Partner")
