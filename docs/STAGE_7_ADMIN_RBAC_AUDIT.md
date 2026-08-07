@@ -39,63 +39,45 @@ The final active `system_admin` cannot be demoted through the control plane. Sys
 
 ## Permission catalogue
 
-Permissions are explicit capabilities rather than UI sections. Current Stage 7 capabilities include:
+Permissions are explicit capabilities rather than UI sections. Stage 7 includes dashboard, order, catalogue, inventory, customer, support, RFQ, shipment, supplier, payment/refund, reporting, staff, audit, integration, and configuration capabilities with separate view/manage operations where appropriate.
 
-- dashboard view;
-- order view/manage;
-- catalogue view/manage/archive;
-- inventory view/adjust;
-- customer view;
-- support view/manage;
-- RFQ view/quote;
-- shipment view/dispatch;
-- supplier view/manage;
-- payment view/refund;
-- reporting view;
-- staff view/manage;
-- audit view;
-- integration view/manage;
-- configuration view/manage.
-
-The permission catalogue intentionally contains payment/refund, integration and configuration capabilities before every corresponding admin screen is promoted into this stage. This lets later control-plane screens use the same stable backend access vocabulary rather than adding another authorization mechanism.
+The permission vocabulary is shared by the main admin router and alternate operational API paths so a denied capability cannot be recovered by calling a compatibility endpoint directly.
 
 ## Alternate API paths
 
-Stage 7 does not protect only `/api/v1/admin/*`. Privileged compatibility and operational endpoints in orders, inventory, products, shipping, suppliers, reporting, warranty/RMA and B2B RFQs are moved to the same current-state permission checks where they can perform or expose staff-level actions.
+Stage 7 does not protect only `/api/v1/admin/*`. Privileged compatibility and operational endpoints in orders, inventory, products, payments, shipping, suppliers, reporting, warranty/RMA and B2B RFQs use the same current-state permission checks where they can perform or expose staff-level actions.
 
-Customer ownership behavior is preserved. For example, customers can still see and cancel their own eligible orders, while cross-customer operations require the appropriate current staff permission.
+Customer ownership behavior is preserved. Customers can still access eligible operations on their own resources, while cross-customer work requires the appropriate current staff permission.
 
 ## Audit trail
 
-`elitedom_admin_audit_log` is server-written in the same request transaction as the privileged business change. Records include:
-
-- persisted actor ID and role;
-- action;
-- entity type and identifier;
-- bounded before/after summaries where useful;
-- timestamp;
-- authenticated session ID when present;
-- request method/path;
-- direct request peer IP.
+`elitedom_admin_audit_log` is server-written in the same request transaction as the privileged business change. Records include persisted actor ID/role, action, entity type/identifier, bounded before/after summaries, timestamp, authenticated session ID when present, request method/path and direct request peer IP.
 
 Audit serialization redacts credential/payment-sensitive key names including passwords, tokens, secrets, signatures, authorization values, HMAC material, CVV/CVC, PAN/card-number fields and related values. Large/deep summaries are bounded rather than storing arbitrary request bodies.
 
-Stage 7 audits staff-access changes and important control-plane mutations including order state/cancellation, stock adjustments, catalogue mutations, shipment transitions, supplier/procurement changes, RMA reviews and staff-issued B2B actions.
+Stage 7 audits staff-access changes and important control-plane mutations including order state/cancellation, stock adjustments, catalogue mutations, shipment transitions, supplier/procurement changes, RMA reviews, staff-issued B2B actions and privileged refund requests.
 
 ## Staff access console
 
-The frontend admin shell resolves `/api/v1/admin/access/me` and renders navigation from the effective server permissions rather than a JavaScript role table.
-
-The Staff Access screen provides:
-
-- current staff accounts;
-- role selection;
-- effective permission visibility;
-- explicit default/allow/deny override selection;
-- confirmation before saving;
-- automatic session revocation after an access-policy change.
+The frontend admin shell resolves `/api/v1/admin/access/me` and renders navigation from the effective server permissions. The Staff Access screen provides current staff accounts, role selection, effective permission visibility, explicit default/allow/deny overrides, confirmation before saving, and automatic target-session revocation after an access-policy change.
 
 Legacy page-level role hints remain presentation-only for backward-compatible rendering; they are not an authorization boundary. Every protected API request is server-enforced.
+
+## Finance control plane
+
+The Payments & Refunds console provides provider-neutral payment-attempt visibility and refund-request visibility without exposing card credentials or provider secrets.
+
+Refund creation is protected by `payments.refund`, reuses the Stage 6 idempotent full-refund helper, validates that the order is paid/refund-requested and that the latest provider attempt is succeeded when present, and records privileged requests in the audit log. Creating a local refund request never claims the payment provider has completed the refund.
+
+## Supplier and procurement control plane
+
+The Suppliers & Purchase Orders console exposes verified supplier context, lead times, performance metrics and purchase-order state under `suppliers.view`. Mutating supplier/procurement compatibility endpoints require `suppliers.manage` and are audited.
+
+## Integration and configuration readiness
+
+The Integrations & Config console is read-only and intentionally exposes readiness signals rather than credential values. It reports configured/missing booleans for Odoo, Paymob, Google Sign-In, Apple Sign-In, Twilio OTP and transactional email, plus safe runtime facts such as environment, app version, metrics state and counts of host/CORS/proxy configuration.
+
+Secret values, API keys, HMAC values, JWT secrets and payment credentials are never returned by these endpoints. Deployment-managed secrets are not editable from the application admin console.
 
 ## Audit console
 
@@ -109,7 +91,11 @@ Alembic revision `0011_admin_rbac_audit` follows `0010_fulfillment_lifecycle` an
 - `elitedom_admin_audit_log`;
 - supporting uniqueness constraints and query indexes.
 
-The migration has a complete reverse path so the existing CI migration checks can continue validating fresh upgrade, latest downgrade/replay and full downgrade/replay.
+The migration has a complete reverse path so CI can validate fresh upgrade, latest downgrade/replay and full downgrade/replay.
+
+## Validation coverage
+
+Stage 7 integration coverage verifies that persisted roles beat stale privileged JWT claims, explicit deny overrides beat role defaults, staff access changes are audited, the final active system administrator cannot be demoted, finance APIs reject forged role claims, integration readiness does not return secret configuration fields, and admin full-refund requests are idempotent and audited.
 
 ## Deferred production hardening
 
