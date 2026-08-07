@@ -3,25 +3,31 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { StoreProductCard } from "@/components/store/StoreProductCard";
-import { fetchCatalog } from "@/lib/api";
+import { fetchRichCatalog } from "@/lib/catalog-api";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
 import type { Product } from "@/types/store";
 
 export function HomeCatalogSections() {
-  const { direction, t } = usePreferences();
+  const { direction, locale, t } = usePreferences();
   const [products, setProducts] = useState<Product[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    void fetchCatalog()
+    setLoading(true);
+    setError(null);
+    void fetchRichCatalog({ locale, limit: 24 })
       .then((result) => {
         if (active) setProducts(result);
       })
       .catch((reason: unknown) => {
         if (active) {
-          setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
+          setError(
+            reason instanceof Error
+              ? reason.message
+              : t("storefront", "catalogueLoadError"),
+          );
         }
       })
       .finally(() => {
@@ -30,7 +36,7 @@ export function HomeCatalogSections() {
     return () => {
       active = false;
     };
-  }, [t]);
+  }, [locale, t]);
 
   if (loading) {
     return (
@@ -78,6 +84,7 @@ export function HomeCatalogSections() {
   }
 
   const arrivals = products.slice(0, 4);
+  const featured = products.filter((product) => product.featured).slice(0, 4);
   const available = products
     .filter((product) => product.stockQty > 0 || product.dropshipEnabled)
     .slice(0, 4);
@@ -89,7 +96,7 @@ export function HomeCatalogSections() {
         arrow={arrow}
         eyebrow={t("storefront", "justLanded")}
         title={t("storefront", "newArrivals")}
-        products={arrivals}
+        products={featured.length > 0 ? featured : arrivals}
         viewAll={t("storefront", "viewAllProducts")}
       />
       <ProductSection
