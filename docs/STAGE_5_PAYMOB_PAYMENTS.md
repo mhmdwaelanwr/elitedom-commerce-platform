@@ -17,7 +17,7 @@ Replace new electronic checkout sessions with Paymob Intention API and Unified C
 - Payment failure releases local inventory exactly once.
 - Late payment success re-reserves local inventory before fulfillment.
 - Verified refund callbacks complete pending refund records without changing fulfillment stock.
-- A non-PII public status endpoint lets guest checkout return pages poll by payment-attempt ID plus order number.
+- A non-PII public status endpoint lets guest checkout return pages poll by the unguessable order reference created by the backend.
 
 ## Database migration
 
@@ -55,6 +55,7 @@ Paymob remains disabled until all required sandbox or production values are supp
 - Secret and HMAC keys never enter frontend responses.
 - The hosted checkout URL contains only Paymob's public key and per-attempt client secret.
 - Raw callback bodies and customer payment details are not persisted.
+- Phone-only accounts must provide a deliverable checkout email; their internal compatibility address is never sent to Paymob.
 
 ## Refund policy
 
@@ -78,6 +79,7 @@ The public Paymob documentation currently describes dashboard void operations bu
 - Integration ID mismatch is rejected.
 - Failed payment releases stock once.
 - Verified refund callback completes a pending refund.
+- Phone-only accounts use the checkout billing email instead of their internal compatibility email.
 - Frontend redirects to hosted checkout and never displays redirect success as confirmed payment.
 - Backend Ruff/pytest, migration replay, Odoo tests, frontend lint/type-check/build, and Compose validation are green.
 
