@@ -73,6 +73,7 @@ def main() -> int:
     except SyntaxError as exc:
         errors.append(f"live_smoke.py is not valid Python: {exc}")
     require("socket.getaddrinfo" in smoke_source, "Live smoke must resolve and reject private network targets.", errors)
+    require("_NoRedirectHandler" in smoke_source, "Live smoke must fail closed instead of following redirects.", errors)
     require("health/ready" in smoke_source, "Live smoke must verify dependency readiness.", errors)
     require("robots.txt" in smoke_source and "sitemap.xml" in smoke_source, "Live smoke must verify public SEO assets.", errors)
 
@@ -81,16 +82,22 @@ def main() -> int:
         require(marker in runbook, f"Go-live runbook is missing section: {marker}", errors)
 
     stage_doc = (ROOT / "docs/STAGE_10_UAT_GO_LIVE.md").read_text(encoding="utf-8")
-    for marker in ("Launch Control Plane", "UAT matrix", "External smoke", "Known live-provider gates"):
+    for marker in ("Launch Control Plane", "UAT matrix", "External smoke", "Known live-provider gates", "release reference"):
         require(marker in stage_doc, f"Stage 10 documentation is missing: {marker}", errors)
 
     migration = (STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py").read_text(encoding="utf-8")
     require('down_revision: str | None = "0013_staff_mfa"' in migration, "Launch migration must extend 0013_staff_mfa.", errors)
     require("def downgrade()" in migration, "Launch acceptance migration must remain reversible.", errors)
+    require("release_ref" in migration and "environment" in migration, "Launch acceptance persistence must be scoped by release and environment.", errors)
+    require("uq_launch_acceptance_release_environment_key" in migration, "Release-scoped launch evidence must be unique per gate.", errors)
+
+    launch_test = (STORE / "backend/app/tests/integration/test_stage10_launch_acceptance.py").read_text(encoding="utf-8")
+    require("test_launch_acceptance_does_not_carry_between_releases" in launch_test, "Backend coverage must prove evidence cannot carry between releases.", errors)
 
     launch_page = (STORE / "frontend/src/app/admin/launch/page.tsx").read_text(encoding="utf-8")
     require("config.manage" in launch_page, "Launch UI must preserve config.manage write boundary.", errors)
     require("evidence_ref" in launch_page, "Launch UI must capture evidence references.", errors)
+    require("releaseRef" in launch_page, "Launch UI must require an explicit release reference.", errors)
 
     if errors:
         for error in errors:
