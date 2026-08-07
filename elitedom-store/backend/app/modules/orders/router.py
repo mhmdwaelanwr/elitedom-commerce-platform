@@ -1,7 +1,6 @@
 """
 Elitedom Store — Orders Module Router
-Shopping cart, checkout, and order lifecycle management.
-Per FR-CART-001 to FR-ORD-004 and API_SPECIFICATION.md Section 4.
+Shopping cart, checkout, cancellation, and legacy order-state management.
 """
 
 from typing import Optional
@@ -14,6 +13,9 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models import Cart, SaleOrder
+from app.modules.fulfillment.cancellation import OrderCancellationService
+from app.modules.fulfillment.service import CONFIRMED, FulfillmentLifecycleService
+from app.modules.inventory.reservations import InventoryReservationService
 from app.modules.orders.schemas import (
     AddToCartRequest,
     CheckoutRequest,
@@ -26,7 +28,7 @@ from app.shared.exceptions import (
     InvalidCredentialsError,
     ResourceNotFoundError,
 )
-from app.shared.schemas import OrderState, UserRole
+from app.shared.schemas import OrderState, PaymentMethod, UserRole
 from app.shared.security import (
     decode_token,
     get_current_user,
@@ -48,12 +50,7 @@ def _is_adminish(role: str) -> bool:
 async def _get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
 ) -> Optional[dict]:
-    """Return a verified access-token subject when supplied, otherwise guest mode.
-
-    Cart and checkout endpoints are intentionally accessible to guests.  An
-    absent bearer token is therefore valid, while an invalid or refresh token
-    remains an authentication error rather than silently becoming a guest.
-    """
+    """Return a verified access-token subject when supplied, otherwise guest mode."""
     if credentials is None:
         return None
 
@@ -86,15 +83,9 @@ def _guest_session_id(session_id: Optional[str]) -> str:
 def _cart_owner(
     current_user: Optional[dict], session_id: Optional[str]
 ) -> tuple[Optional[int], Optional[str]]:
-    """Use JWT ownership for accounts and an explicit opaque id for guests."""
     if current_user is not None:
-        # Do not let an arbitrary session id switch an authenticated request
-        # into somebody else's guest cart.  Guest-cart adoption is /cart/sync.
         return current_user["user_id"], None
     return None, _guest_session_id(session_id)
-
-
-# ── Cart Endpoints ───────────────────────────────────────────────────────────
 
 
 @router.post("/cart/sync")
@@ -103,16 +94,11 @@ async def sync_cart(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """
-    Sync guest cart with authenticated user's persistent cart.
-    FR-CART-001: Persistent shopping cart for guests and registered users.
-    """
+    """Sync an explicitly identified guest cart into the authenticated cart."""
     partner_id = current_user["user_id"]
-
     session_id = (session_id or "").strip()
     if not session_id:
-        service = OrderService(db)
-        return await service.get_cart(partner_id=partner_id)
+        return await OrderService(db).get_cart(partner_id=partner_id)
 
     guest_query = (
         select(Cart)
@@ -124,14 +110,9 @@ async def sync_cart(
         )
     )
     guest_cart = (await db.execute(guest_query)).scalar_one_or_none()
-
     service = OrderService(db)
     user_cart = await service.get_cart(partner_id=partner_id)
-
-    if not guest_cart:
-        return user_cart
-
-    if user_cart.id == guest_cart.id:
+    if not guest_cart or user_cart.id == guest_cart.id:
         return user_cart
 
     user_cart_row = (
@@ -139,7 +120,6 @@ async def sync_cart(
             select(Cart).options(selectinload(Cart.items)).where(Cart.id == user_cart.id)
         )
     ).scalar_one()
-
     user_items_by_product = {item.product_id: item for item in user_cart_row.items}
     for guest_item in list(guest_cart.items):
         existing = user_items_by_product.get(guest_item.product_id)
@@ -161,10 +141,10 @@ async def get_cart(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """Get a JWT-owned cart or the cart belonging to an explicit guest session."""
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    service = OrderService(db)
-    return await service.get_cart(partner_id=partner_id, session_id=guest_session_id)
+    return await OrderService(db).get_cart(
+        partner_id=partner_id, session_id=guest_session_id
+    )
 
 
 @router.post("/cart/items")
@@ -174,10 +154,8 @@ async def add_to_cart(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """Add a product to the caller's JWT-owned or guest-session cart."""
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    service = OrderService(db)
-    return await service.add_to_cart(
+    return await OrderService(db).add_to_cart(
         request,
         partner_id=partner_id,
         session_id=guest_session_id,
@@ -192,10 +170,8 @@ async def update_cart_item(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """Update an item quantity while enforcing user/session cart ownership."""
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    service = OrderService(db)
-    return await service.update_cart_item(
+    return await OrderService(db).update_cart_item(
         item_id,
         request,
         partner_id=partner_id,
@@ -210,17 +186,12 @@ async def remove_from_cart(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """Remove an item while enforcing user/session cart ownership."""
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    service = OrderService(db)
-    return await service.remove_from_cart(
+    return await OrderService(db).remove_from_cart(
         item_id,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
-
-
-# ── Checkout Endpoints ───────────────────────────────────────────────────────
 
 
 @router.post("/checkout", status_code=201)
@@ -230,25 +201,20 @@ async def checkout(
     db: AsyncSession = Depends(get_db),
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
-    """
-    Submit checkout order.
-    FR-CART-002: Streamlined checkout with address, delivery, payment.
-    FR-CART-003: Stripe credit card + COD support.
-    FR-CART-004: Governorate-based shipping fee calculation.
-    """
-    # Query is the established cart API contract; support a payload session id
-    # as a compatibility fallback for API clients that cannot append a query.
+    """Submit checkout and durably snapshot the local stock reservation."""
     requested_session_id = session_id if session_id is not None else request.session_id
     partner_id, guest_session_id = _cart_owner(current_user, requested_session_id)
-    service = OrderService(db)
-    return await service.checkout(
+    response = await OrderService(db).checkout(
         request,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
-
-
-# ── Order Management Endpoints ───────────────────────────────────────────────
+    await InventoryReservationService(db).adopt_checkout_reservations(response.order.id)
+    lifecycle_service = FulfillmentLifecycleService(db)
+    await lifecycle_service.get(response.order.id)
+    if request.payment_method == PaymentMethod.COD:
+        await lifecycle_service.transition(response.order.id, CONFIRMED)
+    return response
 
 
 @router.get("")
@@ -259,16 +225,13 @@ async def list_orders(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """List orders for the current user (or all orders for admin)."""
     query = (
         select(SaleOrder)
         .options(selectinload(SaleOrder.order_lines))
         .order_by(SaleOrder.created_at.desc())
     )
-
     if not _is_adminish(current_user["role"]):
         query = query.where(SaleOrder.partner_id == current_user["user_id"])
-
     if status:
         query = query.where(SaleOrder.state == status)
 
@@ -277,13 +240,9 @@ async def list_orders(
         count_query = count_query.where(SaleOrder.partner_id == current_user["user_id"])
     if status:
         count_query = count_query.where(SaleOrder.state == status)
-
     total_count = len((await db.execute(count_query)).scalars().all())
     query = query.offset((page - 1) * limit).limit(limit)
-
-    result = await db.execute(query)
-    orders = result.scalars().all()
-
+    orders = (await db.execute(query)).scalars().all()
     return {
         "orders": [SaleOrderResponse.model_validate(order) for order in orders],
         "total_count": total_count,
@@ -298,19 +257,17 @@ async def get_order(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get order details including line items and tracking info."""
-    query = (
-        select(SaleOrder)
-        .options(selectinload(SaleOrder.order_lines))
-        .where(SaleOrder.id == order_id)
-    )
-    order = (await db.execute(query)).scalar_one_or_none()
+    order = (
+        await db.execute(
+            select(SaleOrder)
+            .options(selectinload(SaleOrder.order_lines))
+            .where(SaleOrder.id == order_id)
+        )
+    ).scalar_one_or_none()
     if not order:
         raise ResourceNotFoundError("SaleOrder", order_id)
-
     if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
         raise InsufficientPermissionsError()
-
     return SaleOrderResponse.model_validate(order)
 
 
@@ -321,28 +278,21 @@ async def update_order_status(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN)),
 ):
-    """
-    Update order status (admin/warehouse only).
-    FR-ORD-002: Status transitions per state machine.
-    """
-    service = OrderService(db)
-    return await service.update_order_state(order_id, target_state)
+    """Update the legacy Odoo-compatible state for controlled warehouse work."""
+    return await OrderService(db).update_order_state(order_id, target_state)
 
 
 @router.post("/{order_id}/cancel")
 async def cancel_order(
     order_id: int,
+    reason: str = Query(default="customer_request", min_length=3, max_length=255),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    """Cancel a pending order."""
-    query = select(SaleOrder).where(SaleOrder.id == order_id)
-    order = (await db.execute(query)).scalar_one_or_none()
-    if not order:
+    """Cancel only before shipment, releasing inventory and requesting refunds once."""
+    order = await db.scalar(select(SaleOrder).where(SaleOrder.id == order_id))
+    if order is None:
         raise ResourceNotFoundError("SaleOrder", order_id)
-
     if not _is_adminish(current_user["role"]) and order.partner_id != current_user["user_id"]:
         raise InsufficientPermissionsError()
-
-    service = OrderService(db)
-    return await service.update_order_state(order_id, OrderState.CANCEL)
+    return await OrderCancellationService(db).cancel(order_id, reason=reason)

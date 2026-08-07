@@ -21,6 +21,7 @@ from app.celery_app import celery_app
 from app.config import get_settings
 from app.integrations.odoo.client import odoo_client
 from app.models import Currency, CurrencyRate, ProductTemplate, SaleOrder
+from app.modules.inventory.source_sync import apply_authoritative_quantity_sync
 from app.shared.events import InventoryUpdated
 from app.shared.outbox import enqueue_domain_event_sync, request_outbox_dispatch
 
@@ -82,7 +83,7 @@ def _whole_stock_quantity(value: object) -> int:
 
 
 def _apply_inventory_page(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], int, int]:
-    """Apply one Odoo inventory page by SKU and return durable change events."""
+    """Apply one Odoo inventory page without erasing local reservations."""
     normalized_rows: list[tuple[str, int]] = []
     skipped = 0
     for row in rows:
@@ -108,22 +109,28 @@ def _apply_inventory_page(rows: list[dict[str, Any]]) -> tuple[list[dict[str, An
         }
         changes: list[dict[str, Any]] = []
         unchanged = 0
-        for sku, new_quantity in normalized_rows:
+        for sku, source_quantity in normalized_rows:
             product = products_by_sku.get(sku)
             if product is None:
                 logger.info("Odoo inventory SKU %s has no local catalog product", sku)
                 skipped += 1
                 continue
-            if product.stock_qty == new_quantity:
+
+            previous_quantity, new_quantity = apply_authoritative_quantity_sync(
+                db,
+                product=product,
+                source_quantity=source_quantity,
+                source="odoo_periodic_sync",
+            )
+            if previous_quantity == new_quantity:
                 unchanged += 1
                 continue
-            previous_quantity = product.stock_qty
-            product.stock_qty = new_quantity
             changes.append(
                 {
                     "product_id": product.id,
                     "sku": product.sku,
                     "previous_quantity": previous_quantity,
+                    "source_on_hand_quantity": source_quantity,
                     "new_quantity": new_quantity,
                     "source": "odoo_periodic_sync",
                 }
@@ -136,9 +143,6 @@ def _apply_inventory_page(rows: list[dict[str, Any]]) -> tuple[list[dict[str, An
                 source_context="odoo_periodic",
             )
 
-    # The outbox records were committed with the local stock changes.  Wake the
-    # dispatcher only after that commit; its scheduled sweep remains the safe
-    # fallback if Redis is unavailable at this instant.
     if changes:
         request_outbox_dispatch()
     return changes, unchanged, skipped
@@ -151,7 +155,7 @@ def _apply_inventory_page(rows: list[dict[str, Any]]) -> tuple[list[dict[str, An
     default_retry_delay=5,
 )
 def sync_inventory(self: Any) -> dict[str, Any]:
-    """Periodically mirror Odoo's SKU stock into local product inventory."""
+    """Periodically mirror Odoo stock into reservation-safe local availability."""
     if not _odoo_ready():
         return _skipped("sync_inventory")
 
