@@ -92,7 +92,7 @@ def unified_checkout_url(base_url: str, public_key: str, client_secret: str) -> 
 
 
 def _string_identifier(value: Any) -> str | None:
-    if isinstance(value, (str, int)) and str(value).strip():
+    if isinstance(value, str | int) and str(value).strip():
         return str(value)
     return None
 
