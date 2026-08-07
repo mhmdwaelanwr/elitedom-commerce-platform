@@ -247,11 +247,14 @@ async def _get_or_create_picking(
     if picking is not None:
         return picking
 
+    # New pickings start neutral and receive the trusted callback state below.
+    # This preserves the previous-state transition signal used to consume a
+    # local checkout reservation when the first callback we see is "shipped".
     picking = StockPicking(
         name=_picking_name(order, payload),
         sale_id=order.id,
         picking_type="dropship" if order.is_dropship else "outgoing",
-        state=PICKING_STATE_BY_ODOO_STATUS[payload.new_status],
+        state="draft",
     )
     db.add(picking)
     await db.flush()
