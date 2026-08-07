@@ -52,11 +52,14 @@ class StaffPermissionOverride(Base):
 
 
 class LaunchAcceptance(Base):
-    """Auditable operator sign-off for launch gates that cannot be inferred from config."""
+    """Auditable operator sign-off scoped to one release candidate and environment."""
 
     __tablename__ = "elitedom_launch_acceptance"
 
-    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    release_ref: Mapped[str] = mapped_column(String(128), nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    key: Mapped[str] = mapped_column(String(64), nullable=False)
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, server_default="pending"
     )
@@ -76,11 +79,27 @@ class LaunchAcceptance(Base):
     )
 
     __table_args__ = (
+        UniqueConstraint(
+            "release_ref",
+            "environment",
+            "key",
+            name="uq_launch_acceptance_release_environment_key",
+        ),
         CheckConstraint(
             "status IN ('pending', 'passed', 'failed', 'waived')",
             name="ck_launch_acceptance_status",
         ),
-        Index("ix_launch_acceptance_status", "status"),
+        Index(
+            "ix_launch_acceptance_release_environment",
+            "release_ref",
+            "environment",
+        ),
+        Index(
+            "ix_launch_acceptance_status",
+            "release_ref",
+            "environment",
+            "status",
+        ),
         Index("ix_launch_acceptance_verified", "verified_by", "verified_at"),
     )
 
