@@ -94,6 +94,8 @@ Safety/metadata controls include:
 - ordering and exactly one primary image when media order is replaced
 - duplicate image detection per product
 - path-safe local file deletion
+- transaction-aware filesystem cleanup: a newly uploaded object is removed if its database transaction rolls back, while a deleted image file is removed only after the database commit succeeds
+- post-commit local cleanup is best-effort so a filesystem issue cannot turn a durable database mutation into a false failed response
 
 The metadata boundary is provider-neutral so Stage 9 can move media behind object storage/CDN without changing product records.
 
@@ -159,6 +161,7 @@ The following are intentionally deferred to Stage 9 production hardening:
 
 - object storage/CDN provider configuration and lifecycle policy
 - image resizing/derivative generation pipeline
+- orphan-object janitor/retention policy for rare local cleanup failures
 - cache invalidation strategy at CDN scale
 - dedicated search index synchronization for the new flexible attribute model
 - structured-data/SEO production validation and performance budgets
