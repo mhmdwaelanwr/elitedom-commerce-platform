@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.modules.admin.access import AdminPermission
 from app.modules.admin.access_service import AdminAccessService
-from app.modules.products.catalog_media import delete_catalog_media_file, store_catalog_media
+from app.modules.products.catalog_media import store_catalog_media
 from app.modules.products.catalog_schemas import (
     CatalogAttributeDefinitionResponse,
     CatalogAttributeDefinitionUpsertRequest,
@@ -226,18 +226,15 @@ async def upload_product_media(
     is_primary: bool = Form(default=False),
 ) -> CatalogImageResponse:
     stored = await store_catalog_media(image, product_id)
-    try:
-        result = await CatalogContentService(db).add_media(
-            product_id,
-            stored,
-            alt_text=alt_text,
-            caption=caption,
-            caption_ar=caption_ar,
-            is_primary=is_primary,
-        )
-    except Exception:
-        delete_catalog_media_file(stored.url)
-        raise
+    db.info.setdefault("catalog_media_delete_on_rollback", []).append(stored.url)
+    result = await CatalogContentService(db).add_media(
+        product_id,
+        stored,
+        alt_text=alt_text,
+        caption=caption,
+        caption_ar=caption_ar,
+        is_primary=is_primary,
+    )
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="catalog.media.create",
@@ -289,7 +286,7 @@ async def delete_product_media(
     current_user: CatalogManager,
 ):
     url = await CatalogContentService(db).delete_media(product_id, image_id)
-    delete_catalog_media_file(url)
+    db.info.setdefault("catalog_media_delete_after_commit", []).append(url)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="catalog.media.delete",
