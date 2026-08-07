@@ -9,7 +9,7 @@ from app.models import PurchaseOrder, SaleOrder
 from app.modules.fulfillment.models import Shipment
 from app.modules.fulfillment.service import CANCELLED, FulfillmentLifecycleService
 from app.modules.inventory.reservations import InventoryReservationService
-from app.modules.payments.models import PaymentAttempt
+from app.modules.payments.models import PaymentAttempt, PaymentRefund
 from app.modules.payments.refunds import ensure_full_refund_request
 from app.shared.events import OrderCancelled
 from app.shared.exceptions import ResourceConflictError, ResourceNotFoundError
@@ -33,14 +33,15 @@ class OrderCancellationService:
         lifecycle_service = FulfillmentLifecycleService(self.db)
         lifecycle = await lifecycle_service.get(order.id, lock=True)
         if lifecycle.status == CANCELLED:
-            refund = await self._latest_attempt(order.id)
+            refund = await self._latest_refund(order.id)
             return {
                 "order_id": order.id,
                 "order_number": order.name,
                 "order_state": order.state,
                 "fulfillment_status": lifecycle.status,
                 "payment_status": order.payment_status,
-                "payment_attempt_id": refund.id if refund else None,
+                "refund_id": refund.id if refund else None,
+                "released_quantity": 0,
                 "cancelled": False,
             }
 
@@ -56,7 +57,9 @@ class OrderCancellationService:
             .all()
         )
         advanced_pos = [
-            po.po_number for po in purchase_orders if po.status in {"sent", "partial", "received"}
+            po.po_number
+            for po in purchase_orders
+            if po.status in {"sent", "partial", "received"}
         ]
         if advanced_pos:
             raise ResourceConflictError(
@@ -127,5 +130,13 @@ class OrderCancellationService:
             select(PaymentAttempt)
             .where(PaymentAttempt.order_id == order_id)
             .order_by(PaymentAttempt.created_at.desc())
+            .limit(1)
+        )
+
+    async def _latest_refund(self, order_id: int) -> PaymentRefund | None:
+        return await self.db.scalar(
+            select(PaymentRefund)
+            .where(PaymentRefund.order_id == order_id)
+            .order_by(PaymentRefund.created_at.desc())
             .limit(1)
         )
