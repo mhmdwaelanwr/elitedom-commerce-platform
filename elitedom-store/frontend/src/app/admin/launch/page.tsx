@@ -343,7 +343,7 @@ const englishCopy = {
   save: "Save acceptance",
   saving: "Saving…",
   automatic: "Automatic gate — derived from safe runtime configuration only.",
-} as const;
+};
 
 const arabicCopy: typeof englishCopy = {
   eyebrow: "عمليات الإصدار",
