@@ -41,10 +41,16 @@ encoded_bundle = "".join(fetch_text_blob(sha) for sha in BLOB_SHAS)
 compressed = base64.b64decode(encoded_bundle, validate=True)
 files: dict[str, str] = json.loads(lzma.decompress(compressed).decode("utf-8"))
 
+written = 0
 for relative_path, content in sorted(files.items()):
+    # GitHub's Actions token is intentionally not granted workflow-management
+    # permission. Workflow changes are applied separately by the GitHub connector.
+    if relative_path.startswith(".github/workflows/"):
+        continue
     destination = ROOT / relative_path
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(content, encoding="utf-8")
+    written += 1
 
 # Stage 0 and 1 belong to immutable delivery history alongside Stages 2-10.
 for relative_path in (
@@ -55,17 +61,14 @@ for relative_path in (
     if legacy.exists():
         legacy.unlink()
 
-# Bootstrap plumbing must never be part of the resulting enterprise repository.
-for relative_path in (
-    ".github/workflows/_docs-bootstrap.yml",
-    ".tmp/apply_docs_bundle.py",
-):
-    temporary = ROOT / relative_path
-    if temporary.exists():
-        temporary.unlink()
+# The script is bootstrap plumbing; the workflow is removed separately by the
+# GitHub connector after this validated commit reaches the feature branch.
+bootstrap_script = ROOT / ".tmp/apply_docs_bundle.py"
+if bootstrap_script.exists():
+    bootstrap_script.unlink()
 
 temporary_root = ROOT / ".tmp"
 if temporary_root.exists() and not any(temporary_root.iterdir()):
     temporary_root.rmdir()
 
-print(f"Applied {len(files)} generated repository files.")
+print(f"Applied {written} generated repository files; workflow files deferred.")
