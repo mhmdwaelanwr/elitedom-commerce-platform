@@ -29,6 +29,8 @@ _AUTH_LIMITS: tuple[tuple[str, int, int], ...] = (
     ("/api/v1/auth/refresh", 30, 60),
 )
 _memory_counts: dict[str, tuple[int, float]] = defaultdict(lambda: (0, 0.0))
+# Compatibility alias used by the existing test isolation fixture.
+_request_counts = _memory_counts
 _redis: Redis | None = None
 
 _REDIS_SCRIPT = """
