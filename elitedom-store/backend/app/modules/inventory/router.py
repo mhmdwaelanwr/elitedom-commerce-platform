@@ -2,10 +2,12 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.modules.admin.access import AdminPermission
+from app.modules.admin.access_service import AdminAccessService
 from app.modules.inventory.service import (
     BarcodeScanResponse,
     InventoryService,
@@ -14,43 +16,57 @@ from app.modules.inventory.service import (
     StockAdjustmentResponse,
     StockLevelResponse,
 )
-from app.shared.schemas import UserRole
-from app.shared.security import require_role
+from app.shared.security import require_permission
 
 router = APIRouter()
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
-InventoryManagerUser = Annotated[
-    dict, Depends(require_role(UserRole.INVENTORY_MANAGER, UserRole.SYSTEM_ADMIN))
+InventoryAdjuster = Annotated[
+    dict, Depends(require_permission(AdminPermission.INVENTORY_ADJUST.value))
 ]
-WarehouseUser = Annotated[
-    dict, Depends(require_role(UserRole.WAREHOUSE_OPERATOR, UserRole.SYSTEM_ADMIN))
+InventoryViewer = Annotated[
+    dict, Depends(require_permission(AdminPermission.INVENTORY_VIEW.value))
 ]
 
 
 @router.post("/adjust", response_model=StockAdjustmentResponse)
 async def adjust_stock(
-    request: StockAdjustmentRequest,
+    payload: StockAdjustmentRequest,
+    request: Request,
     db: DatabaseSession,
-    current_user: InventoryManagerUser,
+    current_user: InventoryAdjuster,
 ) -> StockAdjustmentResponse:
-    """Apply a validated manual stock delta (inventory manager/admin only)."""
-    return await InventoryService(db).adjust_stock(request)
+    """Apply a validated manual stock delta with a durable audit record."""
+    result = await InventoryService(db).adjust_stock(payload)
+    await AdminAccessService(db).record_audit(
+        actor=current_user,
+        action="inventory.stock.adjust",
+        entity_type="product",
+        entity_id=payload.sku,
+        before={"stock_qty": result.previous_stock_qty},
+        after={
+            "stock_qty": result.stock_qty,
+            "quantity_delta": result.quantity_delta,
+            "reason": payload.reason,
+        },
+        request=request,
+    )
+    return result
 
 
 @router.get("/serial/{serial_number}", response_model=SerialNumberResponse)
 async def lookup_serial(
     serial_number: str,
     db: DatabaseSession,
-    current_user: WarehouseUser,
+    current_user: InventoryViewer,
 ) -> SerialNumberResponse:
-    """Look up a warehouse serial number for fulfilment and warranty work."""
+    """Look up a warehouse serial number for authorised fulfilment and warranty work."""
     return await InventoryService(db).lookup_serial(serial_number)
 
 
 @router.get("/scan", response_model=BarcodeScanResponse)
 async def barcode_scan(
     db: DatabaseSession,
-    current_user: WarehouseUser,
+    current_user: InventoryViewer,
     barcode: str = Query(..., min_length=1, max_length=128),
 ) -> BarcodeScanResponse:
     """Resolve a scanned SKU/barcode from the local product catalogue."""
