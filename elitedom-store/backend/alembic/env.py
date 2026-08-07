@@ -12,6 +12,7 @@ from app.config import get_settings
 from app.database import Base
 from app.models import *  # noqa: F401,F403 — Import all core models for autogenerate
 from app.modules.auth.models import *  # noqa: F401,F403 — Import auth persistence models
+from app.modules.payments.models import *  # noqa: F401,F403 — Import payment persistence models
 
 # Alembic Config object
 config = context.config
@@ -49,6 +50,12 @@ def run_migrations_online() -> None:
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
+
+    with connectable.connect() as connection:
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+        )
 
     with connectable.connect() as connection:
         context.configure(
