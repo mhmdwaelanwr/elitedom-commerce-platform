@@ -1,14 +1,19 @@
-"""Authentication endpoints for password, phone OTP, OAuth, and sessions."""
+"""Authentication endpoints for password, phone OTP, OAuth, sessions, and staff MFA."""
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
+from app.modules.auth.mfa_service import AdminMfaService
 from app.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
     LogoutAllResponse,
+    MfaCodeRequest,
+    MfaEnrollmentConfirmResponse,
+    MfaEnrollmentResponse,
+    MfaStatusResponse,
     OAuthRequest,
     OtpChallengeResponse,
     OtpRequest,
@@ -62,11 +67,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
-async def register(
-    payload: RegisterRequest,
-    db: AsyncSession = Depends(get_db),
-):
-    """Register using email, password, and an Egyptian mobile number."""
+async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
     return await AuthService(db).register(payload)
 
 
@@ -77,7 +78,6 @@ async def login(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Authenticate with email/password and create a revocable session."""
     result = await _service(db, request).login(payload)
     _set_refresh_cookie(response, result.refresh_token)
     return result
@@ -89,7 +89,6 @@ async def request_phone_otp(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ):
-    """Send a six-digit, rate-limited login code to an Egyptian mobile."""
     return await _service(db, request).request_phone_otp(payload)
 
 
@@ -100,7 +99,6 @@ async def verify_phone_otp(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Consume a phone code and sign in or create the verified phone owner."""
     result = await _service(db, request).verify_phone_otp(payload)
     _set_refresh_cookie(response, result.refresh_token)
     return result
@@ -113,7 +111,6 @@ async def oauth_login(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Authenticate via a verified Google or Apple identity token."""
     result = await _service(db, request).oauth_login(payload)
     _set_refresh_cookie(response, result.refresh_token)
     return result
@@ -125,7 +122,6 @@ async def refresh_token(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
-    """Rotate the HttpOnly refresh cookie and return a short-lived access token."""
     token = request.cookies.get("refresh_token")
     if not token:
         raise InvalidCredentialsError()
@@ -134,13 +130,60 @@ async def refresh_token(
     return result
 
 
+@router.get("/mfa/status", response_model=MfaStatusResponse)
+async def mfa_status(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminMfaService(db).status(
+        partner_id=current_user["user_id"],
+        session_id=current_user.get("session_id"),
+    )
+
+
+@router.post("/mfa/enroll", response_model=MfaEnrollmentResponse)
+async def begin_mfa_enrollment(
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminMfaService(db).begin_enrollment(
+        partner_id=current_user["user_id"],
+        session_id=current_user.get("session_id"),
+    )
+
+
+@router.post("/mfa/confirm", response_model=MfaEnrollmentConfirmResponse)
+async def confirm_mfa_enrollment(
+    payload: MfaCodeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminMfaService(db).confirm_enrollment(
+        partner_id=current_user["user_id"],
+        session_id=current_user.get("session_id"),
+        code=payload.code,
+    )
+
+
+@router.post("/mfa/verify", response_model=MfaStatusResponse)
+async def verify_mfa(
+    payload: MfaCodeRequest,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await AdminMfaService(db).verify(
+        partner_id=current_user["user_id"],
+        session_id=current_user.get("session_id"),
+        code=payload.code,
+    )
+
+
 @router.get("/sessions", response_model=SessionListResponse)
 async def list_sessions(
     request: Request,
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """List active browser/device sessions for the authenticated account."""
     return await _service(db, request).list_sessions(
         partner_id=current_user["user_id"],
         current_session_id=current_user.get("session_id"),
@@ -155,7 +198,6 @@ async def revoke_session(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke one session owned by the authenticated account."""
     await _service(db, request).revoke_session(
         partner_id=current_user["user_id"],
         session_id=session_id,
@@ -172,7 +214,6 @@ async def logout_all(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke all device sessions for the authenticated account."""
     result = await _service(db, request).logout_all(partner_id=current_user["user_id"])
     _clear_refresh_cookie(response)
     return result
@@ -185,7 +226,6 @@ async def logout(
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke the current session and clear its refresh cookie."""
     await _service(db, request).logout(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
