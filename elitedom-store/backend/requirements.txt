@@ -23,7 +23,7 @@ passlib[bcrypt]==1.7.4
 
 # ── Background Tasks ────────────────────────────────────────────────────────
 celery[redis]==5.4.0
-redis==5.1.0
+redis==8.1.0
 
 # ── Third-Party Integrations ────────────────────────────────────────────────
 stripe==10.0.0
