@@ -17,10 +17,7 @@ export default defineConfig([
     ],
     languageOptions: {
       ecmaVersion: 2022,
-      globals: {
-        ...globals.browser,
-        process: "readonly",
-      },
+      globals: globals.browser,
     },
   },
 ]);
