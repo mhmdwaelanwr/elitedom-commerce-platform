@@ -78,11 +78,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }, [ready, session]);
 
   if (!ready) return <AdminBootScreen />;
-
-  if (!session || !isStaffRole(session.role)) {
-    return <RestrictedAdminAccess />;
-  }
-
+  if (!session || !isStaffRole(session.role)) return <RestrictedAdminAccess />;
   if (!access && !accessError) return <AdminBootScreen />;
   if (accessError || !access) return <RestrictedAdminAccess />;
 
@@ -106,53 +102,86 @@ export function AdminShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="admin-console mx-auto w-full max-w-[96rem] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="overflow-hidden rounded-[1.75rem] border border-border bg-surface shadow-2xl">
-        <div className="flex min-h-[calc(100vh-11rem)] flex-col lg:flex-row">
-          <aside className="border-b border-border bg-elevated lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-e">
-            <div className="flex items-center justify-between px-5 py-5 lg:block">
-              <Link className="focus-ring group inline-flex items-center gap-3" href="/admin">
-                <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary text-primary-contrast shadow-lg"><AdminIcon name="bolt" /></span>
-                <span>
-                  <span className="block text-sm font-black tracking-tight text-foreground">ELITEDOM</span>
-                  <span className="block text-[10px] font-bold uppercase tracking-[0.18em] text-primary">{t("admin", "operations")}</span>
+    <div className="admin-console min-h-[calc(100vh-9rem)] border-y border-border bg-background">
+      <div className="mx-auto flex w-full max-w-[112rem] flex-col lg:min-h-[calc(100vh-9rem)] lg:flex-row">
+        <aside className="border-b border-border bg-surface lg:w-[16rem] lg:shrink-0 lg:border-b-0 lg:border-e">
+          <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-4 lg:px-5">
+            <Link className="focus-ring group inline-flex items-center gap-3 rounded-lg" href="/admin">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-contrast shadow-sm"><AdminIcon name="bolt" /></span>
+              <span>
+                <span className="block text-sm font-black tracking-[-0.03em] text-foreground">ELITEDOM</span>
+                <span className="block text-[9px] font-black uppercase tracking-[0.14em] text-primary">{t("admin", "operations")}</span>
+              </span>
+            </Link>
+            <Link aria-label={t("admin", "returnToStore")} className="focus-ring grid h-9 w-9 place-items-center rounded-lg text-muted hover:bg-elevated hover:text-primary lg:hidden" href="/">
+              <StoreIcon direction={direction} />
+            </Link>
+          </div>
+
+          <nav aria-label={t("admin", "operations")} className="flex gap-1 overflow-x-auto px-3 py-3 lg:block lg:space-y-0.5 lg:overflow-visible lg:px-3 lg:py-4">
+            {visibleNavigation.map((item) => {
+              const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
+              return (
+                <Link
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "focus-ring inline-flex min-h-10 shrink-0 items-center gap-3 rounded-lg px-3 text-sm font-semibold transition lg:flex",
+                    active
+                      ? "bg-primary text-primary-contrast shadow-sm"
+                      : "text-muted hover:bg-elevated hover:text-foreground",
+                  )}
+                  href={item.href}
+                  key={item.href}
+                >
+                  <AdminIcon name={item.icon} />
+                  <span className="whitespace-nowrap">{t("admin", item.label)}</span>
+                </Link>
+              );
+            })}
+          </nav>
+
+          <div className="hidden border-t border-border p-3 lg:block">
+            <div className="rounded-lg bg-elevated/65 p-3">
+              <div className="flex items-center gap-2.5">
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface text-xs font-black text-primary shadow-sm">
+                  {(session.name ?? session.email ?? "E").slice(0, 1).toUpperCase()}
                 </span>
-              </Link>
-              <Link className="focus-ring text-xs font-bold text-muted hover:text-primary lg:mt-6 lg:inline-flex" href="/">
-                {direction === "rtl" ? "→" : "←"} {t("admin", "returnToStore")}
-              </Link>
-            </div>
-            <nav aria-label={t("admin", "operations")} className="flex gap-1 overflow-x-auto border-t border-border px-3 py-3 lg:block lg:space-y-1 lg:overflow-visible lg:border-t-0 lg:px-3 lg:py-0">
-              {visibleNavigation.map((item) => {
-                const active = item.href === "/admin" ? pathname === "/admin" : pathname.startsWith(item.href);
-                return (
-                  <Link aria-current={active ? "page" : undefined} className={cn("focus-ring inline-flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold transition lg:flex", active ? "bg-primary/15 text-primary" : "text-muted hover:bg-surface hover:text-foreground")} href={item.href} key={item.href}>
-                    <AdminIcon name={item.icon} />
-                    {t("admin", item.label)}
-                  </Link>
-                );
-              })}
-            </nav>
-            <div className="hidden border-t border-border p-4 lg:block">
-              <div className="rounded-2xl border border-border bg-surface p-3">
-                <p className="truncate text-sm font-bold text-foreground">{session.email}</p>
-                <p className="mt-1 text-xs font-medium text-muted">{humanize(access.role)}</p>
-                <p className="mt-1 text-[11px] text-muted">{access.permissions.length} {t("admin", "activePermissions")}</p>
-                <button className="focus-ring mt-3 text-xs font-bold text-primary hover:brightness-110 disabled:opacity-60" disabled={isSigningOut} onClick={signOut} type="button">
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-bold text-foreground">{session.name ?? session.email}</p>
+                  <p className="mt-0.5 truncate text-[10px] text-muted">{humanize(access.role)}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+                <span className="text-[10px] text-muted">{access.permissions.length} {t("admin", "activePermissions")}</span>
+                <button className="focus-ring rounded-md text-[11px] font-bold text-primary hover:brightness-110 disabled:opacity-60" disabled={isSigningOut} onClick={signOut} type="button">
                   {isSigningOut ? t("auth", "signingOut") : t("auth", "signOut")}
                 </button>
               </div>
             </div>
-          </aside>
-          <div className="min-w-0 flex-1 bg-background">
-            <div className="flex items-center justify-between border-b border-border px-5 py-3 sm:px-7 lg:hidden">
-              <p className="text-xs font-bold text-muted">{humanize(access.role)}</p>
-              <button className="focus-ring text-xs font-bold text-primary disabled:opacity-60" disabled={isSigningOut} onClick={signOut} type="button">
+            <Link className="focus-ring mt-2 flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-muted hover:bg-elevated hover:text-foreground" href="/">
+              <StoreIcon direction={direction} />
+              {t("admin", "returnToStore")}
+            </Link>
+          </div>
+        </aside>
+
+        <div className="min-w-0 flex-1">
+          <header className="flex min-h-14 items-center justify-between gap-4 border-b border-border bg-surface px-4 py-2.5 sm:px-6 lg:px-7">
+            <div className="min-w-0">
+              <p className="truncate text-xs font-bold text-foreground">{humanize(access.role)}</p>
+              <p className="mt-0.5 hidden text-[10px] text-muted sm:block">{access.permissions.length} {t("admin", "activePermissions")}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="hidden items-center gap-1.5 rounded-md border border-success/25 bg-success/5 px-2.5 py-1.5 text-[10px] font-bold text-success sm:inline-flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />API
+              </span>
+              <button className="focus-ring rounded-lg border border-border bg-surface px-3 py-2 text-xs font-bold text-primary shadow-sm disabled:opacity-60 lg:hidden" disabled={isSigningOut} onClick={signOut} type="button">
                 {isSigningOut ? t("auth", "signingOut") : t("auth", "signOut")}
               </button>
             </div>
-            <div className="p-5 sm:p-7">{children}</div>
-          </div>
+          </header>
+
+          <main className="p-4 sm:p-6 lg:p-7">{children}</main>
         </div>
       </div>
     </div>
@@ -162,13 +191,13 @@ export function AdminShell({ children }: { children: ReactNode }) {
 function RestrictedAdminAccess() {
   const { t } = usePreferences();
   return (
-    <div className="site-container grid min-h-[60vh] place-items-center py-10">
-      <section className="max-w-lg rounded-3xl border border-border bg-surface p-8 text-center shadow-2xl">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-2xl border border-danger/30 bg-danger/10 text-danger"><AdminIcon name="lock" /></div>
+    <div className="site-container grid min-h-[60vh] place-items-center py-12">
+      <section className="max-w-lg rounded-2xl border border-border bg-surface p-8 text-center shadow-sm">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-xl bg-danger/10 text-danger"><AdminIcon name="lock" /></span>
         <p className="section-kicker mt-6">{t("admin", "restrictedArea")}</p>
-        <h1 className="mt-2 text-2xl font-black text-foreground">{t("admin", "staffRequired")}</h1>
+        <h1 className="mt-2 text-2xl font-black tracking-tight text-foreground">{t("admin", "staffRequired")}</h1>
         <p className="mt-3 text-sm leading-6 text-muted">{t("admin", "restrictedDescription")}</p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
+        <div className="mt-6 flex flex-wrap justify-center gap-2">
           <Link className="button-primary" href="/signin?next=/admin">{t("auth", "signIn")}</Link>
           <Link className="button-secondary" href="/">{t("admin", "returnToStore")}</Link>
         </div>
@@ -180,8 +209,8 @@ function RestrictedAdminAccess() {
 function AdminBootScreen() {
   const { t } = usePreferences();
   return (
-    <div className="site-container grid min-h-[60vh] place-items-center py-10" aria-live="polite">
-      <div className="flex items-center gap-3 rounded-2xl border border-border bg-surface px-5 py-4 text-sm font-semibold text-muted">
+    <div className="site-container grid min-h-[60vh] place-items-center py-12" aria-live="polite">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-surface px-5 py-4 text-sm font-semibold text-muted shadow-sm">
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-e-transparent" />
         {t("admin", "checkingSession")}
       </div>
@@ -209,4 +238,8 @@ export function AdminIcon({ name }: { name: IconName }) {
     bolt: <path d="m13 2-9 12h7l-1 8 10-13h-7l0-7Z" />,
   };
   return <svg aria-hidden="true" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">{paths[name]}</svg>;
+}
+
+function StoreIcon({ direction }: { direction: "ltr" | "rtl" }) {
+  return <svg aria-hidden="true" className={direction === "rtl" ? "rotate-180" : ""} fill="none" height="16" viewBox="0 0 24 24" width="16"><path d="M19 12H5m5-5-5 5 5 5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
 }
