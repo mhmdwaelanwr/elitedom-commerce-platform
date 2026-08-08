@@ -23,9 +23,7 @@ export function HomeCatalogSections() {
           if (active) setProducts(result);
         })
         .catch((reason: unknown) => {
-          if (active) {
-            setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
-          }
+          if (active) setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
         })
         .finally(() => {
           if (active) setLoading(false);
@@ -38,17 +36,14 @@ export function HomeCatalogSections() {
     };
   }, [locale, t]);
 
-  if (loading) {
-    return <CatalogSkeleton label={t("storefront", "checkingAvailability")} />;
-  }
+  if (loading) return <CatalogSkeleton label={t("storefront", "checkingAvailability")} />;
 
   if (error) {
     return (
-      <section className="site-container py-10 sm:py-12">
-        <div className="commerce-panel mx-auto max-w-3xl p-7 text-center sm:p-9">
-          <span className="status-warning mx-auto grid h-10 w-10 place-items-center rounded-lg border text-sm font-black" aria-hidden="true">!</span>
-          <p className="section-kicker mt-4">{t("storefront", "liveCatalogueUnavailable")}</p>
-          <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground">{t("storefront", "reconnectingInventory")}</h2>
+      <section className="site-container py-14 sm:py-20">
+        <div className="mx-auto max-w-2xl rounded-[2rem] bg-elevated px-6 py-10 text-center sm:px-10">
+          <p className="section-kicker">{t("storefront", "liveCatalogueUnavailable")}</p>
+          <h2 className="mt-3 text-2xl font-bold tracking-[-0.03em] text-foreground">{t("storefront", "reconnectingInventory")}</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-muted">{error}</p>
           <Link className="button-primary mt-6" href="/shop">{t("storefront", "retryCatalogue")}</Link>
         </div>
@@ -58,10 +53,8 @@ export function HomeCatalogSections() {
 
   if (products.length === 0) {
     return (
-      <section className="site-container py-10 sm:py-12">
-        <div className="commerce-panel p-8 text-center text-sm text-muted">
-          {t("storefront", "noPublishedProducts")}
-        </div>
+      <section className="site-container py-14 sm:py-20">
+        <div className="rounded-[2rem] bg-elevated p-8 text-center text-sm text-muted">{t("storefront", "noPublishedProducts")}</div>
       </section>
     );
   }
@@ -83,10 +76,10 @@ export function HomeCatalogSections() {
       <ProductSection
         arrow={arrow}
         eyebrow={t("storefront", "readyToOrder")}
-        muted
         products={available.length > 0 ? available : arrivals}
         title={t("storefront", "availableNow")}
         viewAll={t("storefront", "viewAllProducts")}
+        tonal
       />
     </>
   );
@@ -98,29 +91,29 @@ function ProductSection({
   title,
   products,
   viewAll,
-  muted = false,
+  tonal = false,
 }: {
   arrow: string;
   eyebrow: string;
   title: string;
   products: Product[];
   viewAll: string;
-  muted?: boolean;
+  tonal?: boolean;
 }) {
   return (
-    <section className={muted ? "border-y border-border bg-elevated/55 py-10 sm:py-12" : "py-10 sm:py-12"}>
+    <section className={tonal ? "bg-surface py-14 sm:py-20" : "py-14 sm:py-20"}>
       <div className="site-container">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-5">
           <div>
             <p className="section-kicker">{eyebrow}</p>
-            <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground sm:text-3xl">{title}</h2>
+            <h2 className="mt-2 max-w-2xl text-3xl font-bold tracking-[-0.04em] text-foreground sm:text-4xl">{title}</h2>
           </div>
-          <Link className="focus-ring rounded-lg text-sm font-black text-primary hover:underline" href="/shop">
+          <Link className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-bold text-primary transition hover:bg-[var(--ds-primary-soft)]" href="/shop">
             {viewAll} <span aria-hidden="true">{arrow}</span>
           </Link>
         </div>
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {products.map((product) => <StoreProductCard key={product.id} product={product} />)}
+        <div className="mt-8 grid gap-x-5 gap-y-10 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((product) => <StoreProductCard context="home" key={product.id} product={product} />)}
         </div>
       </div>
     </section>
@@ -129,23 +122,19 @@ function ProductSection({
 
 function CatalogSkeleton({ label }: { label: string }) {
   return (
-    <section aria-busy="true" aria-label={label} className="site-container py-10 sm:py-12">
-      <div className="mb-6 flex items-end justify-between gap-4">
-        <div className="space-y-2">
-          <div className="h-3 w-24 animate-pulse rounded bg-elevated" />
-          <div className="h-8 w-64 max-w-[70vw] animate-pulse rounded bg-elevated" />
-        </div>
-        <div className="h-4 w-20 animate-pulse rounded bg-elevated" />
+    <section aria-busy="true" aria-label={label} className="site-container py-14 sm:py-20">
+      <div className="mb-8 space-y-3">
+        <div className="h-3 w-24 animate-pulse rounded-full bg-elevated" />
+        <div className="h-9 w-72 max-w-[70vw] animate-pulse rounded-full bg-elevated" />
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
-          <div className="commerce-card overflow-hidden" key={index}>
-            <div className="aspect-[4/3] animate-pulse bg-elevated" />
-            <div className="space-y-3 p-5">
-              <div className="h-3 w-20 animate-pulse rounded bg-elevated" />
-              <div className="h-5 w-full animate-pulse rounded bg-elevated" />
-              <div className="h-5 w-2/3 animate-pulse rounded bg-elevated" />
-              <div className="h-10 w-full animate-pulse rounded-lg bg-elevated" />
+          <div key={index}>
+            <div className="aspect-square animate-pulse rounded-[1.75rem] bg-elevated" />
+            <div className="mt-4 space-y-2 px-1">
+              <div className="h-3 w-20 animate-pulse rounded-full bg-elevated" />
+              <div className="h-5 w-full animate-pulse rounded-full bg-elevated" />
+              <div className="h-5 w-2/3 animate-pulse rounded-full bg-elevated" />
             </div>
           </div>
         ))}
