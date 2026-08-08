@@ -31,7 +31,7 @@ See `LICENSE` and `NOTICE` before contributing. A contribution must not copy sou
 ## Architectural boundaries
 
 - `elitedom-store/backend/` owns application APIs, business rules, persistence, provider adapters, workers, and migrations.
-- `elitedom-store/frontend/` owns browser UX and typed calls into backend contracts; it must not embed provider secrets or reimplement server-authoritative pricing/authorization.
+- `elitedom-store/frontend/` owns the React/Vite browser UX and typed calls into backend contracts; it must not embed provider secrets or reimplement server-authoritative pricing/authorization.
 - `elitedom-store/odoo/` owns the Odoo addon and outbound ERP events.
 - `elitedom-store/infrastructure/` owns Docker Compose topology and deployment scripts.
 - `elitedom-store/scripts/` owns deterministic repository/CI/launch validation tooling.
@@ -63,11 +63,13 @@ Schema migrations and ORM changes belong in the same PR.
 
 ## Frontend expectations
 
+- React 19 + TypeScript + Vite + React Router are the frontend runtime conventions.
 - Preserve English/Arabic, LTR/RTL, and light/dark/system preferences.
 - Preserve responsive, loading, empty, error, focus, and keyboard-accessible states.
+- Browser-visible configuration uses `VITE_*`; never place private provider credentials there.
 - Do not bypass typed backend adapters with provider-specific browser calls unless the architecture explicitly requires a public provider SDK.
-- `npm run lint`, type checking, design-system checks, and production build must pass.
-- npm with `package-lock.json` is the canonical frontend package-manager contract unless an intentional repository-wide decision changes it.
+- `npm run lint`, `npm run check:types`, design-system checks, and `npm run build` must pass.
+- The frontend currently uses npm installation from `package.json`; if a lockfile is regenerated, it must match the React/Vite dependency graph before CI is switched back to `npm ci`.
 
 ## Dependency maintenance
 
@@ -89,7 +91,7 @@ make verify-repo
 
 Then run the runtime checks applicable to the change, for example backend lint/tests, frontend verification/build, migration replay, Odoo validation/install tests, or Compose validation. CI remains authoritative for the required pull-request gate set.
 
-Use `make clean` to remove local containers/volumes and generated Python/Next.js/test artifacts when validating a clean developer state.
+Use `make clean` to remove local containers/volumes and generated Python/Vite/test artifacts when validating a clean developer state.
 
 ## Security
 
