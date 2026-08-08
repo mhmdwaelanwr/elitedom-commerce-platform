@@ -19,60 +19,66 @@ export default function HomePage() {
   };
 
   return (
-    <>
-      <section className="border-b border-border bg-background">
-        <div className="site-container py-5 sm:py-7 lg:py-8">
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1.7fr)_minmax(21rem,0.8fr)]">
-            <HeroCard arrow={arrow} />
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              <CampaignCard
-                action={t("storefront", "shopMobile")}
-                href="/shop?category=mobile"
-                image="/template/images/hero/hero-02.png"
-                kicker={t("storefront", "mobileWork")}
-                title={t("storefront", "portablePerformance")}
-                arrow={arrow}
-              />
-              <CampaignCard
-                action={t("storefront", "shopAudio")}
-                href="/shop?category=audio"
-                image="/template/images/hero/hero-03.png"
-                kicker={t("storefront", "focusedSound")}
-                title={t("storefront", "audioForEverything")}
-                arrow={arrow}
-              />
+    <main>
+      <section className="site-container pt-5 sm:pt-7 lg:pt-8">
+        <div className="hero-surface relative min-h-[34rem] overflow-hidden rounded-[2rem] px-6 py-10 sm:min-h-[38rem] sm:px-10 sm:py-14 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(24rem,1.1fr)] lg:items-center lg:px-14 xl:min-h-[42rem] xl:px-16">
+          <div className="relative z-10 max-w-2xl">
+            <p className="text-sm font-bold text-primary">{t("storefront", "heroEyebrow")}</p>
+            <h1 className="mt-4 max-w-2xl text-[2.65rem] font-bold leading-[0.98] tracking-[-0.055em] text-foreground sm:text-6xl lg:text-[4.25rem] xl:text-[4.8rem]">
+              {t("storefront", "heroTitleLead")} {t("storefront", "heroTitleAccent")}
+            </h1>
+            <p className="mt-6 max-w-xl text-base leading-7 text-muted sm:text-lg sm:leading-8">
+              {t("storefront", "heroDescription")}
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link className="button-primary" href="/shop">
+                {t("storefront", "shopNow")} <span aria-hidden="true">{arrow}</span>
+              </Link>
+              <Link className="button-secondary border-transparent bg-surface" href="/b2b">
+                {t("storefront", "businessQuote")}
+              </Link>
             </div>
+          </div>
+
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[48%] lg:inset-y-0 lg:start-auto lg:end-0 lg:h-auto lg:w-[54%]">
+            <div className="hero-accent-surface absolute bottom-[-10%] end-[-8%] h-[84%] w-[78%] rounded-[42%_58%_42%_58%/55%_45%_55%_45%]" aria-hidden="true" />
+            <Image
+              alt=""
+              aria-hidden="true"
+              className="relative z-10 object-contain object-bottom p-3 lg:p-8 xl:p-10"
+              fill
+              priority
+              sizes="(min-width: 1024px) 50vw, 100vw"
+              src="/template/images/hero/hero-01.png"
+            />
           </div>
         </div>
       </section>
 
-      <TrustStrip />
+      <section className="site-container py-12 sm:py-16">
+        <div className="flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <p className="text-sm font-bold text-primary">{t("storefront", "browseByDepartment")}</p>
+            <h2 className="mt-2 text-3xl font-bold tracking-[-0.04em] text-foreground sm:text-4xl">
+              {t("storefront", "departmentHeading")}
+            </h2>
+          </div>
+          <Link className="focus-ring inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-bold text-primary transition hover:bg-[var(--ds-primary-soft)]" href="/shop">
+            {t("storefront", "fullCatalogue")} <span aria-hidden="true">{arrow}</span>
+          </Link>
+        </div>
 
-      <section className="site-container py-10 sm:py-12">
-        <SectionHeading
-          action={t("storefront", "fullCatalogue")}
-          actionHref="/shop"
-          arrow={arrow}
-          eyebrow={t("storefront", "browseByDepartment")}
-          title={t("storefront", "departmentHeading")}
-        />
-        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {CATEGORIES.map((department) => (
+        <div className="mt-8 grid grid-cols-2 gap-x-3 gap-y-6 sm:grid-cols-3 lg:grid-cols-6">
+          {CATEGORIES.map((department, index) => (
             <Link
-              className="commerce-card commerce-card-hover group flex min-h-36 flex-col items-center justify-center gap-3 p-4 text-center"
+              className="focus-ring group flex min-w-0 flex-col items-center gap-3 rounded-[1.75rem] p-2 text-center transition hover:bg-surface"
               href={`/shop?category=${department.slug}`}
               key={department.slug}
             >
-              <span className="relative block h-20 w-20 overflow-hidden rounded-xl bg-elevated">
-                <Image
-                  alt=""
-                  className="object-contain p-2.5 transition duration-200 group-hover:scale-105"
-                  fill
-                  sizes="80px"
-                  src={department.image}
-                />
+              <span className={`relative block aspect-square w-full overflow-hidden rounded-[1.75rem] ${index % 2 === 0 ? "bg-elevated" : "tonal-surface"}`}>
+                <Image alt="" className="object-contain p-5 transition duration-300 group-hover:scale-[1.05] sm:p-6" fill sizes="(min-width: 1024px) 12vw, 45vw" src={department.image} />
               </span>
-              <span className="text-sm font-black text-foreground group-hover:text-primary">
+              <span className="truncate text-sm font-bold text-foreground group-hover:text-primary">
                 {departmentNames[department.slug] ?? department.name}
               </span>
             </Link>
@@ -80,267 +86,111 @@ export default function HomePage() {
         </div>
       </section>
 
+      <TrustRow />
+
       <HomeCatalogSections />
 
-      <section className="site-container py-10 sm:py-14">
-        <div className="grid gap-4 lg:grid-cols-[1.35fr_0.65fr]">
-          <Link
-            className="commerce-panel group relative min-h-[23rem] overflow-hidden p-7 sm:p-9"
-            href="/shop?category=computers"
-          >
-            <div className="relative z-10 max-w-md">
-              <p className="section-kicker">{t("storefront", "performanceSystems")}</p>
-              <h2 className="mt-3 max-w-sm text-3xl font-black leading-tight tracking-tight text-foreground sm:text-4xl">
-                {t("storefront", "performanceSystemsTitle")}
-              </h2>
-              <p className="mt-4 max-w-md text-sm leading-6 text-muted sm:text-base sm:leading-7">
-                {t("storefront", "performanceSystemsText")}
-              </p>
-              <span className="button-secondary mt-7">
-                {t("storefront", "shopNow")} <span aria-hidden="true">{arrow}</span>
-              </span>
-            </div>
-            <div className="absolute inset-y-0 end-0 hidden w-[48%] sm:block">
-              <Image
-                alt=""
-                className="object-contain object-bottom p-5 transition duration-300 group-hover:scale-[1.02]"
-                fill
-                sizes="(min-width: 1024px) 40vw, 50vw"
-                src="/template/images/promo/promo-01.png"
-              />
-            </div>
-          </Link>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-            <ServiceCard
-              action={`${t("storefront", "open")} ${arrow}`}
-              href="/b2b"
-              icon="business"
-              text={t("storefront", "equipTeamText")}
-              title={t("storefront", "equipTeam")}
-            />
-            <ServiceCard
-              action={`${t("storefront", "open")} ${arrow}`}
-              href="/warranty"
-              icon="shield"
-              text={t("storefront", "supportAfterCheckoutText")}
-              title={t("storefront", "supportAfterCheckout")}
-            />
-          </div>
-        </div>
-      </section>
-
-      <section className="border-y border-border bg-elevated/65">
-        <div className="site-container grid gap-7 py-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center sm:py-12">
-          <div>
-            <p className="section-kicker">{t("storefront", "customerPromise")}</p>
-            <h2 className="mt-3 max-w-md text-2xl font-black tracking-tight text-foreground sm:text-3xl">
-              {t("storefront", "supportAfterCheckout")}
+      <section className="site-container py-14 sm:py-20">
+        <div className="grid overflow-hidden rounded-[2rem] bg-surface lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+          <div className="flex flex-col justify-center px-7 py-10 sm:px-10 sm:py-14 lg:px-14">
+            <p className="text-sm font-bold text-primary">{t("storefront", "performanceSystems")}</p>
+            <h2 className="mt-3 max-w-lg text-3xl font-bold leading-tight tracking-[-0.045em] text-foreground sm:text-5xl">
+              {t("storefront", "performanceSystemsTitle")}
             </h2>
-            <p className="mt-3 max-w-lg text-sm leading-6 text-muted sm:text-base">
-              {t("storefront", "footerDescription")}
+            <p className="mt-5 max-w-lg text-sm leading-7 text-muted sm:text-base">
+              {t("storefront", "performanceSystemsText")}
             </p>
+            <Link className="button-primary mt-7 w-fit" href="/shop?category=computers">
+              {t("storefront", "shopNow")} <span aria-hidden="true">{arrow}</span>
+            </Link>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <PromiseItem icon="price" text={t("storefront", "clearPrices")} />
-            <PromiseItem icon="truck" text={t("storefront", "governorateDelivery")} />
-            <PromiseItem icon="shield" text={t("storefront", "digitalWarranty")} />
-            <PromiseItem icon="support" text={t("storefront", "technicalHelp")} />
+          <div className="product-canvas relative min-h-[22rem] sm:min-h-[30rem] lg:min-h-[34rem]">
+            <Image alt="" className="object-contain object-bottom p-6 sm:p-10" fill sizes="(min-width: 1024px) 55vw, 100vw" src="/template/images/promo/promo-01.png" />
           </div>
         </div>
       </section>
-    </>
+
+      <section className="site-container pb-16 sm:pb-24">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <ServiceTile
+            arrow={arrow}
+            href="/b2b"
+            label={t("storefront", "business")}
+            text={t("storefront", "equipTeamText")}
+            title={t("storefront", "equipTeam")}
+          />
+          <ServiceTile
+            arrow={arrow}
+            href="/warranty"
+            label={t("storefront", "warranty")}
+            text={t("storefront", "supportAfterCheckoutText")}
+            title={t("storefront", "supportAfterCheckout")}
+            tonal
+          />
+        </div>
+      </section>
+    </main>
   );
 }
 
-function HeroCard({ arrow }: { arrow: string }) {
+function TrustRow() {
   const { t } = usePreferences();
   return (
-    <div className="commerce-panel relative min-h-[34rem] overflow-hidden px-6 py-10 sm:px-10 sm:py-12 lg:min-h-[36rem] lg:px-12 lg:py-14">
-      <div className="relative z-10 max-w-2xl">
-        <div className="inline-flex items-center gap-2 rounded-full border border-border bg-elevated px-3 py-1.5 text-xs font-bold text-muted">
-          <span className="h-1.5 w-1.5 rounded-full bg-success" />
-          {t("storefront", "heroEyebrow")}
-        </div>
-        <h1 className="mt-5 max-w-2xl text-4xl font-black leading-[1.03] tracking-[-0.045em] text-foreground sm:text-5xl lg:text-[3.6rem]">
-          {t("storefront", "heroTitleLead")} {" "}
-          <span className="text-primary">{t("storefront", "heroTitleAccent")}</span>
-        </h1>
-        <p className="mt-5 max-w-xl text-base leading-7 text-muted lg:text-lg lg:leading-8">
-          {t("storefront", "heroDescription")}
-        </p>
-        <div className="mt-7 flex flex-wrap gap-3">
-          <Link className="button-primary" href="/shop">
-            {t("storefront", "shopNow")} <span aria-hidden="true">{arrow}</span>
-          </Link>
-          <Link className="button-secondary" href="/b2b">
-            {t("storefront", "businessQuote")}
-          </Link>
-        </div>
-        <dl className="mt-9 grid max-w-xl grid-cols-3 divide-x divide-border border-t border-border pt-5 rtl:divide-x-reverse">
-          <Metric label={t("storefront", "liveInventory")} value="Odoo" />
-          <Metric label={t("storefront", "vatIncluded")} value="14%" />
-          <Metric label={t("storefront", "fulfillment")} value={t("storefront", "localWarehouses")} />
-        </dl>
-      </div>
-      <Image
-        alt=""
-        aria-hidden="true"
-        className="pointer-events-none absolute bottom-0 end-[-2rem] hidden h-auto w-[42%] max-w-[31rem] object-contain drop-shadow-xl lg:block"
-        height={560}
-        priority
-        src="/template/images/hero/hero-01.png"
-        width={560}
-      />
-    </div>
-  );
-}
-
-function CampaignCard({
-  action,
-  href,
-  image,
-  kicker,
-  title,
-  arrow,
-}: {
-  action: string;
-  href: string;
-  image: string;
-  kicker: string;
-  title: string;
-  arrow: string;
-}) {
-  return (
-    <Link className="commerce-card commerce-card-hover group relative min-h-64 overflow-hidden p-6" href={href}>
-      <div className="relative z-10 max-w-[14rem]">
-        <p className="section-kicker">{kicker}</p>
-        <h2 className="mt-2 text-xl font-black leading-tight tracking-tight text-foreground sm:text-2xl">{title}</h2>
-        <span className="mt-5 inline-flex items-center gap-1 text-sm font-black text-primary">
-          {action} <span aria-hidden="true">{arrow}</span>
-        </span>
-      </div>
-      <Image
-        alt=""
-        className="absolute bottom-0 end-0 h-[62%] w-[48%] object-contain object-bottom p-2 transition duration-300 group-hover:scale-[1.03]"
-        fill
-        sizes="320px"
-        src={image}
-      />
-    </Link>
-  );
-}
-
-function TrustStrip() {
-  const { t } = usePreferences();
-  return (
-    <section className="border-b border-border bg-surface">
+    <section className="border-y border-border bg-surface">
       <div className="site-container grid divide-y divide-border sm:grid-cols-3 sm:divide-x sm:divide-y-0 rtl:sm:divide-x-reverse">
-        <TrustPoint detail={t("storefront", "freeShippingDetail")} icon="truck" title={t("storefront", "freeShipping")} />
-        <TrustPoint detail={t("storefront", "securePaymentsDetail")} icon="shield" title={t("storefront", "securePayments")} />
-        <TrustPoint detail={t("storefront", "verifiedWarrantyDetail")} icon="support" title={t("storefront", "verifiedWarranty")} />
+        <TrustPoint detail={t("storefront", "freeShippingDetail")} icon={<TruckIcon />} title={t("storefront", "freeShipping")} />
+        <TrustPoint detail={t("storefront", "securePaymentsDetail")} icon={<ShieldIcon />} title={t("storefront", "securePayments")} />
+        <TrustPoint detail={t("storefront", "verifiedWarrantyDetail")} icon={<SupportIcon />} title={t("storefront", "verifiedWarranty")} />
       </div>
     </section>
   );
 }
 
-function TrustPoint({ title, detail, icon }: { title: string; detail: string; icon: "truck" | "shield" | "support" }) {
+function TrustPoint({ title, detail, icon }: { title: string; detail: string; icon: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 px-4 py-4 sm:px-6">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-elevated text-primary">
-        <SimpleIcon icon={icon} />
-      </span>
+    <div className="flex items-start gap-3 px-2 py-6 sm:px-6 sm:py-7">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[var(--ds-primary-soft)] text-primary">{icon}</span>
       <div className="min-w-0">
-        <p className="text-sm font-black text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs leading-5 text-muted">{detail}</p>
+        <p className="text-sm font-bold text-foreground">{title}</p>
+        <p className="mt-1 text-xs leading-5 text-muted">{detail}</p>
       </div>
     </div>
   );
 }
 
-function SectionHeading({
-  action,
-  actionHref,
+function ServiceTile({
   arrow,
-  eyebrow,
-  title,
-}: {
-  action: string;
-  actionHref: string;
-  arrow: string;
-  eyebrow: string;
-  title: string;
-}) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-4">
-      <div>
-        <p className="section-kicker">{eyebrow}</p>
-        <h2 className="mt-2 text-2xl font-black tracking-tight text-foreground sm:text-3xl">{title}</h2>
-      </div>
-      <Link className="focus-ring rounded-lg text-sm font-black text-primary hover:underline" href={actionHref}>
-        {action} <span aria-hidden="true">{arrow}</span>
-      </Link>
-    </div>
-  );
-}
-
-function ServiceCard({
-  action,
   href,
-  icon,
+  label,
   text,
   title,
+  tonal = false,
 }: {
-  action: string;
+  arrow: string;
   href: string;
-  icon: "business" | "shield";
+  label: string;
   text: string;
   title: string;
+  tonal?: boolean;
 }) {
   return (
-    <Link className="commerce-card commerce-card-hover group flex min-h-44 flex-col p-6" href={href}>
-      <span className="grid h-10 w-10 place-items-center rounded-lg bg-elevated text-primary">
-        <SimpleIcon icon={icon} />
+    <Link className={`focus-ring group flex min-h-72 flex-col rounded-[2rem] p-7 transition sm:p-10 ${tonal ? "tonal-surface" : "hero-surface"}`} href={href}>
+      <p className="text-sm font-bold text-primary">{label}</p>
+      <h2 className="mt-3 max-w-md text-3xl font-bold tracking-[-0.04em] text-foreground sm:text-4xl">{title}</h2>
+      <p className="mt-4 max-w-lg text-sm leading-7 text-muted sm:text-base">{text}</p>
+      <span className="mt-auto pt-8 text-sm font-bold text-primary group-hover:underline">
+        {label} <span aria-hidden="true">{arrow}</span>
       </span>
-      <h3 className="mt-5 text-xl font-black tracking-tight text-foreground">{title}</h3>
-      <p className="mt-2 text-sm leading-6 text-muted">{text}</p>
-      <span className="mt-auto pt-5 text-sm font-black text-primary group-hover:underline">{action}</span>
     </Link>
   );
 }
 
-function PromiseItem({ icon, text }: { icon: "price" | "truck" | "shield" | "support"; text: string }) {
-  return (
-    <div className="commerce-card flex items-center gap-3 p-4">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-elevated text-primary">
-        <SimpleIcon icon={icon} />
-      </span>
-      <span className="text-sm font-bold leading-5 text-foreground">{text}</span>
-    </div>
-  );
+function TruckIcon() {
+  return <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /><circle cx="7" cy="18" r="2" stroke="currentColor" strokeWidth="1.8" /><circle cx="18" cy="18" r="2" stroke="currentColor" strokeWidth="1.8" /></svg>;
 }
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="px-3 first:ps-0 last:pe-0">
-      <dt className="text-[10px] font-bold uppercase tracking-wider text-muted">{label}</dt>
-      <dd className="mt-1 text-base font-black text-foreground sm:text-lg">{value}</dd>
-    </div>
-  );
+function ShieldIcon() {
+  return <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20"><path d="M12 3 20 6v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6l8-3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /><path d="m9 12 2 2 4-4" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
 }
-
-function SimpleIcon({ icon }: { icon: "truck" | "shield" | "support" | "business" | "price" }) {
-  if (icon === "truck") {
-    return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><path d="M3 6h11v10H3zM14 10h4l3 3v3h-7z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /><circle cx="7" cy="18" r="2" stroke="currentColor" strokeWidth="1.8" /><circle cx="18" cy="18" r="2" stroke="currentColor" strokeWidth="1.8" /></svg>;
-  }
-  if (icon === "shield") {
-    return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><path d="M12 3 20 6v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6l8-3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /><path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
-  }
-  if (icon === "support") {
-    return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><path d="M5 13v-2a7 7 0 0 1 14 0v2M5 13H3v5h4v-5H5Zm14 0h2v5h-4v-5h2ZM17 18c0 2-2 3-5 3" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
-  }
-  if (icon === "business") {
-    return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><path d="M4 21V5h10v16M14 9h6v12M8 9h2M8 13h2M8 17h2M17 13h1M17 17h1M2 21h20" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
-  }
-  return <svg aria-hidden="true" fill="none" height="19" viewBox="0 0 24 24" width="19"><path d="M4 7h16v10H4z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /><path d="M8 12h8M12 9v6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>;
+function SupportIcon() {
+  return <svg aria-hidden="true" fill="none" height="20" viewBox="0 0 24 24" width="20"><path d="M5 13v-2a7 7 0 0 1 14 0v2" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /><path d="M5 12H3v5h4v-5H5ZM19 12h2v5h-4v-5h2ZM17 19c-1.2 1-2.8 1.5-5 1.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
 }
