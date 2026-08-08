@@ -1,6 +1,6 @@
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/$/, "");
+import { clientEnv } from "@/lib/env";
+
+const API_BASE_URL = clientEnv.apiUrl;
 
 export type PublicPaymentStatus = {
   order_number: string;
