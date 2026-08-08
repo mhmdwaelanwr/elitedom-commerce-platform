@@ -31,7 +31,7 @@ REQUIRED_FILES = (
 
 REQUIRED_CI_MARKERS = (
     "Backend (Python 3.11)",
-    "Frontend (React 19 + Vite)",
+    "Frontend (Node 22)",
     "Odoo 17 addon install and tests",
     "PostgreSQL migration smoke test",
     "Validate Docker Compose",
