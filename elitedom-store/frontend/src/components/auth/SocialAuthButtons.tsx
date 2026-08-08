@@ -46,12 +46,7 @@ type Props = {
 const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
 const appleClientId = process.env.NEXT_PUBLIC_APPLE_CLIENT_ID ?? "";
 
-export function SocialAuthButtons({
-  continueWithApple,
-  onError,
-  onSession,
-  providerUnavailable,
-}: Props) {
+export function SocialAuthButtons({ continueWithApple, onError, onSession, providerUnavailable }: Props) {
   const googleButton = useRef<HTMLDivElement>(null);
   const [googleReady, setGoogleReady] = useState(false);
   const [appleReady, setAppleReady] = useState(false);
@@ -71,9 +66,7 @@ export function SocialAuthButtons({
         }
         void oauthLogin("google", response.credential)
           .then(onSession)
-          .catch((error: unknown) =>
-            onError(error instanceof Error ? error.message : providerUnavailable),
-          );
+          .catch((error: unknown) => onError(error instanceof Error ? error.message : providerUnavailable));
       },
     });
     googleButton.current.replaceChildren();
@@ -120,41 +113,34 @@ export function SocialAuthButtons({
 
   return (
     <div className="grid gap-3">
-      {googleClientId && (
+      {googleClientId ? (
         <>
-          <Script
-            onLoad={() => setGoogleReady(true)}
-            src="https://accounts.google.com/gsi/client"
-            strategy="afterInteractive"
-          />
-          <div className="flex min-h-11 justify-center overflow-hidden" ref={googleButton} />
+          <Script onLoad={() => setGoogleReady(true)} src="https://accounts.google.com/gsi/client" strategy="afterInteractive" />
+          <div className="flex min-h-11 justify-center overflow-hidden rounded-full" ref={googleButton} />
         </>
-      )}
+      ) : null}
 
-      {appleClientId && (
+      {appleClientId ? (
         <>
-          <Script
-            onLoad={() => setAppleReady(true)}
-            src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js"
-            strategy="afterInteractive"
-          />
-          <button
-            className="button-secondary w-full disabled:cursor-wait disabled:opacity-60"
-            disabled={!appleReady || isAppleLoading}
-            onClick={handleAppleSignIn}
-            type="button"
-          >
-            <span aria-hidden="true">●</span>
+          <Script onLoad={() => setAppleReady(true)} src="https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js" strategy="afterInteractive" />
+          <button className="button-secondary w-full disabled:cursor-wait disabled:opacity-60" disabled={!appleReady || isAppleLoading} onClick={handleAppleSignIn} type="button">
+            <AppleIcon />
             {isAppleLoading ? "…" : continueWithApple}
           </button>
         </>
-      )}
+      ) : null}
 
-      {!hasProvider && (
-        <p className="rounded-xl border border-border bg-elevated px-4 py-3 text-center text-xs leading-5 text-muted">
-          {providerUnavailable}
-        </p>
-      )}
+      {!hasProvider ? (
+        <p className="rounded-2xl bg-elevated px-4 py-3 text-center text-xs leading-5 text-muted">{providerUnavailable}</p>
+      ) : null}
     </div>
+  );
+}
+
+function AppleIcon() {
+  return (
+    <svg aria-hidden="true" fill="currentColor" height="18" viewBox="0 0 24 24" width="18">
+      <path d="M17.1 12.5c0-2 1.6-3 1.7-3.1-1-.1-2.1.6-2.6.6-.5 0-1.3-.6-2.2-.6-1.1 0-2.2.7-2.8 1.7-1.2 2.1-.3 5.2.9 6.9.6.8 1.2 1.7 2.1 1.7.8 0 1.2-.5 2.2-.5s1.3.5 2.2.5c.9 0 1.5-.8 2-1.6.7-.9.9-1.9 1-2-.1 0-2.5-1-2.5-3.6Zm-1.6-4c.5-.6.8-1.5.7-2.4-.8 0-1.7.5-2.2 1.1-.5.5-.9 1.4-.8 2.3.9.1 1.8-.4 2.3-1Z" />
+    </svg>
   );
 }
