@@ -221,7 +221,8 @@ jobs:
             --log-level=test
 
   frontend:
-    name: Frontend (React 19 + Vite)
+    # Keep the legacy protected-branch check name while the implementation is React/Vite.
+    name: Frontend (Node 22)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
@@ -243,13 +244,13 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
-      - name: Lint frontend
+      - name: Lint React/Vite frontend
         run: npm run lint
 
-      - name: Type-check frontend
+      - name: Type-check React/Vite frontend
         run: npm run check:types
 
-      - name: Build frontend
+      - name: Build React/Vite frontend
         run: npm run build
 
   compose:
