@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { type FormEvent, type ReactNode, useEffect, useMemo, useState } from "react";
 import { useStore } from "@/components/store/StoreProvider";
@@ -12,7 +13,7 @@ import {
 import { GOVERNORATES, getCheckoutTotals } from "@/lib/checkout";
 import { formatPrice } from "@/lib/format";
 import { usePreferences } from "@/providers/AppPreferencesProvider";
-import type { CheckoutDetails, CheckoutResult, Currency } from "@/types/store";
+import type { CartItem, CheckoutDetails, CheckoutResult, Currency } from "@/types/store";
 
 const PAYMENT_ORDER_STORAGE_KEY = "elitedom:last-payment-order";
 
@@ -65,7 +66,9 @@ export default function CheckoutPage() {
         address.address_line_2,
         address.city,
         address.country,
-      ].filter(Boolean).join(", "),
+      ]
+        .filter(Boolean)
+        .join(", "),
       governorate: address.governorate,
     }));
   }
@@ -112,21 +115,28 @@ export default function CheckoutPage() {
 
   if (cart.length === 0) {
     return (
-      <div className="site-container grid min-h-[55vh] place-items-center py-12 text-center">
-        <div>
-          <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-elevated text-3xl text-primary">✓</div>
-          <h1 className="mt-4 text-3xl font-black text-foreground">{t("checkout", "emptyCartTitle")}</h1>
-          <p className="mt-3 text-sm text-muted">{t("checkout", "emptyCartText")}</p>
-          <Link className="button-primary mt-6" href="/shop">
+      <div className="site-container grid min-h-[64vh] place-items-center py-14 text-center">
+        <section className="w-full max-w-lg">
+          <span className="mx-auto grid h-20 w-20 place-items-center rounded-2xl border border-border bg-surface text-primary shadow-sm">
+            <CartCheckIcon />
+          </span>
+          <p className="section-kicker mt-7">{t("checkout", "eyebrow")}</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
+            {t("checkout", "emptyCartTitle")}
+          </h1>
+          <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-muted sm:text-base">
+            {t("checkout", "emptyCartText")}
+          </p>
+          <Link className="button-primary mt-7" href="/shop">
             {t("checkout", "browseProducts")}
           </Link>
-        </div>
+        </section>
       </div>
     );
   }
 
   return (
-    <div className="site-container py-8 sm:py-12">
+    <div className="site-container py-7 sm:py-10 lg:py-12">
       <nav aria-label="Breadcrumb" className="flex items-center gap-2 text-sm text-muted">
         <Link className="focus-ring rounded-md hover:text-foreground" href="/">
           {t("storefront", "home")}
@@ -139,149 +149,180 @@ export default function CheckoutPage() {
         <span className="text-foreground">{t("checkout", "title")}</span>
       </nav>
 
-      <div className="mt-6">
-        <p className="section-kicker">{t("checkout", "eyebrow")}</p>
-        <h1 className="mt-2 text-3xl font-black text-foreground">{t("checkout", "pageTitle")}</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{t("checkout", "description")}</p>
-      </div>
+      <header className="mt-6 max-w-3xl">
+        <div className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-[0.12em] text-primary">
+          <LockIcon />
+          {t("checkout", "eyebrow")}
+        </div>
+        <h1 className="mt-3 text-3xl font-black tracking-tight text-foreground sm:text-4xl">
+          {t("checkout", "pageTitle")}
+        </h1>
+        <p className="mt-3 max-w-2xl text-sm leading-6 text-muted sm:text-base">
+          {t("checkout", "description")}
+        </p>
+      </header>
 
       <CheckoutSteps />
 
       {!session && (
-        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/30 bg-primary/10 p-4 text-sm text-foreground">
-          <span>{t("checkout", "guestCheckout")}</span>
-          <Link className="button-secondary px-4 py-2" href="/signin?next=/checkout">
+        <div className="mt-6 flex flex-col gap-4 rounded-xl border border-border bg-surface px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 shrink-0 text-primary"><UserIcon /></span>
+            <p className="max-w-2xl text-sm leading-6 text-muted">{t("checkout", "guestCheckout")}</p>
+          </div>
+          <Link className="button-secondary shrink-0 px-4 py-2.5" href="/signin?next=/checkout">
             {t("checkout", "signIn")}
           </Link>
         </div>
       )}
 
-      <form className="mt-8 grid gap-7 lg:grid-cols-[minmax(0,1fr)_22rem]" onSubmit={handleSubmit}>
-        <section className="rounded-2xl border border-border bg-surface p-5 sm:p-7">
-          <h2 className="text-xl font-black text-foreground">{t("checkout", "shippingDetails")}</h2>
+      <form className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_24rem] xl:gap-10" onSubmit={handleSubmit}>
+        <div className="grid min-w-0 gap-5">
+          <CheckoutPanel
+            icon={<LocationIcon />}
+            number="01"
+            title={t("checkout", "shippingDetails")}
+          >
+            {session && savedAddresses.length > 0 && (
+              <div className="mb-6 rounded-xl border border-border bg-elevated p-4">
+                <Field label={t("checkout", "useSavedAddress")} noMargin>
+                  <select
+                    className="form-input"
+                    defaultValue=""
+                    onChange={(event) => selectSavedAddress(event.target.value)}
+                  >
+                    <option disabled value="">
+                      {t("checkout", "selectAddress")}
+                    </option>
+                    {savedAddresses.map((address) => (
+                      <option key={address.id} value={address.id}>
+                        {address.label}
+                        {address.is_default ? ` (${t("checkout", "defaultAddress")})` : ""} · {address.city}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+            )}
 
-          {session && savedAddresses.length > 0 && (
-            <Field label={t("checkout", "useSavedAddress")}>
-              <select className="form-input" defaultValue="" onChange={(event) => selectSavedAddress(event.target.value)}>
-                <option disabled value="">{t("checkout", "selectAddress")}</option>
-                {savedAddresses.map((address) => (
-                  <option key={address.id} value={address.id}>
-                    {address.label}{address.is_default ? ` (${t("checkout", "defaultAddress")})` : ""} · {address.city}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-
-          <div className="mt-6 grid gap-5 sm:grid-cols-2">
-            <Field label={t("checkout", "fullName")}>
-              <input
-                autoComplete="name"
-                className="form-input"
-                onChange={(event) => update("fullName", event.target.value)}
-                required
-                value={form.fullName}
-              />
-            </Field>
-            <Field label={t("checkout", "email")}>
-              <input
-                autoComplete="email"
-                className="form-input"
-                onChange={(event) => update("email", event.target.value)}
-                required
-                type="email"
-                value={form.email}
-              />
-            </Field>
-            <Field label={t("checkout", "mobileNumber")}>
-              <input
-                autoComplete="tel"
-                className="form-input"
-                onChange={(event) => update("phone", event.target.value)}
-                required
-                type="tel"
-                value={form.phone}
-              />
-            </Field>
-            <Field label={t("checkout", "governorate")}>
-              <select
-                className="form-input"
-                onChange={(event) => update("governorate", event.target.value)}
-                value={form.governorate}
-              >
-                {GOVERNORATES.map((governorate) => <option key={governorate}>{governorate}</option>)}
-              </select>
-            </Field>
-          </div>
-
-          <Field label={t("checkout", "fullDeliveryAddress")}>
-            <textarea
-              autoComplete="street-address"
-              className="form-input min-h-28 resize-y"
-              onChange={(event) => update("shippingAddress", event.target.value)}
-              placeholder={t("checkout", "addressPlaceholder")}
-              required
-              value={form.shippingAddress}
-            />
-          </Field>
-
-          <fieldset className="mt-6">
-            <legend className="text-sm font-semibold text-foreground">{t("checkout", "paymentMethod")}</legend>
-            <div className="mt-3 grid gap-3 sm:grid-cols-3">
-              <PaymentOption
-                checked={form.paymentMethod === "credit_card"}
-                label={t("checkout", "cardPayment")}
-                onChange={() => update("paymentMethod", "credit_card")}
-                value="💳"
-              />
-              <PaymentOption
-                checked={form.paymentMethod === "instapay"}
-                label={t("checkout", "walletPayment")}
-                onChange={() => update("paymentMethod", "instapay")}
-                value="📱"
-              />
-              <PaymentOption
-                checked={form.paymentMethod === "cash_on_delivery"}
-                label={t("checkout", "cashOnDelivery")}
-                onChange={() => update("paymentMethod", "cash_on_delivery")}
-                value="💵"
-              />
+            <div className="grid gap-x-4 sm:grid-cols-2">
+              <Field label={t("checkout", "fullName")}>
+                <input
+                  autoComplete="name"
+                  className="form-input"
+                  onChange={(event) => update("fullName", event.target.value)}
+                  required
+                  value={form.fullName}
+                />
+              </Field>
+              <Field label={t("checkout", "email")}>
+                <input
+                  autoComplete="email"
+                  className="form-input"
+                  onChange={(event) => update("email", event.target.value)}
+                  required
+                  type="email"
+                  value={form.email}
+                />
+              </Field>
+              <Field label={t("checkout", "mobileNumber")}>
+                <input
+                  autoComplete="tel"
+                  className="form-input"
+                  onChange={(event) => update("phone", event.target.value)}
+                  required
+                  type="tel"
+                  value={form.phone}
+                />
+              </Field>
+              <Field label={t("checkout", "governorate")}>
+                <select
+                  className="form-input"
+                  onChange={(event) => update("governorate", event.target.value)}
+                  value={form.governorate}
+                >
+                  {GOVERNORATES.map((governorate) => (
+                    <option key={governorate}>{governorate}</option>
+                  ))}
+                </select>
+              </Field>
             </div>
-          </fieldset>
 
-          <Field label={t("checkout", "orderNotes")}>
+            <Field label={t("checkout", "fullDeliveryAddress")}>
+              <textarea
+                autoComplete="street-address"
+                className="form-input min-h-28 resize-y"
+                onChange={(event) => update("shippingAddress", event.target.value)}
+                placeholder={t("checkout", "addressPlaceholder")}
+                required
+                value={form.shippingAddress}
+              />
+            </Field>
+          </CheckoutPanel>
+
+          <CheckoutPanel icon={<CardIcon />} number="02" title={t("checkout", "paymentMethod")}>
+            <fieldset>
+              <legend className="sr-only">{t("checkout", "paymentMethod")}</legend>
+              <div className="grid gap-3 sm:grid-cols-3">
+                <PaymentOption
+                  checked={form.paymentMethod === "credit_card"}
+                  icon={<CardIcon />}
+                  label={t("checkout", "cardPayment")}
+                  meta="Paymob"
+                  onChange={() => update("paymentMethod", "credit_card")}
+                />
+                <PaymentOption
+                  checked={form.paymentMethod === "instapay"}
+                  icon={<PhoneIcon />}
+                  label={t("checkout", "walletPayment")}
+                  meta="Paymob"
+                  onChange={() => update("paymentMethod", "instapay")}
+                />
+                <PaymentOption
+                  checked={form.paymentMethod === "cash_on_delivery"}
+                  icon={<CashIcon />}
+                  label={t("checkout", "cashOnDelivery")}
+                  meta="Elitedom"
+                  onChange={() => update("paymentMethod", "cash_on_delivery")}
+                />
+              </div>
+            </fieldset>
+
+            {session && (
+              <label className="mt-5 flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-elevated p-4 text-sm text-muted transition hover:border-primary/35">
+                <input
+                  checked={form.useLoyaltyPoints}
+                  className="mt-1 h-4 w-4 accent-primary"
+                  onChange={(event) => update("useLoyaltyPoints", event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong className="font-black text-foreground">{t("checkout", "loyaltyTitle")}</strong>
+                  <span className="mt-1 block text-xs leading-5">{t("checkout", "loyaltyText")}</span>
+                </span>
+              </label>
+            )}
+          </CheckoutPanel>
+
+          <CheckoutPanel icon={<NoteIcon />} number="03" title={t("checkout", "orderNotes")}>
             <textarea
               className="form-input min-h-24 resize-y"
               onChange={(event) => update("notes", event.target.value)}
               placeholder={t("checkout", "notesPlaceholder")}
               value={form.notes}
             />
-          </Field>
-
-          {session && (
-            <label className="mt-5 flex items-start gap-3 rounded-xl border border-border bg-elevated p-4 text-sm text-muted">
-              <input
-                checked={form.useLoyaltyPoints}
-                className="mt-0.5 h-4 w-4 accent-primary"
-                onChange={(event) => update("useLoyaltyPoints", event.target.checked)}
-                type="checkbox"
-              />
-              <span>
-                <strong className="text-foreground">{t("checkout", "loyaltyTitle")}</strong>
-                <br />
-                <span className="text-xs leading-5">{t("checkout", "loyaltyText")}</span>
-              </span>
-            </label>
-          )}
+          </CheckoutPanel>
 
           {error && (
-            <p className="mt-5 rounded-xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger" role="alert">
-              {error}
-            </p>
+            <div className="flex items-start gap-3 rounded-xl border border-danger/35 bg-danger/10 px-4 py-3.5 text-sm text-danger" role="alert">
+              <span className="mt-0.5 shrink-0"><AlertIcon /></span>
+              <span>{error}</span>
+            </div>
           )}
-        </section>
+        </div>
 
         <OrderSummary
+          cart={cart}
           currency={currency}
           isSubmitting={isSubmitting}
           locale={locale}
@@ -295,76 +336,160 @@ export default function CheckoutPage() {
 function CheckoutSteps() {
   const { t } = usePreferences();
   const steps = [
-    t("checkout", "deliveryAddress"),
-    t("checkout", "paymentMethod"),
-    t("checkout", "placeOrder"),
+    { label: t("checkout", "deliveryAddress"), icon: <LocationIcon /> },
+    { label: t("checkout", "paymentMethod"), icon: <CardIcon /> },
+    { label: t("checkout", "placeOrder"), icon: <CheckIcon /> },
   ];
+
   return (
-    <ol className="mt-6 grid gap-2 sm:grid-cols-3">
+    <ol className="mt-7 grid grid-cols-3 overflow-hidden rounded-xl border border-border bg-surface">
       {steps.map((step, index) => (
-        <li className="flex items-center gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-sm font-semibold text-foreground" key={step}>
-          <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-primary text-xs font-black text-primary-contrast">
-            {index + 1}
+        <li
+          className={`relative flex min-h-16 items-center gap-2.5 px-3 py-3 sm:px-5 ${index < steps.length - 1 ? "border-e border-border" : ""}`}
+          key={step.label}
+        >
+          <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${index === 0 ? "bg-primary text-primary-contrast" : "bg-elevated text-muted"}`}>
+            {step.icon}
           </span>
-          {step}
+          <span className={`hidden text-xs font-black sm:block ${index === 0 ? "text-foreground" : "text-muted"}`}>
+            {step.label}
+          </span>
         </li>
       ))}
     </ol>
   );
 }
 
-function PaymentOption({
-  checked,
-  label,
-  onChange,
-  value,
+function CheckoutPanel({
+  children,
+  icon,
+  number,
+  title,
 }: {
-  checked: boolean;
-  label: string;
-  onChange: () => void;
-  value: string;
+  children: ReactNode;
+  icon: ReactNode;
+  number: string;
+  title: string;
 }) {
   return (
-    <label className={`cursor-pointer rounded-xl border p-4 transition ${checked ? "border-primary bg-primary/10" : "border-border bg-elevated hover:border-primary"}`}>
+    <section className="overflow-hidden rounded-2xl border border-border bg-surface">
+      <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-4 sm:px-6">
+        <div className="flex items-center gap-3">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-elevated text-primary">{icon}</span>
+          <h2 className="text-base font-black text-foreground sm:text-lg">{title}</h2>
+        </div>
+        <span className="font-mono text-xs font-bold text-muted">{number}</span>
+      </header>
+      <div className="p-5 sm:p-6">{children}</div>
+    </section>
+  );
+}
+
+function PaymentOption({
+  checked,
+  icon,
+  label,
+  meta,
+  onChange,
+}: {
+  checked: boolean;
+  icon: ReactNode;
+  label: string;
+  meta: string;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`relative cursor-pointer rounded-xl border p-4 transition ${
+        checked
+          ? "border-primary bg-[var(--ds-soft-primary)] shadow-[inset_0_0_0_1px_var(--ds-primary)]"
+          : "border-border bg-background hover:border-primary/45"
+      }`}
+    >
       <input checked={checked} className="sr-only" name="payment-method" onChange={onChange} type="radio" />
-      <span className="text-xl" aria-hidden="true">{value}</span>
-      <span className="mt-2 block text-sm font-bold text-foreground">{label}</span>
+      <div className="flex items-start justify-between gap-3">
+        <span className={`grid h-9 w-9 place-items-center rounded-lg ${checked ? "bg-primary text-primary-contrast" : "bg-elevated text-muted"}`}>
+          {icon}
+        </span>
+        <span className={`mt-1 h-4 w-4 rounded-full border-2 ${checked ? "border-[5px] border-primary" : "border-border"}`} aria-hidden="true" />
+      </div>
+      <span className="mt-4 block text-sm font-black leading-5 text-foreground">{label}</span>
+      <span className="mt-1 block text-[11px] font-bold uppercase tracking-wider text-muted">{meta}</span>
     </label>
   );
 }
 
 function OrderSummary({
+  cart,
   currency,
   isSubmitting,
   locale,
   totals,
 }: {
+  cart: CartItem[];
   currency: Currency;
   isSubmitting: boolean;
   locale: "en" | "ar";
   totals: ReturnType<typeof getCheckoutTotals>;
 }) {
   const { t } = usePreferences();
+
   return (
-    <aside className="h-fit rounded-2xl border border-border bg-surface p-6 lg:sticky lg:top-28">
-      <h2 className="text-lg font-black text-foreground">{t("checkout", "orderSummary")}</h2>
-      <dl className="mt-5 grid gap-3 text-sm">
-        <SummaryRow label={t("checkout", "products")} value={formatPrice(totals.subtotal, currency, locale)} />
-        <SummaryRow label={t("checkout", "delivery")} value={formatPrice(totals.shipping, currency, locale)} />
-        <SummaryRow label={t("checkout", "vat14")} value={formatPrice(totals.vat, currency, locale)} />
-        <div className="mt-2 flex justify-between gap-4 border-t border-border pt-4">
-          <dt className="font-bold text-foreground">{t("checkout", "total")}</dt>
-          <dd className="text-xl font-black text-primary">{formatPrice(totals.total, currency, locale)}</dd>
+    <aside className="h-fit overflow-hidden rounded-2xl border border-border bg-surface shadow-sm lg:sticky lg:top-28">
+      <div className="border-b border-border px-6 py-5">
+        <p className="section-kicker">{t("checkout", "placeOrder")}</p>
+        <h2 className="mt-1 text-xl font-black text-foreground">{t("checkout", "orderSummary")}</h2>
+      </div>
+
+      <div className="max-h-64 overflow-y-auto border-b border-border px-5 py-2">
+        {cart.map((item) => (
+          <div className="flex items-center gap-3 border-b border-border py-3 last:border-b-0" key={item.product.id}>
+            <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-elevated">
+              <Image alt="" className="object-contain p-1.5" fill sizes="56px" src={item.product.image} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="line-clamp-2 text-xs font-bold leading-5 text-foreground">{item.product.name}</p>
+              <p className="mt-0.5 text-[11px] text-muted">× {item.quantity}</p>
+            </div>
+            <p className="shrink-0 text-xs font-black text-foreground">
+              {formatPrice(item.product.priceEgp * item.quantity, currency, locale)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="p-6">
+        <dl className="grid gap-3 text-sm">
+          <SummaryRow label={t("checkout", "products")} value={formatPrice(totals.subtotal, currency, locale)} />
+          <SummaryRow label={t("checkout", "delivery")} value={formatPrice(totals.shipping, currency, locale)} />
+          <SummaryRow label={t("checkout", "vat14")} value={formatPrice(totals.vat, currency, locale)} />
+        </dl>
+
+        <div className="mt-5 border-t border-border pt-5">
+          <div className="flex items-end justify-between gap-4">
+            <span className="text-sm font-black text-foreground">{t("checkout", "total")}</span>
+            <span className="text-2xl font-black tracking-tight text-foreground">
+              {formatPrice(totals.total, currency, locale)}
+            </span>
+          </div>
         </div>
-      </dl>
-      <button
-        className="button-primary mt-6 flex w-full disabled:cursor-wait disabled:opacity-70"
-        disabled={isSubmitting}
-        type="submit"
-      >
-        {isSubmitting ? t("checkout", "creatingOrder") : t("checkout", "confirmOrder")}
-      </button>
-      <p className="mt-4 text-center text-xs leading-5 text-muted">{t("checkout", "securityNote")}</p>
+
+        <button
+          className="button-primary mt-6 flex w-full justify-center disabled:cursor-wait disabled:opacity-65"
+          disabled={isSubmitting}
+          type="submit"
+        >
+          {isSubmitting ? t("checkout", "creatingOrder") : t("checkout", "confirmOrder")}
+          {!isSubmitting && <ArrowIcon />}
+        </button>
+
+        <div className="mt-5 grid gap-2.5 text-xs leading-5 text-muted">
+          <div className="flex items-start gap-2.5">
+            <span className="mt-0.5 shrink-0 text-success"><ShieldIcon /></span>
+            <span>{t("checkout", "securityNote")}</span>
+          </div>
+        </div>
+      </div>
     </aside>
   );
 }
@@ -378,9 +503,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Field({ children, label }: { children: ReactNode; label: string }) {
+function Field({ children, label, noMargin = false }: { children: ReactNode; label: string; noMargin?: boolean }) {
   return (
-    <label className="mt-5 grid gap-2 text-sm font-semibold text-foreground">
+    <label className={`${noMargin ? "" : "mt-4"} grid gap-2 text-sm font-bold text-foreground`}>
       <span>{label}</span>
       {children}
     </label>
@@ -390,23 +515,141 @@ function Field({ children, label }: { children: ReactNode; label: string }) {
 function CheckoutSuccess({ hasAccount, result }: { hasAccount: boolean; result: CheckoutResult }) {
   const { t } = usePreferences();
   return (
-    <div className="site-container grid min-h-[55vh] place-items-center py-12">
-      <section className="w-full max-w-xl rounded-3xl border border-success/25 bg-success/5 p-8 text-center">
-        <div className="mx-auto grid h-16 w-16 place-items-center rounded-full bg-success text-3xl font-black text-primary-contrast">✓</div>
-        <p className="section-kicker mt-6 text-success">{t("checkout", "orderCreated")}</p>
-        <h1 className="mt-2 text-3xl font-black text-foreground">{t("checkout", "thankYou")}</h1>
-        <p className="mt-4 text-sm leading-6 text-muted">
-          {t("checkout", "orderReference")} <strong className="font-mono text-foreground">{result.orderNumber}</strong>. {t("checkout", "orderUpdateText")}
-        </p>
-        <div className="mt-6 flex flex-wrap justify-center gap-3">
-          <Link className="button-secondary" href={hasAccount ? "/account" : "/signup"}>
-            {hasAccount ? t("checkout", "viewAccount") : t("checkout", "createAccountHistory")}
-          </Link>
+    <div className="site-container grid min-h-[66vh] place-items-center py-14">
+      <section className="w-full max-w-2xl overflow-hidden rounded-3xl border border-border bg-surface shadow-sm">
+        <div className="border-b border-border bg-[var(--ds-soft-success)] px-7 py-8 text-center sm:px-10 sm:py-10">
+          <span className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-success text-white shadow-sm">
+            <CheckIcon large />
+          </span>
+          <p className="mt-5 text-xs font-black uppercase tracking-[0.14em] text-success">{t("checkout", "orderCreated")}</p>
+          <h1 className="mt-2 text-3xl font-black tracking-tight text-foreground sm:text-4xl">{t("checkout", "thankYou")}</h1>
         </div>
-        <Link className="focus-ring mt-6 block rounded-md text-sm font-bold text-primary hover:brightness-110" href="/shop">
-          {t("checkout", "continueShopping")}
-        </Link>
+        <div className="px-7 py-7 text-center sm:px-10 sm:py-8">
+          <p className="text-sm leading-6 text-muted">
+            {t("checkout", "orderReference")} {" "}
+            <strong className="rounded-md bg-elevated px-2 py-1 font-mono text-foreground">{result.orderNumber}</strong>. {" "}
+            {t("checkout", "orderUpdateText")}
+          </p>
+          <div className="mt-7 flex flex-wrap justify-center gap-3">
+            <Link className="button-primary" href={hasAccount ? "/account" : "/signup"}>
+              {hasAccount ? t("checkout", "viewAccount") : t("checkout", "createAccountHistory")}
+            </Link>
+            <Link className="button-secondary" href="/shop">
+              {t("checkout", "continueShopping")}
+            </Link>
+          </div>
+        </div>
       </section>
     </div>
+  );
+}
+
+function LockIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15">
+      <rect height="10" rx="2" stroke="currentColor" strokeWidth="1.8" width="14" x="5" y="10" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function LocationIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <circle cx="12" cy="10" r="2.5" stroke="currentColor" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CardIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <rect height="14" rx="2" stroke="currentColor" strokeWidth="1.8" width="20" x="2" y="5" />
+      <path d="M2 10h20M6 15h4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <rect height="20" rx="3" stroke="currentColor" strokeWidth="1.8" width="12" x="6" y="2" />
+      <path d="M10 18h4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CashIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <rect height="14" rx="2" stroke="currentColor" strokeWidth="1.8" width="20" x="2" y="5" />
+      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M5 9v6M19 9v6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function NoteIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <path d="M5 3h10l4 4v14H5V3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="M14 3v5h5M8 12h8M8 16h6" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function UserIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M5 20c.8-3.2 3.3-5.2 7-5.2s6.2 2 7 5.2" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function ShieldIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <path d="M12 3 20 6v5c0 5-3.4 8.6-8 10-4.6-1.4-8-5-8-10V6l8-3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="m8.5 12 2.2 2.2 4.8-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function AlertIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18">
+      <path d="M12 3 22 20H2L12 3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="M12 9v5M12 17.5v.1" stroke="currentColor" strokeLinecap="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function CheckIcon({ large = false }: { large?: boolean }) {
+  const size = large ? 28 : 18;
+  return (
+    <svg aria-hidden="true" fill="none" height={size} viewBox="0 0 24 24" width={size}>
+      <path d="m5 12 4.2 4.2L19 6.5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
+  );
+}
+
+function CartCheckIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="34" viewBox="0 0 24 24" width="34">
+      <path d="M3 4h2l2 10h10l3-7H7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="m10 10 1.5 1.5L15 8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+      <circle cx="9" cy="19" r="1.4" fill="currentColor" />
+      <circle cx="17" cy="19" r="1.4" fill="currentColor" />
+    </svg>
+  );
+}
+
+function ArrowIcon() {
+  return (
+    <svg aria-hidden="true" className="rtl:rotate-180" fill="none" height="16" viewBox="0 0 24 24" width="16">
+      <path d="m9 5 7 7-7 7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+    </svg>
   );
 }
