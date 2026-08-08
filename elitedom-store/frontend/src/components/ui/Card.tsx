@@ -1,15 +1,11 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
-export function Card({
-  children,
-  className,
-  ...props
-}: HTMLAttributes<HTMLElement>) {
+export function Card({ children, className, ...props }: HTMLAttributes<HTMLElement>) {
   return (
     <section
       className={cn(
-        "rounded-2xl border border-border bg-surface p-5 text-foreground shadow-sm",
+        "rounded-xl border border-border bg-surface p-5 text-foreground shadow-sm",
         className,
       )}
       {...props}
@@ -29,12 +25,10 @@ export function CardHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="mb-4 flex items-start justify-between gap-4">
-      <div>
-        <h2 className="text-lg font-black text-foreground">{title}</h2>
-        {description && (
-          <p className="mt-1 text-sm leading-6 text-muted">{description}</p>
-        )}
+    <header className="mb-5 flex items-start justify-between gap-4 border-b border-border pb-4">
+      <div className="min-w-0">
+        <h2 className="text-lg font-black tracking-tight text-foreground">{title}</h2>
+        {description ? <p className="mt-1 text-sm leading-6 text-muted">{description}</p> : null}
       </div>
       {action}
     </header>
