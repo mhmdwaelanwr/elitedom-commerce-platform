@@ -3,7 +3,7 @@ title: "Interface Architecture and Wireframe Guide"
 status: reference
 owner: engineering
 document_type: ux-reference
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "68c1692c12809777fe0a482e35c1a618713c08bc"
 review_trigger: "Interface Architecture and Wireframe Guide scope or referenced implementation sources change."
 ---
 
@@ -11,7 +11,11 @@ review_trigger: "Interface Architecture and Wireframe Guide scope or referenced 
 
 ## Purpose
 
-Documents page-level information architecture. Actual rendered UI/components are authoritative for layout details.
+Documents the intended page-level information architecture for the clean-room frontend rebuild. The previous rendered UI/components were intentionally removed and are no longer authoritative.
+
+## Clean-room status
+
+The executable frontend is currently a minimal blank App Router baseline. The sections below describe product requirements that will be rebuilt and validated incrementally; they do not claim those screens are present in the temporary baseline.
 
 ## Reference
 
@@ -46,8 +50,11 @@ Enrollment secret/provisioning URI, verification, one-time recovery codes and re
 ## Source of truth
 
 - `elitedom-store/frontend/src/app/`
-- `elitedom-store/frontend/src/components/`
+- `elitedom-store/frontend/src/lib/`
+- `elitedom-store/frontend/src/types/`
+
+A reusable component directory becomes authoritative only after the new clean-room component system is created.
 
 ## Maintenance rule
 
-This page is a curated reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.
+This page is a curated architecture reference, not a substitute for executable code, database migrations, provider dashboards, or production evidence. Update it with the implementation that changes the referenced contract.

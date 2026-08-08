@@ -3,7 +3,7 @@ title: "Design System"
 status: current
 owner: engineering
 document_type: design-system
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "68c1692c12809777fe0a482e35c1a618713c08bc"
 review_trigger: "Design System behavior, evidence, or source-of-truth changes."
 ---
 
@@ -11,31 +11,39 @@ review_trigger: "Design System behavior, evidence, or source-of-truth changes."
 
 ## Purpose
 
-Defines UI consistency rules for the storefront and administration experience without duplicating component implementation.
+Defines UI consistency requirements for the storefront and administration experience without preserving abandoned component implementations.
 
 ## Current state
 
-The frontend uses Next.js 16, React 19 and Tailwind CSS 4 with repository design-system checks. The product supports English/Arabic, LTR/RTL and light/dark/system preferences; these are cross-cutting requirements for new UI.
+The frontend is in an approved clean-room reset. The previous UI implementation, reusable components, locale UI layer, providers, and visual assets were intentionally removed. The executable frontend currently contains a minimal Next.js 16 / React 19 / Tailwind CSS 4 App Router baseline while the new storefront is rebuilt from first principles.
+
+English/Arabic, LTR/RTL, light/dark/system preferences, responsive behavior, accessibility, and stable backend/API contracts remain requirements for the rebuilt interface; they are not claimed as implemented by the temporary blank baseline.
 
 ## Invariants and controls
 
-- Use semantic tokens/components rather than page-specific hard-coded visual systems.
-- Preserve light, dark and system preference behavior.
-- Preserve EN/AR and direction-aware spacing/icons/layout.
-- Interactive states include hover/focus/disabled/loading/error where relevant.
-- Responsive behavior is defined from mobile through desktop; admin density must not break keyboard access.
-- Run the design-system check before build.
+- Do not reintroduce abandoned legacy UI components or visual compatibility layers.
+- Build the new system from semantic design tokens and reusable primitives.
+- Restore EN/AR and direction-aware spacing/icons/layout as part of the new foundation.
+- Restore light, dark and system preference behavior as part of the new foundation.
+- Interactive states must include hover/focus/disabled/loading/error where relevant.
+- Responsive behavior must cover mobile through desktop; admin density must preserve keyboard access.
+- Preserve frontend API and shared TypeScript contracts unless an explicit backend-contract change is approved.
+- Run the clean-room design-system check before build.
 
 ## Source of truth
 
+- `elitedom-store/frontend/src/app/`
 - `elitedom-store/frontend/src/app/globals.css`
-- `elitedom-store/frontend/src/components/`
 - `elitedom-store/frontend/scripts/check-design-system.mjs`
+- `elitedom-store/frontend/src/lib/`
+- `elitedom-store/frontend/src/types/`
+
+A new component source-of-truth directory will be added only when the clean-room component system is intentionally created.
 
 ## Verification
 
-`npm run check:design-system`, lint, TypeScript and production build must pass; accessibility/responsive acceptance is also part of UAT.
+`npm run check:design-system`, lint, TypeScript and production build must pass. Accessibility, responsive, localization and theme acceptance return as implementation gates when those layers are rebuilt.
 
 ## Change policy
 
-Update this document in the same pull request as any change that alters the described behavior. Documentation must describe implemented behavior separately from planned or provider-dependent work.
+Update this document in the same pull request as any change that alters the described behavior. Documentation must distinguish the temporary clean-room baseline from implemented product behavior and from planned work.

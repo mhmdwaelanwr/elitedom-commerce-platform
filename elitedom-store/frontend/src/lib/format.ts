@@ -1,5 +1,6 @@
-import type { Locale } from "@/config/preferences";
 import type { Currency } from "@/types/store";
+
+export type Locale = "en" | "ar";
 
 const EGP_TO_USD = 50;
 
