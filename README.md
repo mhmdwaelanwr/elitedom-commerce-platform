@@ -8,11 +8,11 @@ Elitedom is an enterprise-grade commerce platform for Egyptian technology retail
 
 **Repository description**
 
-> Enterprise commerce platform for Egyptian technology retail — Next.js storefront/admin, FastAPI services, PostgreSQL, Redis/Celery, Paymob payments, Odoo 17 integration, Arabic/RTL support, RBAC/MFA, Docker, CI, and governed launch operations.
+> Enterprise commerce platform for Egyptian technology retail — React/Vite storefront/admin, FastAPI services, PostgreSQL, Redis/Celery, Paymob payments, Odoo 17 integration, Arabic/RTL support, RBAC/MFA, Docker, CI, and governed launch operations.
 
 **Recommended GitHub topics**
 
-`ecommerce` · `marketplace` · `enterprise` · `erp` · `odoo` · `fastapi` · `nextjs` · `react` · `typescript` · `postgresql` · `redis` · `celery` · `paymob` · `payments` · `arabic` · `rtl` · `rbac` · `mfa` · `docker` · `devops`
+`ecommerce` · `marketplace` · `enterprise` · `erp` · `odoo` · `fastapi` · `react` · `vite` · `react-router` · `typescript` · `postgresql` · `redis` · `celery` · `paymob` · `payments` · `arabic` · `rtl` · `rbac` · `mfa` · `docker` · `devops`
 
 ## Repository map
 
@@ -38,7 +38,7 @@ The repository intentionally keeps the executable platform under `elitedom-store
 
 | Capability | Implementation |
 | --- | --- |
-| Storefront and admin | Next.js 16.2, React 19.2, TypeScript, Tailwind CSS 4 |
+| Storefront and admin | React 19.2, TypeScript 5, Vite 7, React Router 7, Tailwind CSS 4; static production assets served by unprivileged Nginx |
 | Application API | Python 3.11, FastAPI, SQLAlchemy async, Pydantic |
 | Data | PostgreSQL 15 with Alembic migrations |
 | ERP | Odoo 17 Community + `elitedom_connector` |
@@ -93,14 +93,14 @@ make migrate
 make seed
 ```
 
-Local defaults expose the storefront on `http://localhost:3000`, FastAPI on `http://localhost:8000`, and Odoo on `http://localhost:8069`.
+Local defaults expose the React/Vite storefront on `http://localhost:3000`, FastAPI on `http://localhost:8000`, and Odoo on `http://localhost:8069`.
 
 ## Quality gates
 
 Every change must preserve the repository's green baseline:
 
 1. Backend Ruff and pytest.
-2. Frontend ESLint, TypeScript, design-system checks, and production build.
+2. Frontend ESLint, TypeScript, design-system checks, and Vite production build.
 3. PostgreSQL fresh upgrade, latest downgrade/replay, and full downgrade/replay.
 4. Odoo 17 clean addon install and native tests.
 5. Development and production Docker Compose validation.
@@ -120,6 +120,8 @@ Every change must preserve the repository's green baseline:
 ## Security and secrets
 
 Never commit real credentials, webhook secrets, OAuth secrets, database passwords, recovery codes, or production environment files. Staging and production configuration fails closed for weak core secrets, unsafe hosts/CORS, disabled staff MFA, in-memory rate limiting, and invalid enabled integrations.
+
+Public `VITE_*` frontend values are compiled into the browser bundle and therefore must never contain provider secrets.
 
 See [`SECURITY.md`](SECURITY.md) and [`docs/operations/infrastructure/SECRETS.md`](docs/operations/infrastructure/SECRETS.md).
 

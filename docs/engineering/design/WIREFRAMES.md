@@ -3,7 +3,7 @@ title: "Interface Architecture and Wireframe Guide"
 status: reference
 owner: engineering
 document_type: ux-reference
-verified_against: "68c1692c12809777fe0a482e35c1a618713c08bc"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Interface Architecture and Wireframe Guide scope or referenced implementation sources change."
 ---
 
@@ -15,7 +15,7 @@ Documents the intended page-level information architecture for the clean-room fr
 
 ## Clean-room status
 
-The executable frontend is currently a minimal blank App Router baseline. The sections below describe product requirements that will be rebuilt and validated incrementally; they do not claim those screens are present in the temporary baseline.
+The executable frontend is currently a minimal React/Vite SPA baseline. The sections below describe product requirements that will be rebuilt and validated incrementally; they do not claim those screens are present in the temporary baseline.
 
 ## Reference
 
@@ -49,7 +49,8 @@ Enrollment secret/provisioning URI, verification, one-time recovery codes and re
 
 ## Source of truth
 
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 - `elitedom-store/frontend/src/lib/`
 - `elitedom-store/frontend/src/types/`
 

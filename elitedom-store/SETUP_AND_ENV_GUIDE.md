@@ -46,7 +46,7 @@ Legacy `STRIPE_*` variables remain only for isolated compatibility/history and a
 
 ## 6. Authentication providers
 
-Google and Apple client IDs configure social identity flows. Browser-public client identifiers use the corresponding `NEXT_PUBLIC_*` settings where required. Provider secrets/tokens stay server-side/provider-side and must not be embedded in the frontend.
+Google and Apple client IDs configure social identity flows. Browser-public client identifiers use `VITE_GOOGLE_CLIENT_ID` and `VITE_APPLE_CLIENT_ID`. Provider secrets/tokens stay server-side/provider-side and must not be embedded in the frontend.
 
 Phone OTP delivery can use Twilio. Configure account auth token and sender or messaging-service identifiers in the target environment and test real delivery before launch.
 
@@ -64,9 +64,11 @@ Use IAM/runtime credential mechanisms for object storage; do not add access keys
 
 Metrics are enabled/configurable and should be scraped using the bearer credential when protected. OpenTelemetry export is optional and its endpoint must be HTTPS or an allowed internal service URL. Never include secrets/PII in metric labels or trace attributes.
 
-## 10. Frontend public configuration
+## 10. React/Vite frontend public configuration
 
-`NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_SITE_URL` and optional public media/OAuth identifiers are browser-visible/build-time values. Production Compose requires the public site/API URLs.
+`VITE_API_URL`, `VITE_SITE_URL`, `VITE_MEDIA_URL`, `VITE_DEMO_CATALOG_FALLBACK`, `VITE_GOOGLE_CLIENT_ID` and `VITE_APPLE_CLIENT_ID` are browser-visible build-time values. Production Compose requires browser-reachable public site/API URLs.
+
+Changing a `VITE_*` value requires rebuilding the frontend because Vite embeds it into the static browser bundle. Never place Paymob secrets, OAuth client secrets, database credentials, Twilio secrets, Odoo keys or private storage credentials in `VITE_*` variables.
 
 ## 11. Validate before deployment
 
@@ -80,12 +82,13 @@ python -m pytest app/tests -q
 python -m alembic upgrade head
 
 cd ../frontend
-npm ci
+npm install --no-audit --no-fund
 npm run verify
-npm run build
 
 cd ../infrastructure
-docker compose --env-file ../.env   -f docker-compose.yml   -f docker-compose.prod.yml config
+docker compose --env-file ../.env \
+  -f docker-compose.yml \
+  -f docker-compose.prod.yml config
 ```
 
 For staging/production, continue with [`docs/GO_LIVE_RUNBOOK.md`](docs/GO_LIVE_RUNBOOK.md). Do not record real credentials or private provider dashboards in Git.

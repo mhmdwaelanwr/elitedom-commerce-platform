@@ -24,6 +24,9 @@ services:
   frontend:
     build:
       args:
-        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:?Set NEXT_PUBLIC_API_URL to the browser-reachable HTTPS API URL}"
-        NEXT_PUBLIC_SITE_URL: "${NEXT_PUBLIC_SITE_URL:?Set NEXT_PUBLIC_SITE_URL to the public HTTPS storefront URL}"
-        NEXT_PUBLIC_MEDIA_URL: "${NEXT_PUBLIC_MEDIA_URL:-}"
+        VITE_API_URL: "${VITE_API_URL:?Set VITE_API_URL to the browser-reachable HTTPS API URL}"
+        VITE_SITE_URL: "${VITE_SITE_URL:?Set VITE_SITE_URL to the public HTTPS storefront URL}"
+        VITE_MEDIA_URL: "${VITE_MEDIA_URL:-}"
+        VITE_DEMO_CATALOG_FALLBACK: "${VITE_DEMO_CATALOG_FALLBACK:-false}"
+        VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-}"
+        VITE_APPLE_CLIENT_ID: "${VITE_APPLE_CLIENT_ID:-}"

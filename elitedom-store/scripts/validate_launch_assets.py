@@ -10,6 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 STORE = ROOT / "elitedom-store"
 STAGE_10_DOC = ROOT / "docs/delivery/releases/STAGE_10_UAT_GO_LIVE.md"
+FRONTEND = STORE / "frontend"
+LAUNCH_PAGE = FRONTEND / "src/pages/admin/LaunchControlPage.tsx"
+SEO_GENERATOR = FRONTEND / "scripts/generate-seo.mjs"
 
 REQUIRED_FILES = (
     ROOT / ".github/workflows/ci.yml",
@@ -20,9 +23,10 @@ REQUIRED_FILES = (
     STORE / "scripts/live_smoke.py",
     STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py",
     STORE / "backend/app/tests/integration/test_stage10_launch_acceptance.py",
-    STORE / "frontend/src/app/admin/launch/page.tsx",
-    STORE / "frontend/src/app/robots.ts",
-    STORE / "frontend/src/app/sitemap.ts",
+    FRONTEND / "src/router.tsx",
+    LAUNCH_PAGE,
+    SEO_GENERATOR,
+    FRONTEND / "vite.config.ts",
 )
 
 REQUIRED_CI_MARKERS = (
@@ -79,6 +83,15 @@ def main() -> int:
     require("health/ready" in smoke_source, "Live smoke must verify dependency readiness.", errors)
     require("robots.txt" in smoke_source and "sitemap.xml" in smoke_source, "Live smoke must verify public SEO assets.", errors)
 
+    seo_generator = SEO_GENERATOR.read_text(encoding="utf-8")
+    require("robots.txt" in seo_generator, "React/Vite SEO generator must emit robots.txt.", errors)
+    require("sitemap.xml" in seo_generator, "React/Vite SEO generator must emit sitemap.xml.", errors)
+    require("VITE_SITE_URL" in seo_generator, "React/Vite SEO assets must use the public VITE_SITE_URL contract.", errors)
+
+    router_source = (FRONTEND / "src/router.tsx").read_text(encoding="utf-8")
+    require('path: "/admin/launch"' in router_source, "React Router must expose the launch-control route.", errors)
+    require("LaunchControlPage" in router_source, "React Router must map launch control to LaunchControlPage.", errors)
+
     runbook = (STORE / "docs/GO_LIVE_RUNBOOK.md").read_text(encoding="utf-8")
     for marker in REQUIRED_RUNBOOK_MARKERS:
         require(marker in runbook, f"Go-live runbook is missing section: {marker}", errors)
@@ -102,7 +115,7 @@ def main() -> int:
     launch_test = (STORE / "backend/app/tests/integration/test_stage10_launch_acceptance.py").read_text(encoding="utf-8")
     require("test_launch_acceptance_does_not_carry_between_releases" in launch_test, "Backend coverage must prove evidence cannot carry between releases.", errors)
 
-    launch_page = (STORE / "frontend/src/app/admin/launch/page.tsx").read_text(encoding="utf-8")
+    launch_page = LAUNCH_PAGE.read_text(encoding="utf-8")
     require("config.manage" in launch_page, "Launch UI must preserve config.manage write boundary.", errors)
     require("evidence_ref" in launch_page, "Launch UI must capture evidence references.", errors)
     require("releaseRef" in launch_page, "Launch UI must require an explicit release reference.", errors)
@@ -112,7 +125,7 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    print("Stage 10 launch assets validated successfully.")
+    print("Stage 10 launch assets validated successfully for the React/Vite frontend.")
     return 0
 
 

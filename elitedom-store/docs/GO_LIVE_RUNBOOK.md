@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -61,7 +61,7 @@ Before a migration or cutover that can change durable state:
 1. Deploy the selected application images/configuration without exposing secret values in logs.
 2. Run Alembic upgrade against the application database using the exact deployed code.
 3. Verify Odoo addon compatibility/install state for the deployed connector version.
-4. Start/verify FastAPI, frontend, Redis, Celery worker/beat, PostgreSQL services, and Odoo according to the target topology.
+4. Start/verify FastAPI, React/Vite frontend, Redis, Celery worker/beat, PostgreSQL services, and Odoo according to the target topology.
 5. Treat migration failure, unexpected schema head, or dependency-readiness failure as a launch blocker.
 
 ## Runtime readiness
@@ -148,7 +148,7 @@ Launch evidence references should identify the external proof without copying se
 - `elitedom-store/backend/app/modules/admin/models.py`
 - `elitedom-store/backend/alembic/versions/20260807_0014_launch_acceptance.py`
 - `elitedom-store/backend/app/tests/integration/test_stage10_launch_acceptance.py`
-- `elitedom-store/frontend/src/app/admin/launch/page.tsx`
+- `elitedom-store/frontend/src/pages/admin/LaunchControlPage.tsx`
 
 ## Verification
 

@@ -7,7 +7,7 @@
 ```text
 elitedom-store/
 ├── backend/          FastAPI application, workers, SQLAlchemy/Alembic and tests
-├── frontend/         Next.js storefront and administration application
+├── frontend/         React/Vite storefront and administration application
 ├── infrastructure/   Docker Compose topology and operational scripts
 ├── odoo/             Odoo 17 addons
 ├── scripts/          Validation, smoke and repository tooling
@@ -38,7 +38,8 @@ Use `make admin-bootstrap` to create a development administrator interactively. 
 
 ## Current runtime
 
-- Next.js 16.2 / React 19.2 / TypeScript / Tailwind 4 storefront and admin.
+- React 19.2 / TypeScript 5 / Vite 7 / React Router 7 / Tailwind 4 storefront and admin.
+- Production frontend assets are served by unprivileged Nginx with SPA history fallback.
 - FastAPI on Python 3.11 with PostgreSQL 15 application persistence.
 - Odoo 17 Community with `elitedom_connector` 17.0.2.0.0.
 - Redis 7 and Celery worker/beat.
@@ -61,18 +62,19 @@ python -m pytest app/tests -q
 
 # frontend
 cd ../frontend
-npm ci
+npm install --no-audit --no-fund
 npm run verify
-npm run build
 ```
 
 GitHub CI additionally replays migrations against PostgreSQL 15, installs/tests the Odoo addon in a clean Odoo 17 container, validates Compose overlays and validates launch assets.
 
-Use `make clean` when you need to reset local containers/volumes and remove generated Python, test, Next.js, and TypeScript build artifacts.
+Use `make clean` when you need to reset local containers/volumes and remove generated Python, test, Vite and TypeScript build artifacts.
 
 ## Environment safety
 
 `.env.example` is documentation, not a production secret file. In staging/production the backend rejects unsafe configuration including debug mode, wildcard hosts/CORS, disabled staff MFA, in-memory rate limiting, weak core secrets and invalid enabled integrations.
+
+Frontend `VITE_*` variables are public build-time values. Never place Paymob, Odoo, Twilio/email, database, object-storage, metrics or other private provider credentials in them.
 
 Production Paymob, OAuth, Twilio/email, Odoo, object storage, metrics and other provider values must be provisioned out-of-band and verified for the exact environment.
 

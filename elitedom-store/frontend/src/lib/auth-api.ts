@@ -1,9 +1,8 @@
 import { ApiError } from "@/lib/api";
+import { clientEnv } from "@/lib/env";
 import type { CustomerSession } from "@/types/store";
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/$/, "");
+const API_BASE_URL = clientEnv.apiUrl;
 
 type AuthPayload = {
   access_token: string;

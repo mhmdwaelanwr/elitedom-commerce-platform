@@ -1,6 +1,7 @@
 # Build output and installed dependencies are rebuilt inside the image.
 node_modules
-.next
+dist
+.vite
 
 # Local configuration and secrets must never enter an image layer.
 .env

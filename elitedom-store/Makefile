@@ -131,5 +131,5 @@ clean: ## Remove development containers/volumes and generated build/test artifac
 	find . -type d -name .mypy_cache -prune -exec rm -rf {} + 2>/dev/null || true
 	find . -type d -name .ruff_cache -prune -exec rm -rf {} + 2>/dev/null || true
 	rm -rf backend/htmlcov backend/.coverage backend/coverage.xml
-	rm -rf frontend/.next frontend/out frontend/.turbo
+	rm -rf frontend/dist frontend/.vite
 	find frontend -type f -name '*.tsbuildinfo' -delete 2>/dev/null || true

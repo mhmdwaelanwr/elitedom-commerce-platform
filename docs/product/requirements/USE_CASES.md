@@ -3,7 +3,7 @@ title: "Use Cases"
 status: reference
 owner: product
 document_type: use-cases
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Critical customer, staff, provider, fulfillment, service, or launch-control journeys change."
 ---
 
@@ -97,7 +97,8 @@ Operator uses liveness/readiness, logs, metrics/tracing where configured, worker
 
 ## Source of truth
 
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 - `elitedom-store/backend/app/modules/`
 - `elitedom-store/backend/app/integrations/`
 - `elitedom-store/backend/app/modules/admin/control_service.py`

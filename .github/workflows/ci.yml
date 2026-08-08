@@ -221,6 +221,7 @@ jobs:
             --log-level=test
 
   frontend:
+    # Keep the legacy protected-branch check name while the implementation is React/Vite.
     name: Frontend (Node 22)
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -228,9 +229,8 @@ jobs:
       run:
         working-directory: elitedom-store/frontend
     env:
-      NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      VITE_API_URL: http://localhost:8000/api/v1
+      VITE_SITE_URL: http://localhost:3000
 
     steps:
       - name: Check out source
@@ -240,19 +240,17 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: elitedom-store/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
-      - name: Lint frontend
+      - name: Lint React/Vite frontend
         run: npm run lint
 
-      - name: Type-check frontend
-        run: npx tsc --noEmit
+      - name: Type-check React/Vite frontend
+        run: npm run check:types
 
-      - name: Build frontend
+      - name: Build React/Vite frontend
         run: npm run build
 
   compose:
@@ -282,8 +280,8 @@ jobs:
         env:
           ENVIRONMENT: production
           DEBUG: "false"
-          NEXT_PUBLIC_API_URL: https://store.example.com/api/v1
-          NEXT_PUBLIC_SITE_URL: https://store.example.com
+          VITE_API_URL: https://store.example.com/api/v1
+          VITE_SITE_URL: https://store.example.com
           SECRET_KEY: ci-production-secret-key-with-at-least-32-characters
           JWT_SECRET_KEY: ci-production-jwt-key-with-at-least-32-characters
           POSTGRES_PASSWORD: ci-production-postgres-password

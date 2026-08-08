@@ -4,7 +4,7 @@ const launchControlContract = {
   evidence_ref: "required",
 } as const;
 
-export default function LaunchControlPage() {
+export function LaunchControlPage() {
   return (
     <main className="clean-room">
       <div className="clean-room__content">
