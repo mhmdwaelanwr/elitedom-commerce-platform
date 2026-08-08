@@ -4,15 +4,31 @@ import { fileURLToPath } from "node:url";
 
 const frontendRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const requiredFiles = [
-  "src/app/layout.tsx",
-  "src/app/page.tsx",
-  "src/app/globals.css",
+  "index.html",
+  "vite.config.ts",
+  "src/main.tsx",
+  "src/router.tsx",
+  "src/pages/HomePage.tsx",
+  "src/pages/admin/LaunchControlPage.tsx",
+  "src/styles/globals.css",
 ];
 const failures = [];
 
 for (const relativePath of requiredFiles) {
   if (!existsSync(join(frontendRoot, relativePath))) {
-    failures.push(`clean-room baseline: missing ${relativePath}`);
+    failures.push(`React/Vite baseline: missing ${relativePath}`);
+  }
+}
+
+const forbiddenNextFiles = [
+  "next.config.ts",
+  "next-env.d.ts",
+  "src/app/layout.tsx",
+  "src/app/page.tsx",
+];
+for (const relativePath of forbiddenNextFiles) {
+  if (existsSync(join(frontendRoot, relativePath))) {
+    failures.push(`React/Vite baseline: Next.js file is still present: ${relativePath}`);
   }
 }
 
@@ -28,9 +44,9 @@ for (const relativePath of requiredFiles) {
 }
 
 if (failures.length > 0) {
-  console.error("Clean-room frontend checks failed:\n");
+  console.error("React/Vite frontend checks failed:\n");
   for (const failure of failures) console.error(`- ${failure}`);
   process.exit(1);
 }
 
-console.log("Clean-room frontend baseline validated.");
+console.log("React/Vite frontend baseline validated.");

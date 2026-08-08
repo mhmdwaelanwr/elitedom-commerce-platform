@@ -1,4 +1,4 @@
-export default function HomePage() {
+export function HomePage() {
   return (
     <main className="clean-room">
       <div className="clean-room__content">

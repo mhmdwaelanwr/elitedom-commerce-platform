@@ -10,7 +10,8 @@
 }
 
 html,
-body {
+body,
+#root {
   min-height: 100%;
 }
 
@@ -61,4 +62,36 @@ a {
   color: #5f6368;
   font-size: 16px;
   line-height: 1.6;
+}
+
+.clean-room__link {
+  display: inline-flex;
+  margin-top: 24px;
+  font-weight: 700;
+  text-underline-offset: 4px;
+}
+
+.clean-room__contract {
+  display: grid;
+  gap: 12px;
+  margin: 28px auto 0;
+  max-width: 520px;
+  text-align: left;
+}
+
+.clean-room__contract div {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  border-top: 1px solid #e5e7eb;
+  padding-top: 12px;
+}
+
+.clean-room__contract dt {
+  color: #5f6368;
+}
+
+.clean-room__contract dd {
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
