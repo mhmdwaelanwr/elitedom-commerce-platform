@@ -221,16 +221,15 @@ jobs:
             --log-level=test
 
   frontend:
-    name: Frontend (Node 22)
+    name: Frontend (React 19 + Vite)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:
       run:
         working-directory: elitedom-store/frontend
     env:
-      NEXT_TELEMETRY_DISABLED: "1"
-      NEXT_PUBLIC_API_URL: http://localhost:8000/api/v1
-      NEXT_PUBLIC_SITE_URL: http://localhost:3000
+      VITE_API_URL: http://localhost:8000/api/v1
+      VITE_SITE_URL: http://localhost:3000
 
     steps:
       - name: Check out source
@@ -240,17 +239,15 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: "22"
-          cache: npm
-          cache-dependency-path: elitedom-store/frontend/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Lint frontend
         run: npm run lint
 
       - name: Type-check frontend
-        run: npx tsc --noEmit
+        run: npm run check:types
 
       - name: Build frontend
         run: npm run build
@@ -282,8 +279,8 @@ jobs:
         env:
           ENVIRONMENT: production
           DEBUG: "false"
-          NEXT_PUBLIC_API_URL: https://store.example.com/api/v1
-          NEXT_PUBLIC_SITE_URL: https://store.example.com
+          VITE_API_URL: https://store.example.com/api/v1
+          VITE_SITE_URL: https://store.example.com
           SECRET_KEY: ci-production-secret-key-with-at-least-32-characters
           JWT_SECRET_KEY: ci-production-jwt-key-with-at-least-32-characters
           POSTGRES_PASSWORD: ci-production-postgres-password

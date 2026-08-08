@@ -147,19 +147,17 @@ services:
       context: ../frontend
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: "${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}"
-        NEXT_PUBLIC_DEMO_CATALOG_FALLBACK: "${NEXT_PUBLIC_DEMO_CATALOG_FALLBACK:-false}"
-        NEXT_PUBLIC_GOOGLE_CLIENT_ID: "${NEXT_PUBLIC_GOOGLE_CLIENT_ID:-}"
-        NEXT_PUBLIC_APPLE_CLIENT_ID: "${NEXT_PUBLIC_APPLE_CLIENT_ID:-}"
+        VITE_API_URL: "${VITE_API_URL:-http://localhost:8000/api/v1}"
+        VITE_SITE_URL: "${VITE_SITE_URL:-http://localhost:3000}"
+        VITE_MEDIA_URL: "${VITE_MEDIA_URL:-}"
+        VITE_DEMO_CATALOG_FALLBACK: "${VITE_DEMO_CATALOG_FALLBACK:-false}"
+        VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-}"
+        VITE_APPLE_CLIENT_ID: "${VITE_APPLE_CLIENT_ID:-}"
     container_name: elitedom-storefront
     restart: unless-stopped
     depends_on:
       fastapi:
         condition: service_healthy
-    environment:
-      NODE_ENV: production
-      PORT: "3000"
-      HOSTNAME: 0.0.0.0
     ports:
       - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
     networks: [elitedom-net]
@@ -167,11 +165,10 @@ services:
     read_only: true
     tmpfs:
       - /tmp:rw,noexec,nosuid,size=64m
-      - /app/.next/cache:rw,noexec,nosuid,size=64m
     security_opt: [no-new-privileges:true]
     cap_drop: [ALL]
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/"]
       interval: 30s
       timeout: 5s
       retries: 3
