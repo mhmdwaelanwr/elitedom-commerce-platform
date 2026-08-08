@@ -252,8 +252,6 @@ function LowStock({
   );
 }
 
-type DashboardCopy = typeof EN_COPY;
-
 const EN_COPY = {
   eyebrow: "Staff overview",
   title: "Operations at a glance",
@@ -300,6 +298,8 @@ const EN_COPY = {
   review: "Review",
   noLowStock: "No low-stock local SKUs right now.",
 } as const;
+
+type DashboardCopy = { [K in keyof typeof EN_COPY]: string };
 
 const AR_COPY: DashboardCopy = {
   eyebrow: "نظرة فريق التشغيل",
