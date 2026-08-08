@@ -46,35 +46,40 @@ function ShopContent() {
 
   useEffect(() => {
     let active = true;
-    setQuery(requestedQuery);
-    setLoading(true);
-    setError(null);
+    const timer = window.setTimeout(() => {
+      setQuery(requestedQuery);
+      setLoading(true);
+      setError(null);
 
-    void Promise.all([
-      fetchRichCatalog({
-        locale,
-        query: requestedQuery || undefined,
-        category: requestedCategory || undefined,
-        limit: 120,
-      }),
-      fetchRichCategories(locale),
-    ])
-      .then(([nextProducts, nextCategories]) => {
-        if (!active) return;
-        setProducts(nextProducts);
-        setCategories(nextCategories);
-      })
-      .catch((reason: unknown) => {
-        if (!active) return;
-        setProducts([]);
-        setCategories([]);
-        setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
+      void Promise.all([
+        fetchRichCatalog({
+          locale,
+          query: requestedQuery || undefined,
+          category: requestedCategory || undefined,
+          limit: 120,
+        }),
+        fetchRichCategories(locale),
+      ])
+        .then(([nextProducts, nextCategories]) => {
+          if (!active) return;
+          setProducts(nextProducts);
+          setCategories(nextCategories);
+        })
+        .catch((reason: unknown) => {
+          if (!active) return;
+          setProducts([]);
+          setCategories([]);
+          setError(reason instanceof Error ? reason.message : t("storefront", "catalogueLoadError"));
+        })
+        .finally(() => {
+          if (active) setLoading(false);
+        });
+    }, 0);
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
   }, [locale, requestedCategory, requestedQuery, t]);
 
   const flatCategories = useMemo(() => flattenCategories(categories), [categories]);
