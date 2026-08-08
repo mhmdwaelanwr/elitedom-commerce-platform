@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { cookies } from "next/headers";
 import "./globals.css";
-import { PreferenceBar } from "@/components/preferences/PreferenceBar";
 import { CartDrawer } from "@/components/store/CartDrawer";
 import { SiteFooter } from "@/components/store/SiteFooter";
 import { SiteHeader } from "@/components/store/SiteHeader";
@@ -94,7 +93,6 @@ export default async function RootLayout({
         <AppPreferencesProvider initialLocale={initialLocale} initialTheme={initialTheme}>
           <StoreProvider>
             <div className="flex min-h-screen flex-col">
-              <PreferenceBar />
               <SiteHeader />
               <main className="flex-1">{children}</main>
               <SiteFooter />
