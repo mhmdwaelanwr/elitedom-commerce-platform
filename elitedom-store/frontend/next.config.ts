@@ -3,6 +3,7 @@ import type { NextConfig } from "next";
 const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1";
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 const mediaUrl = process.env.NEXT_PUBLIC_MEDIA_URL ?? "";
+const isVercel = Boolean(process.env.VERCEL);
 
 function remotePattern(value: string, pathname: string) {
   const parsed = new URL(value);
@@ -37,7 +38,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  output: "standalone",
+  ...(isVercel ? {} : { output: "standalone" as const }),
   poweredByHeader: false,
   compress: true,
   images: {
