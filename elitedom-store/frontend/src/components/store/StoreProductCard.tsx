@@ -10,147 +10,166 @@ import type { Product } from "@/types/store";
 type StoreProductCardProps = {
   product: Product;
   variant?: "grid" | "list";
+  context?: "home" | "catalog";
 };
 
-export function StoreProductCard({ product, variant = "grid" }: StoreProductCardProps) {
+export function StoreProductCard({ product, variant = "grid", context = "catalog" }: StoreProductCardProps) {
   const { addToCart, currency, toggleWishlist, wishlist } = useStore();
   const { locale, t } = usePreferences();
   const available = product.stockQty > 0 || product.dropshipEnabled;
   const isSaved = wishlist.includes(product.id);
   const isList = variant === "list";
+  const isHome = context === "home" && !isList;
   const productHref = `/products/${encodeURIComponent(product.slug ?? product.id)}`;
-
+  const visibleSpecs = product.specs.slice(0, isHome ? 1 : isList ? 5 : 4);
   const stockLabel = product.stockQty > 0
-    ? `${product.stockQty} ${t("storefront", "inStock")}`
+    ? t("storefront", "inStock")
     : product.dropshipEnabled
       ? t("storefront", "dropshipAvailable")
       : t("storefront", "outOfStock");
 
-  const stockClass = product.stockQty > 0
-    ? "status-success"
-    : product.dropshipEnabled
-      ? "status-warning"
-      : "status-danger";
+  if (isList) {
+    return (
+      <article className="group grid min-w-0 gap-5 rounded-[1.75rem] bg-surface p-3 transition hover:shadow-[0_8px_28px_-18px_var(--ds-shadow)] sm:grid-cols-[15rem_minmax(0,1fr)] sm:p-4">
+        <ProductVisual product={product} productHref={productHref} isSaved={isSaved} onWishlist={() => toggleWishlist(product.id)} />
+        <div className="flex min-w-0 flex-col py-2 pe-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            <span className="font-bold text-primary">{product.brand}</span>
+            <span className="text-muted">{product.sku}</span>
+            <span className={`font-bold ${available ? "text-success" : "text-danger"}`}>• {stockLabel}</span>
+          </div>
+          <Link className="focus-ring mt-2 rounded-lg text-xl font-bold leading-7 tracking-[-0.02em] text-foreground transition hover:text-primary" href={productHref}>
+            {product.name}
+          </Link>
+          <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-muted">{product.description}</p>
+          {visibleSpecs.length > 0 ? (
+            <dl className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2 xl:grid-cols-3">
+              {visibleSpecs.map((spec) => (
+                <div className="min-w-0" key={`${spec.label}-${spec.value}`}>
+                  <dt className="truncate text-[11px] text-muted">{spec.label}</dt>
+                  <dd className="truncate text-sm font-bold text-foreground">{spec.value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : null}
+          <div className="mt-auto flex flex-wrap items-end justify-between gap-4 pt-6">
+            <div>
+              <p className="text-xs text-muted">{t("storefront", "vatIncludedShort")}</p>
+              <p className="mt-0.5 text-2xl font-bold tracking-[-0.035em] text-foreground">{formatPrice(product.priceEgp, currency, locale)}</p>
+            </div>
+            <button className="button-primary disabled:cursor-not-allowed disabled:opacity-50" disabled={!available} onClick={() => addToCart(product)} type="button">
+              <CartPlusIcon />
+              {available ? t("storefront", "addToCart") : t("storefront", "unavailable")}
+            </button>
+          </div>
+        </div>
+      </article>
+    );
+  }
 
   return (
-    <article
-      className={`commerce-card commerce-card-hover group relative flex min-w-0 overflow-hidden ${
-        isList ? "flex-col sm:flex-row" : "h-full flex-col"
-      }`}
-    >
-      <div className={`relative shrink-0 bg-background ${isList ? "aspect-[16/10] sm:w-64 sm:aspect-auto" : "aspect-[4/3]"}`}>
-        <Link
-          aria-label={`${t("storefront", "details")}: ${product.name}`}
-          className="focus-ring absolute inset-0 block"
-          href={productHref}
-        >
-          <Image
-            alt={product.name}
-            className="object-contain p-5 transition duration-300 group-hover:scale-[1.025] sm:p-6"
-            fill
-            sizes={isList ? "(min-width: 640px) 256px, 100vw" : "(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"}
-            src={product.image}
-          />
-        </Link>
+    <article className="group flex min-w-0 flex-col">
+      <ProductVisual product={product} productHref={productHref} isSaved={isSaved} onWishlist={() => toggleWishlist(product.id)} />
 
-        <span className={`absolute start-3 top-3 z-10 rounded-md border px-2 py-1 text-[10px] font-black ${stockClass}`}>
-          {stockLabel}
-        </span>
-
-        <button
-          aria-label={`${isSaved ? t("storefront", "removeFromWishlist") : t("storefront", "saveToWishlist")}: ${product.name}`}
-          className={`focus-ring absolute end-3 top-3 z-10 grid h-9 w-9 place-items-center rounded-lg border shadow-sm transition ${
-            isSaved
-              ? "border-danger bg-danger text-primary-contrast"
-              : "border-border bg-surface text-muted hover:border-primary hover:text-primary"
-          }`}
-          onClick={() => toggleWishlist(product.id)}
-          type="button"
-        >
-          <HeartIcon filled={isSaved} />
-        </button>
-      </div>
-
-      <div className={`flex min-w-0 flex-1 flex-col ${isList ? "p-5 sm:p-6" : "p-4 sm:p-5"}`}>
+      <div className="flex min-w-0 flex-1 flex-col px-1 pt-4">
         <div className="flex items-center justify-between gap-3">
-          <span className="truncate text-[11px] font-black uppercase tracking-wide text-primary">{product.brand}</span>
-          <span className="shrink-0 text-xs font-bold text-muted">
-            {product.rating > 0 ? `★ ${product.rating.toFixed(1)}` : `✓ ${t("storefront", "verifiedCatalogue")}`}
-          </span>
+          <span className="truncate text-xs font-bold text-primary">{product.brand}</span>
+          {!isHome ? (
+            <span className={`shrink-0 text-[11px] font-bold ${available ? "text-success" : "text-danger"}`}>
+              {stockLabel}
+            </span>
+          ) : product.rating > 0 ? (
+            <span className="shrink-0 text-xs font-bold text-muted">★ {product.rating.toFixed(1)}</span>
+          ) : null}
         </div>
 
-        <Link
-          className={`focus-ring mt-2 rounded-md font-black leading-6 tracking-[-0.01em] text-foreground transition hover:text-primary ${
-            isList ? "text-lg sm:text-xl" : "line-clamp-2 min-h-12 text-[0.95rem]"
-          }`}
-          href={productHref}
-        >
+        <Link className="focus-ring mt-1.5 line-clamp-2 rounded-lg text-[0.98rem] font-bold leading-6 tracking-[-0.015em] text-foreground transition hover:text-primary" href={productHref}>
           {product.name}
         </Link>
 
-        {isList ? (
-          <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-muted">{product.description}</p>
+        {visibleSpecs.length > 0 ? (
+          isHome ? (
+            <p className="mt-1.5 line-clamp-1 text-xs text-muted">{visibleSpecs[0].value}</p>
+          ) : (
+            <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl bg-elevated p-3.5">
+              {visibleSpecs.map((spec) => (
+                <div className="min-w-0" key={`${spec.label}-${spec.value}`}>
+                  <dt className="truncate text-[10px] text-muted">{spec.label}</dt>
+                  <dd className="mt-0.5 truncate text-xs font-bold text-foreground">{spec.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )
         ) : null}
 
-        <div className="mt-3 flex min-h-12 flex-wrap content-start gap-1.5">
-          {product.specs.slice(0, isList ? 5 : 3).map((spec) => (
-            <span
-              className="rounded-md border border-border bg-elevated px-2 py-1 text-[10px] font-semibold text-muted"
-              key={`${spec.label}-${spec.value}`}
-            >
-              {spec.value}
-            </span>
-          ))}
-        </div>
-
-        <div className="mt-auto pt-4">
-          <div className="border-t border-border pt-4">
-            <div className="flex items-end justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10px] font-semibold text-muted">{t("storefront", "vatIncludedShort")}</p>
-                <p className="mt-0.5 truncate text-xl font-black tracking-[-0.025em] text-foreground">
-                  {formatPrice(product.priceEgp, currency, locale)}
-                </p>
-              </div>
-              <button
-                className="button-primary min-h-10 shrink-0 px-3 py-2 text-xs disabled:cursor-not-allowed disabled:border-border disabled:bg-elevated disabled:text-muted disabled:shadow-none"
-                disabled={!available}
-                onClick={() => addToCart(product)}
-                type="button"
-              >
-                <CartPlusIcon />
-                <span className={isList ? "" : "hidden sm:inline"}>
-                  {available ? t("storefront", "addToCart") : t("storefront", "unavailable")}
-                </span>
-              </button>
-            </div>
-            {isList ? (
-              <Link className="focus-ring mt-3 inline-flex rounded-md text-xs font-black text-primary hover:underline" href={productHref}>
-                {t("storefront", "details")}
-              </Link>
-            ) : null}
+        <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+          <div className="min-w-0">
+            {!isHome ? <p className="text-[10px] text-muted">{t("storefront", "vatIncludedShort")}</p> : null}
+            <p className={`${isHome ? "text-lg" : "text-xl"} truncate font-bold tracking-[-0.03em] text-foreground`}>
+              {formatPrice(product.priceEgp, currency, locale)}
+            </p>
           </div>
+          <button
+            aria-label={`${t("storefront", "addToCart")}: ${product.name}`}
+            className="focus-ring grid h-11 w-11 shrink-0 place-items-center rounded-full bg-primary text-primary-contrast transition hover:shadow-[0_4px_12px_-4px_var(--ds-shadow)] disabled:cursor-not-allowed disabled:bg-elevated disabled:text-muted"
+            disabled={!available}
+            onClick={() => addToCart(product)}
+            type="button"
+          >
+            <CartPlusIcon />
+          </button>
         </div>
       </div>
     </article>
   );
 }
 
-function HeartIcon({ filled }: { filled: boolean }) {
+function ProductVisual({
+  product,
+  productHref,
+  isSaved,
+  onWishlist,
+}: {
+  product: Product;
+  productHref: string;
+  isSaved: boolean;
+  onWishlist: () => void;
+}) {
+  const { t } = usePreferences();
   return (
-    <svg aria-hidden="true" fill={filled ? "currentColor" : "none"} height="17" viewBox="0 0 24 24" width="17">
-      <path d="M20.8 4.7a5.5 5.5 0 0 0-7.8 0L12 5.8l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.5a5.5 5.5 0 0 0-.1-7.8Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
-    </svg>
+    <div className="product-canvas relative aspect-[4/3] overflow-hidden rounded-[1.75rem] sm:aspect-square">
+      <Link aria-label={`${t("storefront", "details")}: ${product.name}`} className="focus-ring absolute inset-0 block rounded-[1.75rem]" href={productHref}>
+        <Image
+          alt={product.name}
+          className="object-contain p-7 transition duration-300 ease-out group-hover:scale-[1.035] sm:p-8"
+          fill
+          sizes="(min-width: 1280px) 25vw, (min-width: 640px) 50vw, 100vw"
+          src={product.image}
+        />
+      </Link>
+      {product.featured ? (
+        <span className="absolute start-3 top-3 rounded-full bg-surface px-3 py-1.5 text-[10px] font-bold text-primary shadow-sm">
+          {t("storefront", "featured")}
+        </span>
+      ) : null}
+      <button
+        aria-label={`${isSaved ? t("storefront", "removeFromWishlist") : t("storefront", "saveToWishlist")}: ${product.name}`}
+        className={`focus-ring absolute end-3 top-3 grid h-10 w-10 place-items-center rounded-full transition ${
+          isSaved ? "bg-primary text-primary-contrast" : "bg-surface text-muted shadow-sm hover:text-primary"
+        }`}
+        onClick={onWishlist}
+        type="button"
+      >
+        <HeartIcon filled={isSaved} />
+      </button>
+    </div>
   );
 }
 
+function HeartIcon({ filled }: { filled: boolean }) {
+  return <svg aria-hidden="true" fill={filled ? "currentColor" : "none"} height="18" viewBox="0 0 24 24" width="18"><path d="M20.8 4.7a5.5 5.5 0 0 0-7.8 0L12 5.8l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.9-8.5a5.5 5.5 0 0 0-.1-7.8Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" /></svg>;
+}
+
 function CartPlusIcon() {
-  return (
-    <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 24 24" width="16">
-      <path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 7H7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-      <path d="M13 10h4M15 8v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
-      <circle cx="10" cy="20" fill="currentColor" r="1.2" />
-      <circle cx="18" cy="20" fill="currentColor" r="1.2" />
-    </svg>
-  );
+  return <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 24 24" width="18"><path d="M3 4h2l2.1 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 1.9-1.4L21 7H7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" /><path d="M13 10h4M15 8v4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /><circle cx="10" cy="20" fill="currentColor" r="1.2" /><circle cx="18" cy="20" fill="currentColor" r="1.2" /></svg>;
 }
