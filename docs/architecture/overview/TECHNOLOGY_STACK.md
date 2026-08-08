@@ -3,7 +3,7 @@ title: "Technology Stack"
 status: reference
 owner: architecture
 document_type: technology-reference
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "0b1ae60b5ed0d3bb4976e10337a16dca04e2aa0f"
 review_trigger: "Technology Stack scope or referenced implementation sources change."
 ---
 
@@ -17,7 +17,7 @@ Records the currently selected runtime technologies and their architectural role
 
 ### Web
 
-Next.js 16.2.12, React 19.2.4, TypeScript 5, Tailwind CSS 4.
+React 19.2, TypeScript 5, Vite 7, React Router 7 and Tailwind CSS 4. The browser application is a client-side SPA; production assets are served by unprivileged Nginx with history fallback.
 
 ### API
 
@@ -41,7 +41,7 @@ Paymob current primary integration; Stripe legacy compatibility remains in code/
 
 ### Media
 
-Local filesystem mode or S3-compatible object storage with explicit CDN URL.
+Local filesystem mode or S3-compatible object storage with explicit CDN URL. Product-media sizing, transformation and CDN optimization are application/storage concerns rather than framework-specific image optimization.
 
 ### Observability
 
@@ -49,11 +49,13 @@ Structured request context, Prometheus-compatible metrics, optional OpenTelemetr
 
 ### Deployment
 
-Docker Compose base + environment overlays; Nginx Proxy Manager and Portainer included in topology.
+Docker Compose base + environment overlays; static React/Vite frontend served by Nginx; Nginx Proxy Manager and Portainer included in topology.
 
 ## Source of truth
 
 - `elitedom-store/frontend/package.json`
+- `elitedom-store/frontend/vite.config.ts`
+- `elitedom-store/frontend/nginx.conf`
 - `elitedom-store/backend/requirements.txt`
 - `elitedom-store/infrastructure/docker-compose.yml`
 - `elitedom-store/odoo/addons/elitedom_connector/__manifest__.py`
