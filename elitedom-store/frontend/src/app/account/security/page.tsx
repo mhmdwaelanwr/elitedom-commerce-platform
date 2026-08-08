@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useStore } from "@/components/store/StoreProvider";
 import { ApiError } from "@/lib/api";
 import {
