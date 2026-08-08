@@ -1,9 +1,8 @@
 import { CATALOG, CATEGORIES, findCatalogProduct } from "@/lib/catalog";
+import { clientEnv } from "@/lib/env";
 import type { Category, Product } from "@/types/store";
 
-const API_BASE_URL = (
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000/api/v1"
-).replace(/\/$/, "");
+const API_BASE_URL = clientEnv.apiUrl;
 const API_ORIGIN = (() => {
   try {
     return new URL(API_BASE_URL).origin;
@@ -11,7 +10,7 @@ const API_ORIGIN = (() => {
     return "";
   }
 })();
-const DEMO_FALLBACK = process.env.NEXT_PUBLIC_DEMO_CATALOG_FALLBACK === "true";
+const DEMO_FALLBACK = clientEnv.demoCatalogFallback;
 const PRODUCT_PLACEHOLDER = "/images/gpu_card.png";
 const CATEGORY_PLACEHOLDER = "/template/images/categories/categories-02.png";
 
