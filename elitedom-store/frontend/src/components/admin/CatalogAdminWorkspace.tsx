@@ -1,7 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { CatalogProductEditor } from "@/components/admin/CatalogProductEditor";
 import { CatalogProductOperations } from "@/components/admin/CatalogProductOperations";
 import { AdminPageHeader, AdminSectionDenied, StatusPill } from "@/components/admin/AdminPrimitives";
@@ -29,9 +28,12 @@ import {
   productToForm,
   type ProductForm,
 } from "@/lib/catalog-admin-form";
+import { usePreferences } from "@/providers/AppPreferencesProvider";
 
 export function CatalogAdminWorkspace() {
   const { notify, session } = useStore();
+  const { locale } = usePreferences();
+  const c = locale === "ar" ? AR : EN;
   const allowed = canAccessAdminSection(session?.role, "products");
   const canManage = session?.role === "system_admin" || session?.role === "inventory_manager";
   const canArchive = session?.role === "system_admin";
@@ -60,16 +62,17 @@ export function CatalogAdminWorkspace() {
       setProducts(productResult.products);
       setCategories(categoryResult);
     } catch (reason) {
-      setError(messageOf(reason, "Unable to load catalogue."));
+      setError(messageOf(reason, c.loadError));
     } finally {
       setLoading(false);
     }
-  }, [allowed, query, session]);
+  }, [allowed, c.loadError, query, session]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
+
   const categoryOptions = useMemo(() => flattenCatalogCategories(categories), [categories]);
 
   async function openProduct(productId: number) {
@@ -81,7 +84,7 @@ export function CatalogAdminWorkspace() {
       setError(null);
       setImageFile(null);
     } catch (reason) {
-      setError(messageOf(reason, "Unable to load product."));
+      setError(messageOf(reason, c.productLoadError));
     }
   }
 
@@ -104,10 +107,10 @@ export function CatalogAdminWorkspace() {
         : await createCatalogProduct({ ...input, sku: form.sku, is_active: false }, session);
       setSelected(saved);
       setForm(productToForm(saved));
-      notify(selected ? `${saved.sku} updated.` : `${saved.sku} created as a draft.`);
+      notify(selected ? `${saved.sku} ${c.updatedNotice}` : `${saved.sku} ${c.createdNotice}`);
       await load();
     } catch (reason) {
-      setError(messageOf(reason, "Unable to save product."));
+      setError(messageOf(reason, c.saveError));
     } finally {
       setSaving(false);
     }
@@ -123,9 +126,9 @@ export function CatalogAdminWorkspace() {
       setSelected(await getCatalogProduct(selected.id, session));
       setImageFile(null);
       setImagePrimary(false);
-      notify("Product image uploaded.");
+      notify(c.imageUploaded);
     } catch (reason) {
-      setError(messageOf(reason, "Unable to upload image."));
+      setError(messageOf(reason, c.imageUploadError));
     } finally {
       setSaving(false);
     }
@@ -136,9 +139,9 @@ export function CatalogAdminWorkspace() {
     try {
       await deleteCatalogImage(selected.id, imageId, session);
       setSelected(await getCatalogProduct(selected.id, session));
-      notify("Product image removed.");
+      notify(c.imageRemoved);
     } catch (reason) {
-      setError(messageOf(reason, "Unable to remove image."));
+      setError(messageOf(reason, c.imageRemoveError));
     }
   }
 
@@ -147,7 +150,7 @@ export function CatalogAdminWorkspace() {
     if (!session || !selected || !canManage) return;
     const quantityDelta = Number(stockDelta);
     if (!quantityDelta || stockReason.trim().length < 3) {
-      setError("Enter a non-zero quantity delta and a clear reason.");
+      setError(c.stockValidation);
       return;
     }
     setSaving(true);
@@ -158,10 +161,10 @@ export function CatalogAdminWorkspace() {
       setForm(productToForm(refreshed));
       setStockDelta("");
       setStockReason("");
-      notify(`${refreshed.sku} stock is now ${refreshed.stock_qty}.`);
+      notify(`${refreshed.sku} · ${c.stockNow} ${refreshed.stock_qty}`);
       await load();
     } catch (reason) {
-      setError(messageOf(reason, "Unable to adjust stock."));
+      setError(messageOf(reason, c.stockError));
     } finally {
       setSaving(false);
     }
@@ -172,11 +175,11 @@ export function CatalogAdminWorkspace() {
     setSaving(true);
     try {
       await archiveCatalogProduct(selected.id, session);
-      notify(`${selected.sku} archived.`);
+      notify(`${selected.sku} ${c.archivedNotice}`);
       startDraft();
       await load();
     } catch (reason) {
-      setError(messageOf(reason, "Unable to archive product."));
+      setError(messageOf(reason, c.archiveError));
     } finally {
       setSaving(false);
     }
@@ -184,25 +187,81 @@ export function CatalogAdminWorkspace() {
 
   if (!allowed) return <AdminSectionDenied section="catalogue and stock" />;
 
-  return <>
-    <AdminPageHeader eyebrow="Catalogue operations" title="Products, publishing & media" description="Odoo owns synchronized master data. Staff can manage drafts, publishing, images, and reasoned stock corrections here." />
-    {error ? <p className="mt-5 rounded-2xl border border-rose-400/25 bg-rose-950/30 p-4 text-sm text-rose-100">{error}</p> : null}
-    <div className="mt-7 grid gap-6 xl:grid-cols-[22rem_minmax(0,1fr)]">
-      <aside className="rounded-3xl border border-slate-800 bg-slate-950/40 p-4">
-        <div className="flex gap-2"><input className="form-input min-w-0" onChange={(event) => setQuery(event.target.value)} placeholder="Search SKU, brand, product" value={query} /><button className="button-secondary px-3" onClick={() => void load()} type="button">Search</button></div>
-        {canManage ? <button className="button-primary mt-3 w-full" onClick={startDraft} type="button">+ New product draft</button> : null}
-        <div className="mt-4 max-h-[70vh] space-y-2 overflow-y-auto pr-1">
-          {loading ? <p className="p-4 text-sm text-slate-500">Loading catalogue…</p> : products.map((product) => <button className={`w-full rounded-2xl border p-4 text-left ${selected?.id === product.id ? "border-sky-400 bg-sky-400/10" : "border-slate-800 bg-slate-900/45 hover:border-slate-600"}`} key={product.id} onClick={() => void openProduct(product.id)} type="button"><div className="flex items-start justify-between gap-3"><span className="font-bold text-white">{product.name}</span><StatusPill value={product.is_active ? "active" : "draft"} /></div><p className="mt-1 font-mono text-xs text-slate-500">{product.sku}</p><div className="mt-3 flex justify-between text-xs"><span className="text-slate-400">{product.stock_qty} units</span><strong className="text-slate-200">{formatEgp(product.list_price)}</strong></div></button>)}
-        </div>
-      </aside>
-      <main className="space-y-6">
-        <CatalogProductEditor selected={selected} form={form} setForm={setForm} categories={categoryOptions} canManage={canManage} saving={saving} onSubmit={saveProduct} />
-        {selected ? <CatalogProductOperations product={selected} canManage={canManage} canArchive={canArchive} saving={saving} imageFile={imageFile} imagePrimary={imagePrimary} stockDelta={stockDelta} stockReason={stockReason} onImageFile={setImageFile} onImagePrimary={setImagePrimary} onUpload={uploadImage} onRemoveImage={(id) => void removeImage(id)} onStockDelta={setStockDelta} onStockReason={setStockReason} onStockSubmit={correctStock} onArchive={() => void archiveProduct()} /> : null}
-      </main>
-    </div>
-  </>;
+  return (
+    <>
+      <AdminPageHeader eyebrow={c.eyebrow} title={c.title} description={c.description} />
+      {error ? <p className="mt-4 rounded-xl border border-danger/25 bg-danger/5 p-4 text-sm text-danger" role="alert">{error}</p> : null}
+
+      <div className="mt-5 grid gap-5 xl:grid-cols-[21rem_minmax(0,1fr)]">
+        <aside className="h-fit rounded-xl border border-border bg-surface p-4 shadow-sm xl:sticky xl:top-20">
+          <div className="relative">
+            <SearchIcon />
+            <input className="form-input ps-9" onChange={(event) => setQuery(event.target.value)} placeholder={c.searchPlaceholder} value={query} />
+          </div>
+          <button className="button-secondary mt-2 w-full" onClick={() => void load()} type="button">{c.search}</button>
+          {canManage ? <button className="button-primary mt-2 w-full" onClick={startDraft} type="button"><PlusIcon />{c.newDraft}</button> : null}
+
+          <div className="mt-4 flex items-center justify-between border-t border-border pt-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-muted">{c.products}</p>
+            <span className="rounded-md bg-elevated px-2 py-1 text-[10px] font-bold text-muted">{products.length}</span>
+          </div>
+
+          <div className="mt-2 max-h-[65vh] space-y-2 overflow-y-auto pe-1">
+            {loading ? (
+              <div className="grid gap-2 py-2">{[0, 1, 2].map((item) => <div className="h-24 animate-pulse rounded-lg bg-elevated" key={item} />)}</div>
+            ) : products.map((product) => (
+              <button
+                className={`focus-ring w-full rounded-lg border p-3.5 text-start transition ${selected?.id === product.id ? "border-primary bg-primary/5" : "border-border bg-surface hover:border-primary/35 hover:bg-elevated/45"}`}
+                key={product.id}
+                onClick={() => void openProduct(product.id)}
+                type="button"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <span className="line-clamp-2 font-bold leading-5 text-foreground">{product.name}</span>
+                  <StatusPill value={product.is_active ? "active" : "draft"} />
+                </div>
+                <p className="mt-1 font-mono text-[10px] text-muted">{product.sku}</p>
+                <div className="mt-3 flex items-center justify-between text-xs">
+                  <span className="text-muted">{product.stock_qty} {c.units}</span>
+                  <strong className="text-foreground">{formatEgp(product.list_price)}</strong>
+                </div>
+              </button>
+            ))}
+          </div>
+        </aside>
+
+        <main className="min-w-0 space-y-5">
+          <CatalogProductEditor selected={selected} form={form} setForm={setForm} categories={categoryOptions} canManage={canManage} saving={saving} onSubmit={saveProduct} />
+          {selected ? (
+            <CatalogProductOperations
+              product={selected}
+              canManage={canManage}
+              canArchive={canArchive}
+              saving={saving}
+              imageFile={imageFile}
+              imagePrimary={imagePrimary}
+              stockDelta={stockDelta}
+              stockReason={stockReason}
+              onImageFile={setImageFile}
+              onImagePrimary={setImagePrimary}
+              onUpload={uploadImage}
+              onRemoveImage={(id) => void removeImage(id)}
+              onStockDelta={setStockDelta}
+              onStockReason={setStockReason}
+              onStockSubmit={correctStock}
+              onArchive={() => void archiveProduct()}
+            />
+          ) : null}
+        </main>
+      </div>
+    </>
+  );
 }
 
-function messageOf(reason: unknown, fallback: string) {
-  return reason instanceof Error ? reason.message : fallback;
-}
+function messageOf(reason: unknown, fallback: string) { return reason instanceof Error ? reason.message : fallback; }
+
+const EN = { eyebrow:"Catalogue operations", title:"Products, publishing & media", description:"Manage drafts, storefront publishing, product media, and controlled stock corrections while preserving Odoo synchronization boundaries.", loadError:"Unable to load catalogue.", productLoadError:"Unable to load product.", saveError:"Unable to save product.", updatedNotice:"updated.", createdNotice:"created as a draft.", imageUploaded:"Product image uploaded.", imageUploadError:"Unable to upload image.", imageRemoved:"Product image removed.", imageRemoveError:"Unable to remove image.", stockValidation:"Enter a non-zero quantity delta and a clear reason.", stockNow:"stock is now", stockError:"Unable to adjust stock.", archivedNotice:"archived.", archiveError:"Unable to archive product.", searchPlaceholder:"Search SKU, brand, product", search:"Search", newDraft:"New product draft", products:"Products", units:"units" } as const;
+const AR: typeof EN = { eyebrow:"عمليات الكتالوج", title:"المنتجات والنشر والوسائط", description:"إدارة المسودات والنشر في المتجر ووسائط المنتجات وتصحيحات المخزون المنضبطة مع الحفاظ على حدود مزامنة Odoo.", loadError:"تعذر تحميل الكتالوج.", productLoadError:"تعذر تحميل المنتج.", saveError:"تعذر حفظ المنتج.", updatedNotice:"تم تحديثه.", createdNotice:"تم إنشاؤه كمسودة.", imageUploaded:"تم رفع صورة المنتج.", imageUploadError:"تعذر رفع الصورة.", imageRemoved:"تم حذف صورة المنتج.", imageRemoveError:"تعذر حذف الصورة.", stockValidation:"أدخل فرق كمية غير صفري وسببًا واضحًا.", stockNow:"المخزون الآن", stockError:"تعذر تعديل المخزون.", archivedNotice:"تمت أرشفته.", archiveError:"تعذر أرشفة المنتج.", searchPlaceholder:"ابحث بـ SKU أو العلامة أو المنتج", search:"بحث", newDraft:"مسودة منتج جديدة", products:"المنتجات", units:"وحدة" };
+
+function SearchIcon() { return <svg aria-hidden="true" className="pointer-events-none absolute start-3 top-1/2 -translate-y-1/2 text-muted" fill="none" height="16" viewBox="0 0 24 24" width="16"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8" /><path d="m16 16 5 5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" /></svg>; }
+function PlusIcon() { return <svg aria-hidden="true" fill="none" height="15" viewBox="0 0 24 24" width="15"><path d="M12 5v14M5 12h14" stroke="currentColor" strokeLinecap="round" strokeWidth="2" /></svg>; }
