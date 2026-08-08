@@ -308,7 +308,7 @@ const EN_COPY = {
   mark: "Mark",
 } as const;
 
-type OrderCopy = typeof EN_COPY;
+type OrderCopy = { [K in keyof typeof EN_COPY]: string };
 
 const AR_COPY: OrderCopy = {
   eyebrow: "عمليات التجارة",
