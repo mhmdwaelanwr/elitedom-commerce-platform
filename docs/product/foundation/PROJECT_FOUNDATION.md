@@ -3,7 +3,7 @@ title: "Project Foundation"
 status: current
 owner: product
 document_type: product-foundation
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Project Foundation behavior, evidence, or source-of-truth changes."
 ---
 
@@ -15,7 +15,7 @@ Defines the stable mission, scope, product boundaries and non-negotiable enginee
 
 ## Current state
 
-Elitedom is an Egyptian technology-commerce platform combining a customer storefront, staff control plane, application API, ERP synchronization, payment orchestration and operational launch controls. The repository is a modular monorepo; it is not a collection of independent demo applications.
+Elitedom is an Egyptian technology-commerce platform combining a customer storefront, staff control plane, application API, ERP synchronization, payment orchestration and operational launch controls. The repository is a modular monorepo; it is not a collection of independent demo applications. The browser frontend is a React 19 + TypeScript + Vite SPA with React Router.
 
 ## Invariants and controls
 
@@ -29,7 +29,8 @@ Elitedom is an Egyptian technology-commerce platform combining a customer storef
 
 - `README.md`
 - `elitedom-store/backend/app/main.py`
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 - `elitedom-store/odoo/addons/elitedom_connector/`
 
 ## Verification

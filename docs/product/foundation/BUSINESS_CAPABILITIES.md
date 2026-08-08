@@ -3,7 +3,7 @@ title: "Business Capabilities"
 status: reference
 owner: product
 document_type: capability-model
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Business Capabilities scope or referenced implementation sources change."
 ---
 
@@ -54,7 +54,8 @@ Health/readiness, metrics, rate limiting, object media, backup/recovery, deploym
 ## Source of truth
 
 - `elitedom-store/backend/app/modules/`
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 - `elitedom-store/backend/app/modules/admin/`
 
 ## Maintenance rule

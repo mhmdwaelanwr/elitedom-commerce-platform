@@ -3,7 +3,7 @@ title: "Sequence Flows"
 status: current
 owner: engineering
 document_type: domain-rules
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Sequence Flows behavior, evidence, or source-of-truth changes."
 ---
 
@@ -20,7 +20,7 @@ Sequences prioritize trust and transaction boundaries rather than visual notatio
 ## Invariants and controls
 
 - Identity: client → auth API → session persistence → optional provider delivery/identity verification.
-- Checkout: client → order validation → payment attempt → Paymob → verified callback → payment/order transition.
+- Checkout: client → order validation → payment attempt → payment provider → verified callback → payment/order transition.
 - Odoo: domain event/outbox → connector/provider delivery → signed webhook → idempotent receipt → domain update.
 - RMA: customer → ownership/eligibility validation → persisted ticket/outbox → staff permission review → valid transition.
 - Launch: operator → release/environment → automatic gates + manual evidence → audit → external smoke.
@@ -29,7 +29,8 @@ Sequences prioritize trust and transaction boundaries rather than visual notatio
 
 - `elitedom-store/backend/app/`
 - `elitedom-store/odoo/addons/elitedom_connector/`
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 
 ## Verification
 

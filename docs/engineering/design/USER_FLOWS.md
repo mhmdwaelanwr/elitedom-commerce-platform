@@ -3,7 +3,7 @@ title: "User Flows"
 status: reference
 owner: engineering
 document_type: ux-reference
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "User Flows scope or referenced implementation sources change."
 ---
 
@@ -25,7 +25,7 @@ Anonymous cart persists and safely merges when the user authenticates.
 
 ### Checkout → payment
 
-Checkout submits authoritative server state → Paymob initiation → redirect/status UX → verified backend payment outcome.
+Checkout submits authoritative server state → payment initiation → redirect/status UX → verified backend payment outcome. Provider branding remains an integration detail rather than a routing concern in the React client.
 
 ### Phone auth
 
@@ -45,7 +45,8 @@ Select release reference/environment → inspect automatic blockers → record e
 
 ## Source of truth
 
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 - `elitedom-store/backend/app/modules/`
 
 ## Maintenance rule

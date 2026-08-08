@@ -3,7 +3,7 @@ title: "Design System"
 status: current
 owner: engineering
 document_type: design-system
-verified_against: "68c1692c12809777fe0a482e35c1a618713c08bc"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Design System behavior, evidence, or source-of-truth changes."
 ---
 
@@ -15,7 +15,7 @@ Defines UI consistency requirements for the storefront and administration experi
 
 ## Current state
 
-The frontend is in an approved clean-room reset. The previous UI implementation, reusable components, locale UI layer, providers, and visual assets were intentionally removed. The executable frontend currently contains a minimal Next.js 16 / React 19 / Tailwind CSS 4 App Router baseline while the new storefront is rebuilt from first principles.
+The frontend is in an approved clean-room reset. The previous UI implementation, reusable components, locale UI layer, providers, and visual assets were intentionally removed. The executable frontend is now a React 19 / TypeScript / Vite single-page application with React Router and Tailwind CSS 4 as the clean foundation while the new storefront is rebuilt from first principles.
 
 English/Arabic, LTR/RTL, light/dark/system preferences, responsive behavior, accessibility, and stable backend/API contracts remain requirements for the rebuilt interface; they are not claimed as implemented by the temporary blank baseline.
 
@@ -32,8 +32,9 @@ English/Arabic, LTR/RTL, light/dark/system preferences, responsive behavior, acc
 
 ## Source of truth
 
-- `elitedom-store/frontend/src/app/`
-- `elitedom-store/frontend/src/app/globals.css`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
+- `elitedom-store/frontend/src/styles/globals.css`
 - `elitedom-store/frontend/scripts/check-design-system.mjs`
 - `elitedom-store/frontend/src/lib/`
 - `elitedom-store/frontend/src/types/`

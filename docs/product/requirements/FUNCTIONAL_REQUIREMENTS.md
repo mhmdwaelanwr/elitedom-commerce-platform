@@ -3,7 +3,7 @@ title: "Functional Requirements"
 status: current
 owner: product
 document_type: requirements
-verified_against: "5be8b80647ecdd5e5410a84b88edc2c1bd8a95f3"
+verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
 review_trigger: "Functional Requirements behavior, evidence, or source-of-truth changes."
 ---
 
@@ -15,7 +15,7 @@ Captures functional behavior by bounded capability and links it to the executabl
 
 ## Current state
 
-The current platform exposes versioned APIs, storefront/admin routes, background integration workers and Odoo connector behavior. Exact request/response fields are owned by FastAPI schemas/OpenAPI rather than duplicated manually here.
+The current platform exposes versioned APIs, React Router storefront/admin routes, background integration workers and Odoo connector behavior. Exact request/response fields are owned by FastAPI schemas/OpenAPI rather than duplicated manually here.
 
 ## Invariants and controls
 
@@ -31,7 +31,8 @@ The current platform exposes versioned APIs, storefront/admin routes, background
 
 - `elitedom-store/backend/app/main.py`
 - `elitedom-store/backend/app/modules/`
-- `elitedom-store/frontend/src/app/`
+- `elitedom-store/frontend/src/pages/`
+- `elitedom-store/frontend/src/router.tsx`
 
 ## Verification
 
