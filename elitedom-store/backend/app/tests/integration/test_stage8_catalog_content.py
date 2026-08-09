@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from io import BytesIO
+from uuid import uuid4
 
 import pytest
 from PIL import Image
@@ -18,6 +20,7 @@ from app.models import (
     Supplier,
 )
 from app.modules.admin.models import AdminAuditLog
+from app.modules.auth.models import AuthSession
 from app.modules.products.catalog_models import (
     CategoryCatalogContent,
     ProductAttributeDefinition,
@@ -28,6 +31,8 @@ from app.shared.security import create_access_token
 
 pytestmark = pytest.mark.asyncio
 
+_SESSION_IDS: dict[int, str] = {}
+
 
 def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[str, str]:
     token = create_access_token(
@@ -35,6 +40,7 @@ def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[s
             "sub": str(partner.id),
             "email": partner.email,
             "role": token_role or partner.role,
+            "sid": _SESSION_IDS[partner.id],
         }
     )
     return {"Authorization": f"Bearer {token}"}
@@ -51,6 +57,18 @@ async def _partner(db_session, *, email: str, role: str) -> Partner:
     )
     db_session.add(partner)
     await db_session.flush()
+    session_id = str(uuid4())
+    db_session.add(
+        AuthSession(
+            id=session_id,
+            partner_id=partner.id,
+            refresh_token_hash="0" * 64,
+            auth_method="test",
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+    )
+    await db_session.flush()
+    _SESSION_IDS[partner.id] = session_id
     return partner
 
 
