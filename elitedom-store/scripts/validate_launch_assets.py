@@ -15,6 +15,9 @@ LAUNCH_PAGE = FRONTEND / "src/pages/admin/LaunchControlPage.tsx"
 SEO_GENERATOR = FRONTEND / "scripts/generate-seo.mjs"
 LAUNCH_E2E_CONFIG = FRONTEND / "playwright.launch.config.mjs"
 LAUNCH_E2E_SPEC = FRONTEND / "e2e/launch.spec.mjs"
+RELEASE_VERIFY = STORE / "scripts/verify_release.py"
+PRODUCTION_COMPOSE = STORE / "infrastructure/docker-compose.prod.yml"
+ENV_EXAMPLE = STORE / ".env.example"
 
 REQUIRED_FILES = (
     ROOT / ".github/workflows/ci.yml",
@@ -23,6 +26,7 @@ REQUIRED_FILES = (
     STAGE_10_DOC,
     STORE / "docs/GO_LIVE_RUNBOOK.md",
     STORE / "scripts/live_smoke.py",
+    RELEASE_VERIFY,
     STORE / "backend/alembic/versions/20260807_0014_launch_acceptance.py",
     STORE / "backend/app/tests/integration/test_stage10_launch_acceptance.py",
     FRONTEND / "src/router.tsx",
@@ -31,6 +35,8 @@ REQUIRED_FILES = (
     FRONTEND / "vite.config.ts",
     LAUNCH_E2E_CONFIG,
     LAUNCH_E2E_SPEC,
+    PRODUCTION_COMPOSE,
+    ENV_EXAMPLE,
 )
 
 REQUIRED_CI_MARKERS = (
@@ -81,6 +87,16 @@ def main() -> int:
         "CI must syntax-check the Playwright launch config.",
         errors,
     )
+    require(
+        "elitedom-store/scripts/verify_release.py" in ci,
+        "CI must syntax-check the release provenance verifier.",
+        errors,
+    )
+    require(
+        "RELEASE_REF: 0123456789abcdef" in ci,
+        "Production Compose validation must provide an immutable release ref.",
+        errors,
+    )
 
     smoke_workflow = (ROOT / ".github/workflows/launch-smoke.yml").read_text(encoding="utf-8")
     require("workflow_dispatch:" in smoke_workflow, "Launch smoke must remain manually dispatched.", errors)
@@ -106,6 +122,16 @@ def main() -> int:
         "Launch workflow must preserve browser evidence on success or failure.",
         errors,
     )
+    require(
+        "release_ref:" in smoke_workflow and "verify_release.py" in smoke_workflow,
+        "Launch workflow must require and verify the deployed release ref.",
+        errors,
+    )
+    require(
+        "release-provenance.json" in smoke_workflow,
+        "Launch workflow must preserve release provenance evidence.",
+        errors,
+    )
 
     smoke_source = (STORE / "scripts/live_smoke.py").read_text(encoding="utf-8")
     try:
@@ -116,6 +142,25 @@ def main() -> int:
     require("_NoRedirectHandler" in smoke_source, "Live smoke must fail closed instead of following redirects.", errors)
     require("health/ready" in smoke_source, "Live smoke must verify dependency readiness.", errors)
     require("robots.txt" in smoke_source and "sitemap.xml" in smoke_source, "Live smoke must verify public SEO assets.", errors)
+
+    release_source = RELEASE_VERIFY.read_text(encoding="utf-8")
+    try:
+        ast.parse(release_source)
+    except SyntaxError as exc:
+        errors.append(f"verify_release.py is not valid Python: {exc}")
+    require("from live_smoke import fetch, validate_origin" in release_source, "Release verification must reuse the hardened public-target checks.", errors)
+    require("health/live" in release_source, "Release verification must use the existing liveness contract.", errors)
+    require("expected_release_ref" in release_source and "deployed_release_ref" in release_source, "Release verification evidence must record expected and deployed refs.", errors)
+    require("^[0-9a-fA-F]{7,64}$" in release_source, "Release verification must accept only hexadecimal Git commit SHAs.", errors)
+
+    production_compose = PRODUCTION_COMPOSE.read_text(encoding="utf-8")
+    require(
+        'APP_VERSION: "${RELEASE_REF:?Set RELEASE_REF to the deployed Git commit SHA}"' in production_compose,
+        "Production FastAPI must expose the immutable RELEASE_REF through APP_VERSION.",
+        errors,
+    )
+    env_example = ENV_EXAMPLE.read_text(encoding="utf-8")
+    require("RELEASE_REF=development" in env_example, "Environment template must document RELEASE_REF.", errors)
 
     e2e_config = LAUNCH_E2E_CONFIG.read_text(encoding="utf-8")
     require("ELITEDOM_SITE_URL" in e2e_config, "Browser config must require the deployed storefront origin.", errors)
@@ -156,6 +201,11 @@ def main() -> int:
         "Go-live runbook must document the deployed browser E2E release gate.",
         errors,
     )
+    require(
+        "release provenance" in runbook,
+        "Go-live runbook must document immutable deployed release provenance.",
+        errors,
+    )
 
     stage_doc = STAGE_10_DOC.read_text(encoding="utf-8")
     for marker in (
@@ -186,7 +236,7 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    print("Launch assets validated successfully, including P15 deployed browser E2E wiring.")
+    print("Launch assets validated successfully, including P15 browser E2E and release provenance wiring.")
     return 0
 
 
