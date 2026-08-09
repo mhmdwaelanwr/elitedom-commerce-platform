@@ -22,9 +22,41 @@
   font-weight: 500;
 }
 
-.el-store-footer__group a:hover {
-  color: var(--el-text-primary);
+.el-store-footer__group a:hover { color: var(--el-text-primary); }
+
+.el-warranty-card select {
+  width: 100%;
+  height: 48px;
+  padding-inline: 13px 38px;
+  border: 1px solid var(--el-control-border);
+  border-radius: 13px;
+  outline: 0;
+  color: var(--el-control-text);
+  background: var(--el-input-bg);
+  font-size: 12px;
 }
+
+.el-warranty-card select:focus {
+  border-color: var(--el-accent-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-accent-primary) 10%, transparent);
+}
+
+.el-warranty-no-orders {
+  min-height: 240px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px dashed var(--el-border-strong);
+  border-radius: 18px;
+  color: var(--el-text-secondary);
+  background: var(--el-surface-2);
+  text-align: center;
+}
+
+.el-warranty-no-orders p { max-width: 420px; margin: 0; font-size: 12px; line-height: 1.55; }
+.el-warranty-no-orders a { color: var(--el-accent-primary); font-size: 11px; font-weight: 650; }
 
 :root[data-theme="light"] .el-social-dock,
 :root[data-theme="light"] .el-store-header,
