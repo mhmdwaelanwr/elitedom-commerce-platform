@@ -1,432 +1,201 @@
-"""Verified, idempotent Paymob transaction callback processing."""
+"""Paymob webhook processing with HMAC verification and idempotency guards."""
 
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
-import logging
-from collections.abc import Mapping
-from datetime import UTC, datetime
-from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from app.config import get_settings, is_secure_secret
-from app.database import get_db
-from app.integrations.paymob.hmac import verify_transaction_hmac
-from app.models import SaleOrder
-from app.modules.payments.models import PaymentAttempt, PaymentWebhookEvent
-from app.modules.payments.transitions import (
-    mark_payment_failed,
-    mark_payment_refunded,
-    mark_payment_succeeded,
-)
-from app.shared.exceptions import (
-    WebhookSignatureInvalidError,
-    WebhookSignatureMissingError,
-)
-from app.shared.schemas import PaymentMethod
+from app.config import get_settings
+from app.integrations.paymob.service import get_paymob_service
+from app.modules.orders.models import Order
+from app.modules.orders.payment_models import PaymentAttempt, PaymentWebhookReceipt
 
-logger = logging.getLogger(__name__)
 settings = get_settings()
-router = APIRouter()
+
+_HMAC_FIELDS = (
+    "amount_cents",
+    "created_at",
+    "currency",
+    "error_occured",
+    "has_parent_transaction",
+    "id",
+    "integration_id",
+    "is_3d_secure",
+    "is_auth",
+    "is_capture",
+    "is_refunded",
+    "is_standalone_payment",
+    "is_voided",
+    "order",
+    "owner",
+    "pending",
+    "source_data.pan",
+    "source_data.sub_type",
+    "source_data.type",
+    "success",
+)
 
 
-def _mapping(value: Any) -> Mapping[str, Any]:
-    return value if isinstance(value, Mapping) else {}
+def _value_at_path(data: dict[str, Any], path: str) -> Any:
+    value: Any = data
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return ""
+        value = value.get(part, "")
+    return value
 
 
-def _identifier(value: Any) -> str | None:
+def _stringify_hmac_value(value: Any) -> str:
     if isinstance(value, bool):
-        return None
-    if isinstance(value, str | int) and str(value).strip():
-        return str(value)
-    return None
+        return "true" if value else "false"
+    if value is None:
+        return ""
+    return str(value)
 
 
-def _boolean(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().casefold() == "true"
-    return bool(value)
+def _hmac_message(obj: dict[str, Any]) -> str:
+    pieces: list[str] = []
+    for field in _HMAC_FIELDS:
+        value = _value_at_path(obj, field)
+        if field == "order" and isinstance(value, dict):
+            value = value.get("id", "")
+        pieces.append(_stringify_hmac_value(value))
+    return "".join(pieces)
 
 
-def _integer(value: Any) -> int | None:
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str) and value.isdecimal():
-        return int(value)
-    return None
-
-
-def _event_key(transaction: Mapping[str, Any]) -> str:
-    """Keep terminal state changes distinct while making retries idempotent."""
-    state = {
-        "id": transaction.get("id"),
-        "pending": _boolean(transaction.get("pending")),
-        "success": _boolean(transaction.get("success")),
-        "refunded": _boolean(transaction.get("is_refunded")),
-        "voided": _boolean(transaction.get("is_voided")),
-        "amount": transaction.get("amount_cents"),
-        "currency": transaction.get("currency"),
-    }
-    digest = hashlib.sha256(
-        json.dumps(state, sort_keys=True, separators=(",", ":")).encode()
+def verify_paymob_hmac(obj: dict[str, Any], received_hmac: str) -> bool:
+    """Validate Paymob's transaction callback signature."""
+    secret = settings.paymob_hmac_secret.get_secret_value()
+    if not secret or not received_hmac:
+        return False
+    expected = hmac.new(
+        secret.encode("utf-8"),
+        _hmac_message(obj).encode("utf-8"),
+        hashlib.sha512,
     ).hexdigest()
-    transaction_id = _identifier(transaction.get("id")) or "unknown"
-    return f"transaction:{transaction_id}:{digest}"
+    return hmac.compare_digest(expected, received_hmac)
 
 
-def _rejected_event_key(transaction: Mapping[str, Any], reason: str) -> str:
-    """Audit rejected callbacks without consuming the accepted event key."""
-    payload_digest = hashlib.sha256(
-        json.dumps(
-            transaction,
-            sort_keys=True,
-            separators=(",", ":"),
-            default=str,
-        ).encode()
-    ).hexdigest()[:24]
-    return f"rejected:{_event_key(transaction)}:{reason}:{payload_digest}"
+def _transaction_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    obj = payload.get("obj")
+    if isinstance(obj, dict):
+        return obj
+    return payload
 
 
-def _callback_type(transaction: Mapping[str, Any]) -> str:
-    if _boolean(transaction.get("is_refunded")):
-        return "transaction.refunded"
-    if _boolean(transaction.get("is_voided")):
-        return "transaction.voided"
-    if _boolean(transaction.get("pending")):
-        return "transaction.pending"
-    if _boolean(transaction.get("success")) and not _boolean(
-        transaction.get("error_occured")
-    ):
-        return "transaction.succeeded"
-    return "transaction.failed"
-
-
-def _order_reference(transaction: Mapping[str, Any]) -> tuple[int | None, str | None]:
-    order_payload = _mapping(transaction.get("order"))
-    claims = _mapping(transaction.get("payment_key_claims"))
-    extras = _mapping(claims.get("extra")) or _mapping(transaction.get("extras"))
-
-    local_id = _integer(extras.get("order_id"))
-    reference = (
-        _identifier(extras.get("order_number"))
-        or _identifier(order_payload.get("merchant_order_id"))
-        or _identifier(order_payload.get("special_reference"))
-        or _identifier(transaction.get("special_reference"))
-    )
-    return local_id, reference
-
-
-def _provider_references(
-    transaction: Mapping[str, Any],
-) -> tuple[str | None, str | None]:
-    order_payload = _mapping(transaction.get("order"))
-    claims = _mapping(transaction.get("payment_key_claims"))
-    intention_payload = _mapping(transaction.get("intention"))
-    provider_order_id = _identifier(order_payload.get("id"))
-    intention_id = (
-        _identifier(intention_payload.get("id"))
-        or _identifier(claims.get("intention_id"))
-        or _identifier(transaction.get("intention_id"))
-    )
-    return intention_id, provider_order_id
-
-
-def _expected_integration_id(attempt: PaymentAttempt) -> int:
-    if attempt.payment_method == PaymentMethod.CREDIT_CARD.value:
-        return settings.paymob_card_payment_method_id
-    if attempt.payment_method == PaymentMethod.MOBILE_WALLET.value:
-        return settings.paymob_wallet_payment_method_id
-    return 0
-
-
-def _binding_error(
-    transaction: Mapping[str, Any],
-    attempt: PaymentAttempt,
-    order: SaleOrder,
-) -> str | None:
-    """Cross-check every redundant callback reference against one stored binding."""
-    transaction_id = _identifier(transaction.get("id"))
-    order_payload = _mapping(transaction.get("order"))
-    provider_order_id = _identifier(order_payload.get("id"))
-
-    if provider_order_id:
-        if not attempt.provider_order_id:
-            return "provider_order_unbound"
-        if str(attempt.provider_order_id) != provider_order_id:
-            return "provider_order_mismatch"
-
-    if transaction_id and attempt.provider_transaction_id:
-        if str(attempt.provider_transaction_id) != transaction_id:
-            return "transaction_mismatch"
-
-    expected_intention = _identifier(attempt.provider_intention_id)
-    claims = _mapping(transaction.get("payment_key_claims"))
-    intention_payload = _mapping(transaction.get("intention"))
-    supplied_intentions = (
-        _identifier(intention_payload.get("id")),
-        _identifier(claims.get("intention_id")),
-        _identifier(transaction.get("intention_id")),
-    )
-    for supplied in supplied_intentions:
-        if supplied is not None and supplied != expected_intention:
-            return "intention_mismatch"
-
-    expected_references = {
-        value
-        for value in (
-            _identifier(attempt.provider_reference),
-            _identifier(order.name),
-        )
-        if value is not None
-    }
-    extras_payloads = (
-        _mapping(claims.get("extra")),
-        _mapping(transaction.get("extras")),
-    )
-    for extras in extras_payloads:
-        local_id = _integer(extras.get("order_id"))
-        if local_id is not None and local_id != order.id:
-            return "local_order_mismatch"
-        order_number = _identifier(extras.get("order_number"))
-        if order_number is not None and order_number not in expected_references:
-            return "order_reference_mismatch"
-
-    redundant_references = (
-        _identifier(order_payload.get("merchant_order_id")),
-        _identifier(order_payload.get("special_reference")),
-        _identifier(transaction.get("special_reference")),
-    )
-    for supplied in redundant_references:
-        if supplied is not None and supplied not in expected_references:
-            return "order_reference_mismatch"
-
-    return None
-
-
-def _validation_error(
-    transaction: Mapping[str, Any],
-    attempt: PaymentAttempt,
-    order: SaleOrder,
-) -> str | None:
-    binding_error = _binding_error(transaction, attempt, order)
-    if binding_error:
-        return binding_error
-
-    amount = _integer(transaction.get("amount_cents"))
-    if amount is None:
-        return "missing_payment_amount"
-    if amount != attempt.amount_minor:
-        return "amount_mismatch"
-
-    currency = transaction.get("currency")
-    if not isinstance(currency, str):
-        return "missing_payment_currency"
-    if currency.strip().upper() != attempt.currency.strip().upper():
-        return "currency_mismatch"
-    if attempt.currency.strip().upper() != order.currency.strip().upper():
-        return "order_currency_mismatch"
-
-    integration_id = _integer(transaction.get("integration_id"))
-    if integration_id != _expected_integration_id(attempt):
-        return "integration_mismatch"
-    return None
-
-
-@router.post("/transaction")
-async def paymob_transaction_webhook(
-    request: Request,
-    hmac_value: str | None = Query(default=None, alias="hmac"),
-    db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
-    """Verify a Paymob HMAC and apply one transaction state exactly once."""
-    if not hmac_value:
-        raise WebhookSignatureMissingError()
-    if not is_secure_secret(settings.paymob_hmac_secret, minimum_length=32):
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Paymob webhook processing is not configured.",
-        )
-
-    try:
-        payload = await request.json()
-    except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise WebhookSignatureInvalidError() from error
-    envelope = _mapping(payload)
-    transaction = _mapping(envelope.get("obj"))
-    if not transaction:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid Paymob callback payload.",
-        )
-    if not verify_transaction_hmac(
-        transaction,
-        hmac_value,
-        settings.paymob_hmac_secret,
-    ):
-        logger.warning("Rejected Paymob callback with an invalid HMAC")
-        raise WebhookSignatureInvalidError()
-
-    result = await process_paymob_transaction(db=db, transaction=transaction)
-    return {"status": result}
-
-
-async def process_paymob_transaction(
-    *,
-    db: AsyncSession,
-    transaction: Mapping[str, Any],
-) -> str:
-    """Process one already-verified Paymob transaction callback."""
-    transaction_id = _identifier(transaction.get("id"))
-    if not transaction_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Paymob callback is missing the transaction id.",
-        )
-
-    callback_type = _callback_type(transaction)
-    attempt, order = await _find_attempt_and_order(db, transaction)
-    if attempt is None or order is None:
-        logger.warning(
-            "Ignored unmatched Paymob transaction %s before consuming idempotency",
-            transaction_id,
-        )
-        return "unmatched"
-
-    validation_error = _validation_error(transaction, attempt, order)
-    if validation_error:
-        receipt = await _register_event(
-            db=db,
-            event_key=_rejected_event_key(transaction, validation_error),
-            event_type=callback_type,
-            provider_transaction_id=transaction_id,
-        )
-        if receipt is not None:
-            receipt.attempt_id = attempt.id
-            receipt.order_id = order.id
-            receipt.processing_status = f"rejected_{validation_error}"
-            receipt.processed_at = datetime.now(UTC)
-            await db.flush()
-        logger.warning(
-            "Rejected Paymob transaction %s for order %s without consuming accepted idempotency: %s",
-            transaction_id,
-            order.name,
-            validation_error,
-        )
-        return "rejected"
-
-    receipt = await _register_event(
-        db=db,
-        event_key=_event_key(transaction),
-        event_type=callback_type,
-        provider_transaction_id=transaction_id,
-    )
-    if receipt is None:
-        return "duplicate"
-
-    receipt.attempt_id = attempt.id
-    receipt.order_id = order.id
-    if callback_type == "transaction.pending":
-        attempt.status = "pending"
-        attempt.provider_transaction_id = transaction_id
-        outcome = "pending"
-    elif callback_type == "transaction.succeeded":
-        outcome = await mark_payment_succeeded(
-            db=db,
-            order=order,
-            attempt=attempt,
-            provider_transaction_id=transaction_id,
-        )
-    elif callback_type == "transaction.refunded":
-        outcome = await mark_payment_refunded(
-            db=db,
-            order=order,
-            attempt=attempt,
-            provider_transaction_id=transaction_id,
-            provider_refund_id=_identifier(transaction.get("refunded_transaction_id")),
-        )
-    else:
-        data = _mapping(transaction.get("data"))
-        failure_code = (
-            _identifier(data.get("message"))
-            or _identifier(data.get("txn_response_code"))
-            or callback_type.removeprefix("transaction.")
-        )
-        outcome = await mark_payment_failed(
-            db=db,
-            order=order,
-            attempt=attempt,
-            provider_transaction_id=transaction_id,
-            failure_code=failure_code,
-        )
-
-    receipt.processing_status = outcome
-    receipt.processed_at = datetime.now(UTC)
-    await db.flush()
-    return outcome
-
-
-async def _register_event(
-    *,
-    db: AsyncSession,
-    event_key: str,
-    event_type: str,
-    provider_transaction_id: str,
-) -> PaymentWebhookEvent | None:
-    receipt = PaymentWebhookEvent(
-        provider="paymob",
-        event_key=event_key,
-        event_type=event_type,
-        provider_transaction_id=provider_transaction_id,
-    )
-    try:
-        async with db.begin_nested():
-            db.add(receipt)
-            await db.flush()
-    except IntegrityError:
+def _as_int(value: Any) -> int | None:
+    if value in (None, ""):
         return None
-    return receipt
+    try:
+        return int(str(value))
+    except (TypeError, ValueError):
+        return None
+
+
+def _transaction_order_id(transaction: dict[str, Any]) -> str | None:
+    provider_order = transaction.get("order")
+    if isinstance(provider_order, dict):
+        provider_order = provider_order.get("id")
+    if provider_order in (None, ""):
+        return None
+    return str(provider_order)
+
+
+def _transaction_extra(transaction: dict[str, Any]) -> tuple[int | None, str | None, str | None]:
+    claims = transaction.get("payment_key_claims")
+    if not isinstance(claims, dict):
+        return None, None, None
+    extra = claims.get("extra")
+    if not isinstance(extra, dict):
+        extra = {}
+    local_order_id = _as_int(extra.get("order_id"))
+    order_number = extra.get("order_number")
+    intention_id = claims.get("intention_id")
+    return (
+        local_order_id,
+        str(order_number) if order_number not in (None, "") else None,
+        str(intention_id) if intention_id not in (None, "") else None,
+    )
+
+
+def _raw_local_order_id(transaction: dict[str, Any]) -> tuple[bool, Any]:
+    """Return whether a local order ID claim was supplied and its raw value.
+
+    A present-but-malformed redundant binding is not equivalent to an omitted
+    binding. Treating it as missing would let a signed provider identifier
+    bypass a contradictory unsigned/local claim instead of rejecting the
+    callback conservatively.
+    """
+    claims = transaction.get("payment_key_claims")
+    if not isinstance(claims, dict):
+        return False, None
+    extra = claims.get("extra")
+    if not isinstance(extra, dict) or "order_id" not in extra:
+        return False, None
+    return True, extra.get("order_id")
+
+
+def _provider_transaction_id(transaction: dict[str, Any]) -> str | None:
+    value = transaction.get("id")
+    if value in (None, ""):
+        return None
+    return str(value)
+
+
+async def _attempt_from_extra(db: AsyncSession, transaction: dict[str, Any]) -> PaymentAttempt | None:
+    local_order_id, order_number, intention_id = _transaction_extra(transaction)
+    attempt: PaymentAttempt | None = None
+    if intention_id:
+        attempt = await db.scalar(
+            select(PaymentAttempt).where(PaymentAttempt.provider_intention_id == intention_id)
+        )
+        if attempt is not None:
+            return attempt
+    if local_order_id is not None:
+        attempt = await db.scalar(
+            select(PaymentAttempt)
+            .where(PaymentAttempt.order_id == local_order_id)
+            .order_by(PaymentAttempt.created_at.desc())
+        )
+        if attempt is not None:
+            return attempt
+    if order_number:
+        order = await db.scalar(select(Order).where(Order.name == order_number))
+        if order is not None:
+            return await db.scalar(
+                select(PaymentAttempt)
+                .where(PaymentAttempt.order_id == order.id)
+                .order_by(PaymentAttempt.created_at.desc())
+            )
+    return None
 
 
 async def _find_attempt_and_order(
     db: AsyncSession,
-    transaction: Mapping[str, Any],
-) -> tuple[PaymentAttempt | None, SaleOrder | None]:
-    """Resolve only through identifiers authenticated by Paymob's transaction HMAC."""
-    transaction_id = _identifier(transaction.get("id"))
-    _, provider_order_id = _provider_references(transaction)
+    transaction: dict[str, Any],
+) -> tuple[PaymentAttempt | None, Order | None]:
+    provider_transaction_id = _provider_transaction_id(transaction)
+    provider_order_id = _transaction_order_id(transaction)
 
     by_transaction: PaymentAttempt | None = None
     by_provider_order: PaymentAttempt | None = None
-    if transaction_id:
+    if provider_transaction_id:
         by_transaction = await db.scalar(
-            select(PaymentAttempt)
-            .where(
-                PaymentAttempt.provider == "paymob",
-                PaymentAttempt.provider_transaction_id == transaction_id,
+            select(PaymentAttempt).where(
+                PaymentAttempt.provider_transaction_id == provider_transaction_id
             )
-            .order_by(PaymentAttempt.created_at.desc())
-            .limit(1)
         )
     if provider_order_id:
         by_provider_order = await db.scalar(
             select(PaymentAttempt)
-            .where(
-                PaymentAttempt.provider == "paymob",
-                PaymentAttempt.provider_order_id == provider_order_id,
-            )
+            .where(PaymentAttempt.provider_order_id == provider_order_id)
             .order_by(PaymentAttempt.created_at.desc())
-            .limit(1)
         )
 
     if (
@@ -434,35 +203,233 @@ async def _find_attempt_and_order(
         and by_provider_order is not None
         and by_transaction.id != by_provider_order.id
     ):
-        logger.warning(
-            "Rejected Paymob callback because signed transaction/order ids resolve to different attempts"
-        )
+        # Both identifiers are HMAC-covered by Paymob. A callback that binds
+        # each signed identifier to a different local attempt is ambiguous and
+        # must not choose either attempt.
         return None, None
 
-    attempt = by_provider_order or by_transaction
+    attempt = by_transaction or by_provider_order
     if attempt is None:
-        # Unsigned intention/extras/merchant references must never select a local
-        # payment object. They are checked only after a signed binding resolves.
+        attempt = await _attempt_from_extra(db, transaction)
+    if attempt is None:
         return None, None
-
-    order = await db.scalar(
-        select(SaleOrder)
-        .options(selectinload(SaleOrder.order_lines))
-        .where(SaleOrder.id == attempt.order_id)
-        .with_for_update()
-    )
-    if order is None:
-        return attempt, None
+    order = await db.scalar(select(Order).where(Order.id == attempt.order_id))
     return attempt, order
 
 
-def order_amount_minor(order: SaleOrder) -> int:
-    """Exact helper used by checkout and reconciliation tests."""
-    try:
-        amount = Decimal(order.amount_total)
-    except (InvalidOperation, TypeError, ValueError) as error:
-        raise ValueError("Order total is not a valid decimal amount.") from error
-    minor = amount * Decimal("100")
-    if amount < 0 or minor != minor.to_integral_value():
-        raise ValueError("Order total cannot be represented in minor units.")
-    return int(minor)
+def _binding_error(
+    transaction: dict[str, Any],
+    attempt: PaymentAttempt,
+    order: Order,
+) -> str | None:
+    provider_order_id = _transaction_order_id(transaction)
+    provider_transaction_id = _provider_transaction_id(transaction)
+    local_order_id, order_number, intention_id = _transaction_extra(transaction)
+    local_order_id_present, raw_local_order_id = _raw_local_order_id(transaction)
+
+    if provider_order_id and attempt.provider_order_id:
+        if str(attempt.provider_order_id) != provider_order_id:
+            return "provider_order_mismatch"
+    if provider_transaction_id and attempt.provider_transaction_id:
+        if str(attempt.provider_transaction_id) != provider_transaction_id:
+            return "provider_transaction_mismatch"
+    if intention_id and attempt.provider_intention_id:
+        if str(attempt.provider_intention_id) != intention_id:
+            return "intention_mismatch"
+    if local_order_id_present:
+        parsed_local_order_id = _as_int(raw_local_order_id)
+        if parsed_local_order_id is None or parsed_local_order_id != order.id:
+            return "local_order_mismatch"
+    elif local_order_id is not None and local_order_id != order.id:
+        return "local_order_mismatch"
+    if order_number and order.name and order_number != order.name:
+        return "order_number_mismatch"
+    if attempt.provider_reference and order.name and attempt.provider_reference != order.name:
+        return "attempt_reference_mismatch"
+    return None
+
+
+def _rejected_event_key(
+    transaction: dict[str, Any],
+    *,
+    reason: str,
+    attempt: PaymentAttempt | None,
+) -> str:
+    """Create an idempotency key for a rejected callback without consuming the accepted event key."""
+    material = json.dumps(
+        transaction,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    digest = hashlib.sha256(material.encode("utf-8")).hexdigest()
+    attempt_id = str(attempt.id) if attempt is not None else "unknown"
+    return f"paymob:rejected:{reason}:{attempt_id}:{digest}"
+
+
+async def _register_receipt(
+    db: AsyncSession,
+    *,
+    event_key: str,
+    transaction: dict[str, Any],
+    signature_valid: bool,
+    attempt_id: int | None,
+    processed: bool,
+    error_message: str | None = None,
+) -> tuple[PaymentWebhookReceipt, bool]:
+    receipt = await db.scalar(
+        select(PaymentWebhookReceipt).where(PaymentWebhookReceipt.event_key == event_key)
+    )
+    if receipt is not None:
+        return receipt, False
+    receipt = PaymentWebhookReceipt(
+        provider="paymob",
+        event_key=event_key,
+        event_type="transaction",
+        payload=transaction,
+        signature_valid=signature_valid,
+        payment_attempt_id=attempt_id,
+        processed=processed,
+        error_message=error_message,
+    )
+    db.add(receipt)
+    await db.flush()
+    return receipt, True
+
+
+async def _record_rejected_callback(
+    db: AsyncSession,
+    *,
+    transaction: dict[str, Any],
+    reason: str,
+    attempt: PaymentAttempt | None,
+) -> dict[str, str]:
+    await _register_receipt(
+        db,
+        event_key=_rejected_event_key(transaction, reason=reason, attempt=attempt),
+        transaction=transaction,
+        signature_valid=True,
+        attempt_id=attempt.id if attempt is not None else None,
+        processed=False,
+        error_message=reason,
+    )
+    await db.commit()
+    return {"status": "rejected"}
+
+
+def _locked_attempt_statement(attempt_id: int):
+    statement = select(PaymentAttempt).where(PaymentAttempt.id == attempt_id)
+    bind = getattr(PaymentAttempt.__table__.metadata, "bind", None)
+    dialect_name = getattr(getattr(bind, "dialect", None), "name", None)
+    if dialect_name == "sqlite":
+        return statement
+    return statement.with_for_update()
+
+
+async def _mark_failed(
+    db: AsyncSession,
+    attempt: PaymentAttempt,
+    transaction: dict[str, Any],
+) -> None:
+    attempt.status = "failed"
+    attempt.provider_transaction_id = (
+        _provider_transaction_id(transaction) or attempt.provider_transaction_id
+    )
+    attempt.provider_order_id = _transaction_order_id(transaction) or attempt.provider_order_id
+    attempt.raw_response = transaction
+    await db.flush()
+
+
+async def process_paymob_transaction(
+    db: AsyncSession,
+    *,
+    payload: dict[str, Any],
+    received_hmac: str,
+) -> dict[str, str]:
+    """Verify and process a Paymob transaction callback."""
+    transaction = _transaction_from_payload(payload)
+    if not verify_paymob_hmac(transaction, received_hmac):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Paymob callback signature",
+        )
+
+    provider_transaction_id = _provider_transaction_id(transaction)
+    if provider_transaction_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Paymob callback did not include a transaction ID",
+        )
+
+    attempt, order = await _find_attempt_and_order(db, transaction)
+    if attempt is None:
+        return await _record_rejected_callback(
+            db,
+            transaction=transaction,
+            reason="payment_attempt_not_found_or_conflicting_signed_identifiers",
+            attempt=None,
+        )
+    if order is None:
+        return await _record_rejected_callback(
+            db,
+            transaction=transaction,
+            reason="order_not_found",
+            attempt=attempt,
+        )
+
+    binding_error = _binding_error(transaction, attempt, order)
+    if binding_error is not None:
+        return await _record_rejected_callback(
+            db,
+            transaction=transaction,
+            reason=binding_error,
+            attempt=attempt,
+        )
+
+    # Register the accepted event only after all callback-to-order bindings are
+    # validated. A signed-but-contradictory callback must never consume the
+    # idempotency key that a later valid callback needs.
+    receipt, created = await _register_receipt(
+        db,
+        event_key=f"paymob:transaction:{provider_transaction_id}",
+        transaction=transaction,
+        signature_valid=True,
+        attempt_id=attempt.id,
+        processed=False,
+    )
+    if not created and receipt.processed:
+        return {"status": "duplicate"}
+
+    service = get_paymob_service()
+    locked_attempt = await db.scalar(_locked_attempt_statement(attempt.id))
+    if locked_attempt is None:
+        receipt.error_message = "payment_attempt_disappeared"
+        await db.commit()
+        return {"status": "rejected"}
+    locked_order = await db.scalar(select(Order).where(Order.id == locked_attempt.order_id))
+    if locked_order is None:
+        receipt.error_message = "order_not_found"
+        await db.commit()
+        return {"status": "rejected"}
+
+    if bool(transaction.get("success")) and not bool(transaction.get("pending")):
+        service.capture_attempt(
+            locked_attempt,
+            provider_order_id=_transaction_order_id(transaction),
+            provider_transaction_id=provider_transaction_id,
+            raw_response=transaction,
+        )
+        if locked_order.status != "Paid":
+            locked_order.status = "Paid"
+            locked_order.payment_status = "paid"
+    elif not bool(transaction.get("pending")):
+        await _mark_failed(db, locked_attempt, transaction)
+        if locked_order.status != "Paid":
+            locked_order.status = "Payment Failed"
+            locked_order.payment_status = "failed"
+
+    receipt.payment_attempt_id = locked_attempt.id
+    receipt.processed = True
+    receipt.error_message = None
+    await db.commit()
+    return {"status": "processed"}
