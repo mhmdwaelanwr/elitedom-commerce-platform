@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Cart, Partner, ProductTemplate, SaleOrder
-from app.shared.security import create_access_token
+from app.tests.auth_helpers import authorization as _authorization
 
 
 async def _create_product(db: AsyncSession) -> ProductTemplate:
@@ -151,10 +151,7 @@ async def test_authenticated_cart_and_checkout_remain_partner_owned(
     db_session.add(customer)
     await db_session.flush()
 
-    access_token = create_access_token(
-        {"sub": str(customer.id), "email": customer.email, "role": "customer"}
-    )
-    authorization = {"Authorization": f"Bearer {access_token}"}
+    authorization = _authorization(customer)
 
     add_response = await client.post(
         "/api/v1/orders/cart/items?session_id=ignored-for-authenticated-user",
@@ -199,10 +196,7 @@ async def test_authenticated_cart_sync_merges_only_the_requested_guest_session(
     assert guest_cart_response.status_code == 200
     guest_cart_id = guest_cart_response.json()["id"]
 
-    access_token = create_access_token(
-        {"sub": str(customer.id), "email": customer.email, "role": "customer"}
-    )
-    authorization = {"Authorization": f"Bearer {access_token}"}
+    authorization = _authorization(customer)
     own_cart_response = await client.post(
         "/api/v1/orders/cart/items",
         json={"product_id": product.id, "quantity": 2},
