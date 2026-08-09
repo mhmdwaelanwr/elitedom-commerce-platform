@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
 
@@ -19,6 +19,7 @@ const copy = {
       ["PC builds", "/#outcomes"],
       ["Displays", "/#categories"],
       ["Deals", "/#curated"],
+      ["Business", "/business"],
     ],
     menu: "Open navigation",
     account: "Account",
@@ -32,6 +33,7 @@ const copy = {
       ["تجميعات PC", "/#outcomes"],
       ["الشاشات", "/#categories"],
       ["العروض", "/#curated"],
+      ["الشركات", "/business"],
     ],
     menu: "افتح القائمة",
     account: "الحساب",
@@ -51,6 +53,7 @@ const searchButtonStyle = {
 
 export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
   const labels = copy[locale];
@@ -63,6 +66,12 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
     setMobileOpen(false);
   }
 
+  function activeHref(href: string) {
+    if (href === "/business") return location.pathname.startsWith("/business");
+    if (href === "/catalog") return location.pathname.startsWith("/catalog") || location.pathname.startsWith("/products/");
+    return false;
+  }
+
   return (
     <header className="el-store-header" data-testid="store-header">
       <div className="el-store-header__left">
@@ -72,8 +81,8 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
         </Link>
 
         <nav aria-label="Primary" className="el-store-header__nav">
-          {labels.navigation.map(([label, href], index) => (
-            <Link className={index === 0 ? "is-active" : undefined} to={href} key={label}>
+          {labels.navigation.map(([label, href]) => (
+            <Link className={activeHref(href) ? "is-active" : undefined} to={href} key={label}>
               {label}
             </Link>
           ))}
