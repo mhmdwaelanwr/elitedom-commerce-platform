@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "981e7bd732672428a9d8d2a3447c3bc3a373472f"
+verified_against: "8b3822d51b3d45ccf6250b46fc0b4780014dd6b7"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -107,12 +107,15 @@ The same manually dispatched workflow then runs the deployed browser E2E gate in
 
 - the deployed frontend is wired to the API origin supplied for the release;
 - 390px Arabic/RTL PDP rendering reaches the backend-authoritative product and price state;
-- a guest can add that real product to the server-backed cart and the test removes its item afterward;
+- a guest can add that real product to the server-backed cart;
+- the same guest cart reaches the Arabic checkout review with the real product summary and all supported customer-facing payment choices rendered;
+- the order-submit control is visible, while the gate explicitly fails if checkout or payment mutation endpoints are called before operator-controlled provider UAT;
+- the test returns to the cart and removes its guest-cart item afterward;
 - Home, Catalog and PDP stay free of horizontal overflow at 430px and 1024px reference widths;
 - the document `lang` and semantic `dir` values follow EN/LTR and AR/RTL state;
 - unhandled browser exceptions fail the gate.
 
-The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. Those flows remain explicit provider/UAT gates with controlled test data.
+The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. It tracks the checkout and payment mutation boundaries during the checkout review and requires zero such mutations. Those flows remain explicit provider/UAT gates with controlled test data.
 
 Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, expected/deployed release-ref evidence, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
 
