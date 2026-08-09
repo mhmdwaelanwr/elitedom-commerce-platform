@@ -10,6 +10,11 @@ services:
       DEBUG: "false"
       STAFF_MFA_REQUIRED: "true"
       RATE_LIMIT_BACKEND: redis
+      # Production traffic reaches FastAPI through Nginx Proxy Manager. Force
+      # operators to identify that trusted peer explicitly so forwarded client
+      # addresses create independent rate-limit buckets instead of one shared
+      # proxy bucket. Never use 0.0.0.0/0 or arbitrary Internet-facing peers.
+      TRUSTED_PROXY_IPS: "${TRUSTED_PROXY_IPS:?Set TRUSTED_PROXY_IPS to the Nginx Proxy Manager internal IP}"
 
   celery-worker:
     environment:
