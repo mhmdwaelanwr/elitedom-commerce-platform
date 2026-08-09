@@ -47,11 +47,13 @@ const superseded = [
   ["244:1175", "247:329", ["downloadSalesExport", "fetchReportingDashboard"]],
   ["245:533", "247:200", ["updateCatalogContent", "uploadCatalogMedia", "createCatalogAdminCategory", "createCatalogAttributeDefinition"]],
 ];
+const platformOwnedBridges = new Set(["fetchReportingDashboard"]);
 for (const [oldNode, newNode, signatures] of superseded) {
   if (!completeness.includes(newNode)) failures.push(`P19 ${oldNode} must be superseded by bound P20 Figma ${newNode}`);
   for (const signature of signatures) {
     if (!completeness.includes(signature)) failures.push(`P19 ${oldNode} supersession is missing reachable ${signature}`);
-    if (!operationsApi.includes(`function ${signature}`) && !operationsApi.includes(`async function ${signature}`)) failures.push(`P19 ${oldNode} supersession is missing API bridge ${signature}`);
+    const apiSource = platformOwnedBridges.has(signature) ? platformApi : operationsApi;
+    if (!apiSource.includes(`function ${signature}`) && !apiSource.includes(`async function ${signature}`)) failures.push(`P19 ${oldNode} supersession is missing API bridge ${signature}`);
   }
 }
 
