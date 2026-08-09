@@ -1,4 +1,5 @@
 import { createBrowserRouter } from "react-router-dom";
+import { ThemeToggle } from "@/components/store/ThemeToggle";
 import { AccountPage } from "@/pages/AccountPage";
 import { AuthPage } from "@/pages/AuthPage";
 import { BusinessLandingPage, BusinessRfqPage } from "@/pages/B2BPage";
@@ -10,7 +11,8 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { RecoverySentPage } from "@/pages/RecoverySentPage";
 import { AdminRoutePage } from "@/pages/admin/AdminOperationsPage";
-import { LaunchControlRoute } from "@/pages/admin/AdminThemeRoute";
+import { AdminThemeRoute } from "@/pages/admin/AdminThemeRoute";
+import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
@@ -29,6 +31,11 @@ export const router = createBrowserRouter([
   { path: "/business/rfq", element: <BusinessRfqPage /> },
   { path: "/business/rfq/:rfqCode", element: <BusinessRfqPage /> },
   { path: "/admin", element: <AdminRoutePage /> },
-  { path: "/admin/launch", element: <LaunchControlRoute /> },
+  {
+    path: "/admin/launch",
+    element: <AdminThemeRoute><LaunchControlPage /></AdminThemeRoute>,
+  },
   { path: "*", element: <NotFoundPage /> },
 ]);
+
+void ThemeToggle;
