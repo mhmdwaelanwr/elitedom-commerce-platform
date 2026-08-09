@@ -15,6 +15,7 @@
   --el-border-subtle: #151a21;
   --el-border-strong: #35404d;
   --el-accent-primary: #55d7eb;
+  --el-accent-on: #020304;
   --el-accent-soft: #067c91;
   --el-success: #27c277;
   --el-warning: #f0b94b;
@@ -22,10 +23,25 @@
   --el-danger: #ef7272;
   --el-action-primary: #ffffff;
   --el-action-on-primary: #07090c;
+  --el-button-primary-bg: #ffffff;
+  --el-button-primary-text: #07090c;
+  --el-button-secondary-bg: #10141a;
+  --el-button-secondary-text: #f6f8fa;
+  --el-control-bg: rgba(11, 14, 18, 0.72);
+  --el-control-hover: #151a21;
+  --el-control-text: #f6f8fa;
+  --el-control-border: rgba(59, 74, 92, 0.42);
+  --el-input-bg: #10141a;
+  --el-provider-google-bg: #131314;
+  --el-provider-apple-bg: #050608;
+  --el-provider-border: rgba(142, 145, 143, 0.68);
   --el-product-media-bg: #0b0e12;
   --el-glass-panel: rgba(11, 14, 18, 0.7);
   --el-glass-border: rgba(59, 74, 92, 0.42);
   --el-glass-header: rgba(9, 12, 16, 0.78);
+  --el-overlay: rgba(2, 3, 4, 0.64);
+  --el-shadow-soft: 0 8px 24px rgba(0, 0, 0, 0.16);
+  --el-shadow-elevated: 0 24px 70px rgba(0, 0, 0, 0.28);
   --el-radius-sm: 8px;
   --el-radius-md: 12px;
   --el-radius-lg: 16px;
@@ -50,6 +66,7 @@
   --el-border-subtle: #e7ebf0;
   --el-border-strong: #cbd3dc;
   --el-accent-primary: #067c91;
+  --el-accent-on: #ffffff;
   --el-accent-soft: #d9f1f4;
   --el-success: #148a55;
   --el-warning: #8a5a00;
@@ -57,15 +74,28 @@
   --el-danger: #b42335;
   --el-action-primary: #07090c;
   --el-action-on-primary: #ffffff;
+  --el-button-primary-bg: #07090c;
+  --el-button-primary-text: #ffffff;
+  --el-button-secondary-bg: #ffffff;
+  --el-button-secondary-text: #07090c;
+  --el-control-bg: rgba(255, 255, 255, 0.88);
+  --el-control-hover: #eef1f4;
+  --el-control-text: #07090c;
+  --el-control-border: rgba(46, 56, 71, 0.18);
+  --el-input-bg: #ffffff;
+  --el-provider-google-bg: #ffffff;
+  --el-provider-apple-bg: #f3f5f7;
+  --el-provider-border: #cbd3dc;
   --el-product-media-bg: #ffffff;
   --el-glass-panel: rgba(255, 255, 255, 0.78);
   --el-glass-border: rgba(46, 56, 71, 0.18);
   --el-glass-header: rgba(250, 251, 253, 0.84);
+  --el-overlay: rgba(37, 44, 54, 0.24);
+  --el-shadow-soft: 0 8px 24px rgba(28, 39, 53, 0.08);
+  --el-shadow-elevated: 0 24px 70px rgba(28, 39, 53, 0.16);
 }
 
-* {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
 html {
   min-width: 320px;
@@ -89,31 +119,15 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-html[lang="ar"] body {
-  font-family: Alexandria, "Noto Sans Arabic", Tahoma, Arial, sans-serif;
-}
-
+html[lang="ar"] body { font-family: Alexandria, "Noto Sans Arabic", Tahoma, Arial, sans-serif; }
 button,
 input,
 textarea,
-select {
-  font: inherit;
-}
-
+select { font: inherit; }
 button,
-a {
-  -webkit-tap-highlight-color: transparent;
-}
-
-a {
-  color: inherit;
-  text-decoration: none;
-}
-
-img {
-  display: block;
-  max-width: 100%;
-}
+a { -webkit-tap-highlight-color: transparent; }
+a { color: inherit; text-decoration: none; }
+img { display: block; max-width: 100%; }
 
 .el-theme-toggle {
   display: inline-flex;
@@ -123,46 +137,33 @@ img {
   min-width: 44px;
   min-height: 44px;
   padding: 0;
-  border: 1px solid var(--el-glass-border);
+  border: 1px solid var(--el-control-border);
   border-radius: 14px;
-  color: var(--el-text-primary);
-  background: var(--el-glass-panel);
+  color: var(--el-control-text);
+  background: var(--el-control-bg);
+  box-shadow: var(--el-shadow-soft);
   backdrop-filter: blur(7px);
   cursor: pointer;
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 
 .el-theme-toggle:hover {
-  border-color: color-mix(in srgb, var(--el-accent-primary) 42%, var(--el-glass-border));
-  background: color-mix(in srgb, var(--el-glass-panel) 86%, var(--el-accent-primary));
+  border-color: color-mix(in srgb, var(--el-accent-primary) 42%, var(--el-control-border));
+  background: var(--el-control-hover);
 }
 
-.el-theme-toggle:active {
-  transform: translateY(1px);
-}
+.el-theme-toggle:active { transform: translateY(1px); }
+.el-theme-toggle--labelled { width: auto; padding-inline: 13px; color: var(--el-text-secondary); font-size: 12px; font-weight: 600; }
+.el-theme-toggle--labelled span { white-space: nowrap; }
 
-.el-theme-toggle--labelled {
-  width: auto;
-  padding-inline: 13px;
-  color: var(--el-text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-}
+:root[data-theme="light"] .el-brand__mark { filter: brightness(0); }
+:root[data-theme="light"] .el-store-icon { filter: brightness(0.28); }
+:root[data-theme="light"] .el-social-dock__items img { filter: invert(1) hue-rotate(150deg); }
 
-.el-theme-toggle--labelled span {
-  white-space: nowrap;
-}
-
-:root[data-theme="light"] .el-brand__mark {
-  filter: brightness(0);
-}
-
-:root[data-theme="light"] .el-store-icon {
-  filter: brightness(0.28);
-}
-
-:root[data-theme="light"] .el-social-dock__items img {
-  filter: invert(1) hue-rotate(150deg);
+/* Theme-safe global control states. Component styles may refine these, but must not
+   force a dark canvas when the semantic theme is light. */
+:root[data-theme="light"] button:not(.el-primary-button):not(.el-surface-primary):not(.el-auth-primary):not(.el-account-primary) {
+  color-scheme: light;
 }
 
 button:focus-visible,
@@ -177,13 +178,8 @@ summary:focus-visible,
 }
 
 @media (prefers-reduced-motion: reduce) {
-  html {
-    scroll-behavior: auto;
-  }
-
-  *,
-  *::before,
-  *::after {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;

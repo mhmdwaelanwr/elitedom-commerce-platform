@@ -1,0 +1,10 @@
+.el-not-found-page { min-height: 100vh; color: var(--el-text-primary); background: var(--el-bg-canvas); }
+.el-not-found { min-height: 720px; display: grid; place-items: center; padding: 72px 0; }
+.el-not-found__panel { width: 100%; min-height: 600px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 18px; padding: clamp(34px, 6vw, 70px); border: 1px solid var(--el-border-subtle); border-radius: 34px; background: var(--el-surface-1); box-shadow: var(--el-shadow-elevated); }
+[dir="rtl"] .el-not-found__panel { align-items: flex-end; text-align: right; }
+.el-not-found__code { color: var(--el-text-primary); font-size: clamp(84px, 11vw, 138px); font-weight: 650; line-height: .9; letter-spacing: -.06em; }
+.el-not-found__panel h1 { max-width: 780px; margin: 4px 0 0; font-size: clamp(34px, 4vw, 50px); line-height: 1.12; letter-spacing: -.035em; }
+.el-not-found__panel > p:not(.el-eyebrow) { max-width: 720px; margin: 0; color: var(--el-text-secondary); font-size: 15px; line-height: 1.6; }
+.el-not-found__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 12px; }
+.el-not-found__panel > small { margin-top: 90px; color: var(--el-text-muted); font: 500 9px/1.4 "Roboto Mono", monospace; letter-spacing: .04em; }
+@media (max-width: 620px) { .el-not-found { min-height: 620px; padding: 34px 0; } .el-not-found__panel { min-height: 520px; padding: 28px 22px; border-radius: 24px; } .el-not-found__panel > small { margin-top: 50px; } }
