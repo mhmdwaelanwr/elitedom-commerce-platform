@@ -108,7 +108,6 @@ export function CatalogPage() {
 
   useEffect(() => {
     let active = true;
-    setState((current) => ({ status: "loading", products: current.products }));
     fetchRichCatalog({ locale, query: query || undefined, limit: 100 })
       .then((products) => {
         if (active) setState({ status: "ready", products });
@@ -186,6 +185,11 @@ export function CatalogPage() {
     setParams(next);
   }
 
+  function retryCatalog() {
+    setState((current) => ({ status: "loading", products: current.products }));
+    setRequestVersion((version) => version + 1);
+  }
+
   function toggleCompare(product: Product) {
     setCompared((current) => {
       if (current.some((item) => item.id === product.id)) return current.filter((item) => item.id !== product.id);
@@ -257,7 +261,7 @@ export function CatalogPage() {
 
             <section className="el-catalog-results">
               {state.status === "loading" ? <CommerceCollectionState locale={locale} state="loading" /> : null}
-              {state.status === "error" ? <CommerceCollectionState locale={locale} onAction={() => setRequestVersion((version) => version + 1)} state="error" /> : null}
+              {state.status === "error" ? <CommerceCollectionState locale={locale} onAction={retryCatalog} state="error" /> : null}
               {state.status === "ready" && visibleProducts.length === 0 ? <CommerceCollectionState locale={locale} onAction={resetFilters} state="empty" /> : null}
               {state.status === "ready" && visibleProducts.length > 0 ? (
                 <div className="el-catalog-grid">
