@@ -4,16 +4,6 @@ Elitedom is an enterprise-grade commerce platform for Egyptian technology retail
 
 > **Release posture:** code quality and launch-control automation are implemented, but public production launch still requires environment-specific credentials, provider acceptance, deployment evidence, backup/restore proof, monitoring validation, and UAT approval for the exact release candidate.
 
-## Project profile
-
-**Repository description**
-
-> Enterprise commerce platform for Egyptian technology retail — React/Vite storefront/admin, FastAPI services, PostgreSQL, Redis/Celery, Paymob payments, Odoo 17 integration, Arabic/RTL support, RBAC/MFA, Docker, CI, and governed launch operations.
-
-**Recommended GitHub topics**
-
-`ecommerce` · `marketplace` · `enterprise` · `erp` · `odoo` · `fastapi` · `react` · `vite` · `react-router` · `typescript` · `postgresql` · `redis` · `celery` · `paymob` · `payments` · `arabic` · `rtl` · `rbac` · `mfa` · `docker` · `devops`
-
 ## Repository map
 
 ```text
