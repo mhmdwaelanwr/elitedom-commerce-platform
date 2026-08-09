@@ -5,6 +5,7 @@ import { applyTheme, readTheme } from "@/lib/theme";
 import { router } from "@/router";
 import "@/styles/globals.css";
 import "@/styles/p14-responsive.css";
+import "@/styles/figma-surfaces.css";
 
 const root = document.getElementById("root");
 
