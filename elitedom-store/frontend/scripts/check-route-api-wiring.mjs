@@ -149,18 +149,39 @@ requireIncludes(operationsApi, [
   '"/inventory/adjust"',
   '"/suppliers"',
   '"/suppliers/purchase-orders"',
-  '"/admin/catalog/products/${productId}/content"',
-  '"/shipping/${orderId}/dropship"',
-  '"/reports/sales/export',
+  "`/admin/catalog/products/${productId}/content`",
+  "`/shipping/${orderId}/dropship`",
+  "`${API_BASE_URL}/reports/sales/export",
 ], "operations API bridge");
 requireIncludes(catalogAdminApi, [
   'request<CatalogProduct>("/products"',
   '`/products/${productId}`',
 ], "catalog admin API bridge");
-requireIncludes(inventoryRouter, ['@router.post("/adjust"'], "inventory backend router");
-requireIncludes(suppliersRouter, ['@router.post(""', '@router.post("/purchase-orders"'], "suppliers backend router");
-requireIncludes(reportingRouter, ['@router.get("/dashboard"', '@router.get("/sales/export"'], "reporting backend router");
-requireIncludes(catalogAdminRouter, ['@router.get("/products/{product_id}/content"', '@router.put("/products/{product_id}/content"'], "catalog admin backend router");
+requireIncludes(inventoryRouter, [
+  '"/adjust"',
+  '"/serial/{serial_number}"',
+  '"/scan"',
+  '"/{sku}"',
+], "inventory backend router");
+requireIncludes(suppliersRouter, [
+  '@router.post(""',
+  '@router.post("/purchase-orders"',
+  '"/products/{product_id}/supplier-links"',
+  '"/{supplier_id}/products/{product_id}"',
+], "suppliers backend router");
+requireIncludes(reportingRouter, [
+  '@router.get("/dashboard"',
+  '@router.get("/sales/export"',
+  '@router.get("/inventory"',
+  '@router.get("/rma"',
+  '@router.get("/suppliers"',
+], "reporting backend router");
+requireIncludes(catalogAdminRouter, [
+  '"/products/{product_id}/content"',
+  '"/categories"',
+  '"/attributes"',
+  '"/products/{product_id}/media"',
+], "catalog admin backend router");
 
 // FastAPI entrypoint must actually mount every router used by these pages under /api/v1.
 for (const mountedRouter of [
