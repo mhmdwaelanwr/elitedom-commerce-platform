@@ -72,6 +72,7 @@ const copy = {
   en: {
     ops: "ELITEDOM OPS",
     system: "ADMIN / RBAC / MFA",
+    adminSections: "Admin sections",
     sections: {
       dashboard: "Dashboard",
       orders: "Orders",
@@ -141,6 +142,7 @@ const copy = {
   ar: {
     ops: "ELITEDOM OPS",
     system: "الإدارة / الصلاحيات / MFA",
+    adminSections: "أقسام لوحة الإدارة",
     sections: {
       dashboard: "لوحة المتابعة",
       orders: "الطلبات",
@@ -296,7 +298,7 @@ export function AdminConsolePage() {
           <ElitedomBrand compact />
           <span><b>{text.ops}</b><small>{text.system}</small></span>
         </div>
-        <nav aria-label="Admin sections">
+        <nav aria-label={text.adminSections}>
           {visibleSections.map((item) => (
             <Link
               className={section === item ? "is-active" : ""}
@@ -347,7 +349,7 @@ function AdminGate({ locale, label, denied = false, retry = false }: {
   retry?: boolean;
 }) {
   return (
-    <div className="el-admin-gate" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <div className="el-admin-gate" dir={locale === "ar" ? "rtl" : "ltr"} lang={locale}>
       <ElitedomBrand />
       <StoreIcon name={denied ? "lock" : "shield"} size={34} />
       <h1>{label}</h1>
@@ -969,8 +971,8 @@ function Kpi({ label, value, meta }: { label: string; value: string; meta: strin
 function Queue({ label, value }: { label: string; value: number }) { return <div className="el-admin-queue"><span>{label}</span><strong>{value}</strong></div>; }
 function Status({ value }: { value: string }) { return <span className={`el-admin-status is-${value.replaceAll("_", "-")}`}>{humanize(value)}</span>; }
 function Empty({ text }: { text: string }) { return <p className="el-admin-empty">{text}</p>; }
-function AdminLoading({ label }: { label: string }) { return <div className="el-admin-loading"><span /><p>{label}</p></div>; }
-function AdminError({ message: value }: { message: string }) { return <p className="el-admin-error">{value}</p>; }
+function AdminLoading({ label }: { label: string }) { return <div aria-busy="true" aria-live="polite" className="el-admin-loading"><span aria-hidden="true" /><p>{label}</p></div>; }
+function AdminError({ message: value }: { message: string }) { return <p className="el-admin-error" role="alert">{value}</p>; }
 
 async function freshSession(fallback: CustomerSession) {
   return await restoreSession() ?? fallback;

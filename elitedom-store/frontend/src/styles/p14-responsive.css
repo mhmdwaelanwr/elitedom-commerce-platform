@@ -1875,6 +1875,183 @@
     overflow-wrap: anywhere;
   }
 
+  /* P14.g — Staff console: compact navigation, durable tables and touch-safe actions. */
+  .el-admin-page {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  .el-admin-sidebar {
+    scrollbar-width: none;
+    overscroll-behavior-inline: contain;
+  }
+
+  .el-admin-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .el-admin-brand {
+    padding-inline: 4px 8px;
+  }
+
+  .el-admin-sidebar nav {
+    min-width: max-content;
+  }
+
+  .el-admin-sidebar nav a,
+  .el-admin-launch-link {
+    flex-basis: 44px;
+    width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .el-admin-sidebar__footer button {
+    min-width: 44px;
+    min-height: 44px;
+    padding-inline: 10px;
+    white-space: nowrap;
+  }
+
+  .el-admin-main {
+    width: 100%;
+    min-width: 0;
+    padding: 22px 12px 54px;
+  }
+
+  .el-admin-topbar {
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+
+  .el-admin-topbar > div:first-child,
+  .el-admin-topbar__actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .el-admin-topbar h1,
+  .el-admin-topbar > div:first-child > p:last-child,
+  .el-admin-kpi > span,
+  .el-admin-kpi > strong,
+  .el-admin-kpi > small,
+  .el-admin-card-heading h2,
+  .el-admin-queue span,
+  .el-admin-low-stock-list b {
+    overflow-wrap: anywhere;
+  }
+
+  .el-admin-topbar__actions {
+    justify-content: space-between;
+  }
+
+  .el-admin-topbar__actions > button,
+  .el-admin-mfa {
+    min-height: 44px;
+    padding: 10px 12px;
+  }
+
+  .el-admin-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .el-admin-kpi {
+    min-width: 0;
+  }
+
+  .el-admin-bars {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .el-admin-toolbar form {
+    min-height: 48px;
+  }
+
+  .el-admin-toolbar form input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .el-admin-toolbar form button {
+    min-width: 52px;
+    min-height: 44px;
+    padding-inline: 14px;
+  }
+
+  .el-admin-table {
+    max-width: 100%;
+    border-radius: 10px;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .el-admin-row {
+    min-height: 52px;
+  }
+
+  button.el-admin-row {
+    min-height: 56px;
+  }
+
+  .el-admin-dialog-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .el-admin-dialog {
+    width: 100%;
+    max-height: calc(100dvh - 24px);
+    padding: 18px 14px calc(18px + env(safe-area-inset-bottom));
+    border-radius: 20px 20px 14px 14px;
+  }
+
+  .el-admin-dialog > header button {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+  }
+
+  .el-admin-action-form input,
+  .el-admin-action-form textarea,
+  .el-admin-action-form select,
+  .el-admin-action-form > button,
+  .el-admin-action-options button,
+  .el-admin-mfa-card button,
+  .el-admin-gate button {
+    min-height: 48px;
+  }
+
+  .el-admin-action-form input,
+  .el-admin-action-form textarea,
+  .el-admin-action-form select,
+  .el-admin-mfa-card input {
+    font-size: 16px;
+  }
+
+  .el-admin-mfa-gate,
+  .el-admin-gate {
+    padding: 16px;
+  }
+
+  .el-admin-mfa-card {
+    min-width: 0;
+    padding: 20px 16px;
+    border-radius: 18px;
+  }
+
+  .el-admin-mfa-card h1,
+  .el-admin-gate h1 {
+    font-size: clamp(22px, 7vw, 28px);
+    overflow-wrap: anywhere;
+  }
+
+  .el-admin-enrollment code,
+  .el-admin-recovery-codes code,
+  .el-admin-enrollment small {
+    word-break: break-word;
+  }
+
   .el-mobile-nav {
     inset-inline: 12px;
   }
