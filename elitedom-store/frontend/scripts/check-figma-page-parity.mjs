@@ -29,6 +29,16 @@ const pages = [
   { node: "98:212", name: "Mobile / Final / Checkout / AR RTL", file: "src/styles/p14-responsive.css", signatures: ["el-checkout", "el-payment-method"] },
   { node: "100:224", name: "Theme / Light / Store Reference / EN", file: "src/styles/globals.css", signatures: [":root[data-theme=\"light\"]", "--el-bg-canvas: #f6f8fa", "--el-action-primary: #07090c"] },
   { node: "105:301", name: "Tablet / Final / Storefront / EN", file: "src/styles/p14-responsive.css", signatures: ["@media (max-width: 900px)", "el-store-header__mobile-row"] },
+  { node: "244:3", name: "P19 Admin / Final / Orders", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["OrdersSection", "fetchAdminOrders", "updateAdminOrderState"] },
+  { node: "244:296", name: "P19 Admin / Final / Payments", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["PAYMENT OPERATIONS", "PaymentsSurface", "fetchPaymentTrail", "requestPaymentRefund"] },
+  { node: "244:589", name: "P19 Admin / Final / Inventory", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["INVENTORY CONTROL", "InventorySurface", "fetchInventoryReport"] },
+  { node: "244:882", name: "P19 Admin / Final / Suppliers & Procurement", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["SUPPLIER & PROCUREMENT", "SuppliersSurface", "fetchSuppliers", "fetchPurchaseOrders"] },
+  { node: "244:1175", name: "P19 Admin / Final / Reporting", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["REPORTING & ANALYTICS", "ReportsSurface", "fetchReportingDashboard"] },
+  { node: "244:1761", name: "P19 Admin / Final / RMA & Warranty", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["RmaSection", "fetchAdminRmas", "reviewAdminRma"] },
+  { node: "244:2054", name: "P19 Admin / Final / Shipping & Fulfilment", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["ShipmentsSection", "fetchAdminShipments", "dispatchAdminOrder"] },
+  { node: "244:2347", name: "P19 Admin / Final / Integrations & Audit", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["INTEGRATIONS & AUDIT", "IntegrationsSurface", "fetchRuntimeReadiness", "fetchAdminAuditLogs"] },
+  { node: "244:2640", name: "P19 Account / Final / Loyalty", file: "src/pages/AccountPage.tsx", signatures: ["LoyaltySection", "fetchLoyaltyBalance", "fetchLoyaltyHistory"] },
+  { node: "244:2682", name: "P19 Account / Final / Warranty & RMA", file: "src/pages/WarrantyPage.tsx", signatures: ["ACCOUNT / WARRANTY", "fetchWarrantyClaims", "checkWarranty", "submitWarrantyClaim"] },
 ];
 
 function source(relativePath) {
@@ -43,36 +53,24 @@ function source(relativePath) {
 for (const page of pages) {
   const text = source(page.file);
   for (const signature of page.signatures) {
-    if (!text.includes(signature)) {
-      failures.push(`Figma ${page.node} (${page.name}) is missing implementation signature ${JSON.stringify(signature)} in ${page.file}`);
-    }
+    if (!text.includes(signature)) failures.push(`Figma ${page.node} (${page.name}) is missing implementation signature ${JSON.stringify(signature)} in ${page.file}`);
   }
 }
 
+const account = source("src/pages/AccountPage.tsx");
+const adminConsole = source("src/pages/admin/AdminConsolePage.tsx");
+if (!account.includes("LoyaltySection") || !adminConsole.includes("CustomersSection")) failures.push("Figma 244:1468 requires both customer operations and account loyalty implementation.");
+if (!adminConsole.includes("AuditSection") || !source("src/pages/admin/AdminPlatformPage.tsx").includes("IntegrationsSurface")) failures.push("Figma 244:2347 requires integrations plus immutable audit visibility.");
+
 const router = source("src/router.tsx");
 const routeContracts = [
-  ["/", "HomePage"],
-  ["/catalog", "CatalogPage"],
-  ["/products/:productId", "ProductDetailPage"],
-  ["/cart", "CartPage"],
-  ["/checkout", "CheckoutRoute"],
-  ["/auth", "AuthPage"],
-  ["/auth/create", "AuthPage"],
-  ["/auth/otp", "AuthPage"],
-  ["/auth/forgot", "AuthPage"],
-  ["/auth/reset", "AuthPage"],
-  ["/auth/recovery-sent", "RecoverySentPage"],
-  ["/account", "AccountPage"],
-  ["/business", "BusinessLandingPage"],
-  ["/business/rfq", "BusinessRfqPage"],
-  ["/business/rfq/:rfqCode", "BusinessRfqPage"],
-  ["/admin", "AdminRoutePage"],
-  ["/admin/launch", "LaunchControlPage"],
+  ["/", "HomePage"], ["/catalog", "CatalogPage"], ["/products/:productId", "ProductDetailPage"], ["/cart", "CartPage"], ["/checkout", "CheckoutRoute"],
+  ["/auth", "AuthPage"], ["/auth/create", "AuthPage"], ["/auth/otp", "AuthPage"], ["/auth/forgot", "AuthPage"], ["/auth/reset", "AuthPage"], ["/auth/recovery-sent", "RecoverySentPage"],
+  ["/account", "AccountPage"], ["/account/warranty", "WarrantyPage"], ["/business", "BusinessLandingPage"], ["/business/rfq", "BusinessRfqPage"], ["/business/rfq/:rfqCode", "BusinessRfqPage"],
+  ["/admin", "AdminRoutePage"], ["/admin/payments", "AdminPlatformPage"], ["/admin/inventory", "AdminPlatformPage"], ["/admin/suppliers", "AdminPlatformPage"], ["/admin/reports", "AdminPlatformPage"], ["/admin/catalog", "AdminPlatformPage"], ["/admin/integrations", "AdminPlatformPage"], ["/admin/launch", "LaunchControlPage"],
 ];
 for (const [route, component] of routeContracts) {
-  if (!router.includes(`path: \"${route}\"`) || !router.includes(`<${component}`)) {
-    failures.push(`Figma parity: route ${route} must resolve to ${component}`);
-  }
+  if (!router.includes(`path: \"${route}\"`) || !router.includes(`<${component}`)) failures.push(`Figma parity: route ${route} must resolve to ${component}`);
 }
 
 const storeHeader = source("src/components/store/StoreHeader.tsx");
@@ -82,31 +80,23 @@ const adminOperations = source("src/pages/admin/AdminOperationsPage.tsx");
 const adminThemeRoute = source("src/pages/admin/AdminThemeRoute.tsx");
 const theme = source("src/lib/theme.ts");
 const globals = source("src/styles/globals.css");
+const themeHardening = source("src/styles/theme-hardening.css");
 
-for (const [surface, text] of [
-  ["store header", storeHeader],
-  ["authentication shell", authShell],
-  ["checkout and checkout-result shell", checkoutThemeRoute],
-  ["admin operations", adminOperations],
-  ["launch control", adminThemeRoute],
-]) {
+for (const [surface, text] of [["store header", storeHeader], ["authentication shell", authShell], ["checkout and checkout-result shell", checkoutThemeRoute], ["admin operations", adminOperations], ["launch control", adminThemeRoute]]) {
   if (!text.includes("ThemeToggle")) failures.push(`Theme parity: ${surface} must expose ThemeToggle`);
 }
-
-if ((storeHeader.match(/<ThemeToggle/g) ?? []).length < 2) {
-  failures.push("Theme parity: StoreHeader must expose theme control in desktop and mobile action rows");
+if ((storeHeader.match(/<ThemeToggle/g) ?? []).length < 2) failures.push("Theme parity: StoreHeader must expose theme control in desktop and mobile action rows");
+if (!theme.includes("THEME_CHANGED_EVENT") || !theme.includes("localStorage")) failures.push("Theme parity: app theme must persist and synchronize changes");
+for (const token of ["--el-control-bg", "--el-control-hover", "--el-input-bg", "--el-button-primary-bg", "--el-provider-google-bg", "--el-provider-apple-bg", "--el-accent-on"]) {
+  if (!globals.includes(token)) failures.push(`Theme parity: missing semantic token ${token}`);
 }
-if (!theme.includes("THEME_CHANGED_EVENT") || !theme.includes("localStorage")) {
-  failures.push("Theme parity: app theme must persist and synchronize changes");
+for (const selector of [".el-auth-provider.is-google", ".el-auth-provider.is-apple", ".el-auth-primary:hover", ".el-account-primary:hover", ".el-store-layer"]) {
+  if (!themeHardening.includes(selector)) failures.push(`Theme parity: hardening layer must normalize ${selector}`);
 }
-if (!globals.includes(":root[data-theme=\"dark\"]") || !globals.includes(":root[data-theme=\"light\"]")) {
-  failures.push("Theme parity: both dark and light semantic token modes are required");
-}
+if (!source("src/main.tsx").includes('import "@/styles/theme-hardening.css"')) failures.push("Theme parity: theme-hardening.css must load globally after shared surfaces");
 
 const forbiddenPreviewRoutes = ["/figma", "/design-preview", "/theme-preview"];
-for (const route of forbiddenPreviewRoutes) {
-  if (router.includes(`path: \"${route}\"`)) failures.push(`Figma parity: duplicate preview route is forbidden: ${route}`);
-}
+for (const route of forbiddenPreviewRoutes) if (router.includes(`path: \"${route}\"`)) failures.push(`Figma parity: duplicate preview route is forbidden: ${route}`);
 
 if (failures.length) {
   console.error("Figma page parity checks failed:\n");
@@ -114,4 +104,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Figma page parity validated: ${pages.length} final frames + theme controls + route contracts.`);
+console.log(`Figma page parity validated: ${pages.length} final frames, P19 backend surfaces, theme controls and route contracts.`);
