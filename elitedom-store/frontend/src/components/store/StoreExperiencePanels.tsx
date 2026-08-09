@@ -78,12 +78,12 @@ export function MegaMenu({ locale, featured, onClose }: { locale: StoreLocale; f
     ["المكونات", [["كروت الشاشة", "/catalog?q=GPU"], ["المعالجات", "/catalog?q=CPU"], ["اللوحات الأم", "/catalog?q=Motherboard"], ["RAM و SSD", "/catalog?q=SSD"], ["مزودات الطاقة", "/catalog?q=PSU"]]],
     ["الأنظمة", [["تجميعات Gaming", "/catalog?q=Gaming"], ["Creator Workstations", "/catalog?q=Creator"], ["أجهزة الشركات", "/business"], ["تجميعة مخصصة", "/business/rfq"]]],
     ["الشاشات والملحقات", [["الشاشات", "/catalog?q=Monitor"], ["كيبورد وماوس", "/catalog?q=Keyboard"], ["الصوتيات", "/catalog?q=Audio"], ["الشبكات", "/catalog?q=Networking"]]],
-    ["الخدمات", [["الضمان والدعم", "/account"], ["التوصيل والتتبع", "/account"], ["الصيانة", "/business"], ["مشتريات الشركات", "/business"]]],
+    ["الخدمات", [["الضمان والدعم", "/account/warranty"], ["التوصيل والتتبع", "/account/orders"], ["الصيانة", "/business"], ["مشتريات الشركات", "/business"]]],
   ] as const : [
     ["COMPONENTS", [["GPUs", "/catalog?q=GPU"], ["CPUs", "/catalog?q=CPU"], ["Motherboards", "/catalog?q=Motherboard"], ["RAM & SSD", "/catalog?q=SSD"], ["Power supplies", "/catalog?q=PSU"]]],
     ["SYSTEMS", [["Gaming builds", "/catalog?q=Gaming"], ["Creator workstations", "/catalog?q=Creator"], ["Business PCs", "/business"], ["Custom PC builder", "/business/rfq"]]],
     ["DISPLAY & GEAR", [["Monitors", "/catalog?q=Monitor"], ["Keyboards & mice", "/catalog?q=Keyboard"], ["Audio", "/catalog?q=Audio"], ["Networking", "/catalog?q=Networking"]]],
-    ["SERVICES", [["Warranty & support", "/account"], ["Delivery & tracking", "/account"], ["Repairs", "/business"], ["B2B procurement", "/business"]]],
+    ["SERVICES", [["Warranty & support", "/account/warranty"], ["Delivery & tracking", "/account/orders"], ["Repairs", "/business"], ["B2B procurement", "/business"]]],
   ] as const;
 
   return (
@@ -114,14 +114,14 @@ export function MobileMenu({ locale, onLocaleChange, onClose }: { locale: StoreL
     ["package", "تجميعات PC", "/catalog?q=PC%20build"],
     ["star", "العروض", "/catalog?sort=price-asc"],
     ["clipboard", "الأعمال وطلبات الأسعار", "/business"],
-    ["delivery", "تتبع الطلب", "/account"],
+    ["delivery", "تتبع الطلب", "/account/orders"],
     ["account", "حسابي", "/account"],
   ] as const : [
     ["grid", "Categories", "/catalog"],
     ["package", "PC builds", "/catalog?q=PC%20build"],
     ["star", "Deals", "/catalog?sort=price-asc"],
     ["clipboard", "Business & RFQ", "/business"],
-    ["delivery", "Track order", "/account"],
+    ["delivery", "Track order", "/account/orders"],
     ["account", "My account", "/account"],
   ] as const;
 
