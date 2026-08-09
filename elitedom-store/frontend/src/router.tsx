@@ -4,12 +4,13 @@ import { AuthPage } from "@/pages/AuthPage";
 import { BusinessLandingPage, BusinessRfqPage } from "@/pages/B2BPage";
 import { CartPage } from "@/pages/CartPage";
 import { CatalogPage } from "@/pages/CatalogPage";
-import { CheckoutPage } from "@/pages/CheckoutPage";
+import { CheckoutRoute } from "@/pages/CheckoutThemeRoute";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { RecoverySentPage } from "@/pages/RecoverySentPage";
-import { AdminConsolePage } from "@/pages/admin/AdminConsolePage";
+import { AdminRoutePage } from "@/pages/admin/AdminOperationsPage";
+import { AdminThemeRoute } from "@/pages/admin/AdminThemeRoute";
 import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
 
 export const router = createBrowserRouter([
@@ -17,7 +18,7 @@ export const router = createBrowserRouter([
   { path: "/catalog", element: <CatalogPage /> },
   { path: "/products/:productId", element: <ProductDetailPage /> },
   { path: "/cart", element: <CartPage /> },
-  { path: "/checkout", element: <CheckoutPage /> },
+  { path: "/checkout", element: <CheckoutRoute /> },
   { path: "/auth", element: <AuthPage mode="sign-in" /> },
   { path: "/auth/create", element: <AuthPage mode="create" /> },
   { path: "/auth/otp", element: <AuthPage mode="otp" /> },
@@ -28,7 +29,10 @@ export const router = createBrowserRouter([
   { path: "/business", element: <BusinessLandingPage /> },
   { path: "/business/rfq", element: <BusinessRfqPage /> },
   { path: "/business/rfq/:rfqCode", element: <BusinessRfqPage /> },
-  { path: "/admin", element: <AdminConsolePage /> },
-  { path: "/admin/launch", element: <LaunchControlPage /> },
+  { path: "/admin", element: <AdminRoutePage /> },
+  {
+    path: "/admin/launch",
+    element: <AdminThemeRoute><LaunchControlPage /></AdminThemeRoute>,
+  },
   { path: "*", element: <NotFoundPage /> },
 ]);

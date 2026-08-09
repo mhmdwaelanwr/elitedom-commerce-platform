@@ -11,6 +11,7 @@ import {
   type StoreToast,
 } from "@/components/store/StoreExperiencePanels";
 import { StoreIcon } from "@/components/store/StoreIcon";
+import { ThemeToggle } from "@/components/store/ThemeToggle";
 import { restoreSession } from "@/lib/auth-session";
 import { loadGuestCart, type GuestCartSnapshot } from "@/lib/cart-data";
 import { fetchRichCatalog } from "@/lib/catalog-api";
@@ -226,7 +227,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
           <button aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"} className="el-icon-button el-locale-button" onClick={() => changeLocale()} type="button">
             {nextLocale === "ar" ? "AR" : "EN"}
           </button>
-
+          <ThemeToggle className="el-icon-button" locale={locale} />
           <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
           <button aria-label={labels.cart} className="el-icon-button" onClick={() => void openCart()} type="button"><StoreIcon name="cart" size={20} /></button>
         </div>
@@ -238,6 +239,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
           </div>
           <div className="el-store-header__mobile-actions">
             <button aria-label={labels.search} className="el-icon-button" onClick={() => { setSearchOpen(true); setSearchLoading(true); setCartOpen(false); }} type="button"><StoreIcon name="search" size={20} /></button>
+            <ThemeToggle className="el-icon-button" locale={locale} />
             <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
             <button aria-label={labels.cart} className="el-icon-button" onClick={() => void openCart()} type="button"><StoreIcon name="cart" size={20} /></button>
           </div>

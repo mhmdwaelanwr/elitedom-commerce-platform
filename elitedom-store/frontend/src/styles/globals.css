@@ -115,6 +115,44 @@ img {
   max-width: 100%;
 }
 
+.el-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--el-glass-border);
+  border-radius: 14px;
+  color: var(--el-text-primary);
+  background: var(--el-glass-panel);
+  backdrop-filter: blur(7px);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.el-theme-toggle:hover {
+  border-color: color-mix(in srgb, var(--el-accent-primary) 42%, var(--el-glass-border));
+  background: color-mix(in srgb, var(--el-glass-panel) 86%, var(--el-accent-primary));
+}
+
+.el-theme-toggle:active {
+  transform: translateY(1px);
+}
+
+.el-theme-toggle--labelled {
+  width: auto;
+  padding-inline: 13px;
+  color: var(--el-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.el-theme-toggle--labelled span {
+  white-space: nowrap;
+}
+
 :root[data-theme="light"] .el-brand__mark {
   filter: brightness(0);
 }
