@@ -53,6 +53,13 @@
   gap: 14px;
 }
 
+.el-cart-mutation-error {
+  margin: 0;
+  color: #ef7272;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .el-cart-item {
   display: grid;
   min-height: 144px;

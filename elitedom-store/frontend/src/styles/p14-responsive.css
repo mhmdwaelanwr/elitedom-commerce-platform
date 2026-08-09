@@ -530,6 +530,202 @@
     padding-block: 40px;
   }
 
+  /* P14.c — Mobile server-backed cart. */
+  .el-cart-intro,
+  [dir="rtl"] .el-cart-intro {
+    min-height: 138px;
+    align-items: stretch;
+    justify-content: center;
+    gap: 10px;
+    text-align: start;
+  }
+
+  .el-cart-intro h1 {
+    width: 100%;
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    font-size: 30px;
+    line-height: 1.5;
+    text-align: start;
+  }
+
+  .el-cart-intro p {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    font-size: 12px;
+    line-height: 1.6;
+    text-align: start;
+  }
+
+  .el-cart-layout {
+    display: flex;
+    width: 100%;
+    min-height: 0;
+    flex-direction: column;
+    gap: 16px;
+    padding-bottom: 42px;
+  }
+
+  .el-cart-items {
+    width: 100%;
+    gap: 12px;
+  }
+
+  .el-cart-mutation-error {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid color-mix(in srgb, #ef7272 45%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, #ef7272 9%, transparent);
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    text-align: start;
+  }
+
+  .el-cart-item {
+    display: grid;
+    width: 100%;
+    min-height: 190px;
+    grid-template-columns: 80px minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    gap: 12px;
+    align-items: start;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .el-cart-item__media {
+    width: 80px;
+    height: 80px;
+    border-radius: 10px;
+  }
+
+  .el-cart-item__media img {
+    padding: 8px;
+  }
+
+  .el-cart-item__info,
+  [dir="rtl"] .el-cart-item__info {
+    min-width: 0;
+    align-items: flex-start;
+    gap: 6px;
+    text-align: start;
+  }
+
+  .el-cart-item__info > a {
+    display: -webkit-box;
+    width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    text-overflow: clip;
+    white-space: normal;
+    unicode-bidi: plaintext;
+  }
+
+  .el-cart-item__info p {
+    display: -webkit-box;
+    width: 100%;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 10px;
+    line-height: 1.5;
+    text-overflow: clip;
+    white-space: normal;
+    unicode-bidi: plaintext;
+  }
+
+  .el-cart-item__info button {
+    display: inline-flex;
+    min-width: 44px;
+    min-height: 44px;
+    align-items: center;
+    padding: 0;
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    touch-action: manipulation;
+  }
+
+  .el-cart-item__price {
+    grid-column: 1;
+    align-self: center;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .el-cart-quantity {
+    width: 124px;
+    height: 46px;
+    grid-column: 2;
+    justify-self: end;
+    padding-inline: 4px;
+    border-radius: 14px;
+  }
+
+  .el-cart-quantity button {
+    width: 44px;
+    height: 44px;
+    touch-action: manipulation;
+  }
+
+  .el-order-summary--cart {
+    position: static;
+    width: 100%;
+    min-height: 370px;
+    gap: 16px;
+    padding: 20px 16px;
+    border-radius: 20px;
+  }
+
+  .el-order-summary--cart h2 {
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    font-size: 22px;
+    line-height: 1.5;
+    text-align: start;
+  }
+
+  .el-order-summary--cart .el-summary-row {
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    font-size: 11px;
+  }
+
+  .el-order-summary--cart .el-summary-row strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 11px;
+    unicode-bidi: plaintext;
+  }
+
+  .el-order-summary--cart .el-summary-row.is-emphasis strong {
+    font-size: 22px;
+    direction: ltr;
+  }
+
+  .el-summary-primary {
+    width: 100%;
+    min-height: 54px;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    touch-action: manipulation;
+  }
+
+  .el-order-summary--cart .el-summary-security {
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    text-align: start;
+  }
+
+  .el-cart-loading {
+    width: 100%;
+    gap: 12px;
+    padding-bottom: 42px;
+  }
+
+  .el-cart-loading > div {
+    min-height: 190px;
+    border-radius: 18px;
+  }
+
   /* P14.c — Mobile checkout parity with the approved 390px RTL reference. */
   .el-checkout-page .el-storefront__shell {
     width: 100%;
