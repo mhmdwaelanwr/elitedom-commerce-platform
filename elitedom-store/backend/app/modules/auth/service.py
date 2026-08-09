@@ -216,10 +216,12 @@ class AuthService:
         """Consume a phone challenge and sign in or create the phone owner."""
         now = _now()
         challenge = await self.db.scalar(
-            select(OtpChallenge).where(
+            select(OtpChallenge)
+            .where(
                 OtpChallenge.id == request.challenge_id,
                 OtpChallenge.mobile == request.mobile,
             )
+            .with_for_update()
         )
         if challenge is None or challenge.consumed_at is not None:
             raise InvalidOtpError()
@@ -257,23 +259,23 @@ class AuthService:
             raise TokenExpiredError()
 
         user_id = payload.get("sub")
-        if user_id is None:
+        session_id = payload.get("sid")
+        if user_id is None or not session_id:
+            # Stateless compatibility credentials cannot participate in logout,
+            # replay detection, or atomic rotation, so they are no longer accepted.
             raise InvalidCredentialsError()
+
         partner = await self.db.scalar(select(Partner).where(Partner.id == int(user_id)))
         if not partner or not partner.is_active:
             raise InvalidCredentialsError()
 
-        session_id = payload.get("sid")
-        if not session_id:
-            # One-time upgrade path for cookies issued before stateful sessions
-            # were introduced. The replacement token is fully tracked.
-            return await self._issue_tokens(partner, auth_method="legacy_refresh")
-
         auth_session = await self.db.scalar(
-            select(AuthSession).where(
+            select(AuthSession)
+            .where(
                 AuthSession.id == str(session_id),
                 AuthSession.partner_id == partner.id,
             )
+            .with_for_update()
         )
         if (
             auth_session is None
