@@ -213,13 +213,15 @@ class AuthService:
         )
 
     async def verify_phone_otp(self, request: OtpVerifyRequest) -> LoginResponse:
-        """Consume a phone challenge and sign in or create the phone owner."""
+        """Atomically consume a phone challenge and sign in or create the phone owner."""
         now = _now()
         challenge = await self.db.scalar(
-            select(OtpChallenge).where(
+            select(OtpChallenge)
+            .where(
                 OtpChallenge.id == request.challenge_id,
                 OtpChallenge.mobile == request.mobile,
             )
+            .with_for_update()
         )
         if challenge is None or challenge.consumed_at is not None:
             raise InvalidOtpError()
@@ -251,7 +253,7 @@ class AuthService:
         return await self._issue_tokens(partner, auth_method="phone_otp")
 
     async def refresh(self, refresh_token: str) -> LoginResponse:
-        """Rotate a refresh credential and reject replayed or revoked tokens."""
+        """Atomically rotate a tracked refresh credential and reject replay."""
         payload = decode_token(refresh_token)
         if payload.get("type") != "refresh":
             raise TokenExpiredError()
@@ -265,15 +267,18 @@ class AuthService:
 
         session_id = payload.get("sid")
         if not session_id:
-            # One-time upgrade path for cookies issued before stateful sessions
-            # were introduced. The replacement token is fully tracked.
-            return await self._issue_tokens(partner, auth_method="legacy_refresh")
+            # Legacy stateless refresh credentials cannot participate in
+            # session revocation or one-time rotation. Fail closed instead of
+            # recreating a tracked session from a replayable bearer token.
+            raise InvalidCredentialsError()
 
         auth_session = await self.db.scalar(
-            select(AuthSession).where(
+            select(AuthSession)
+            .where(
                 AuthSession.id == str(session_id),
                 AuthSession.partner_id == partner.id,
             )
+            .with_for_update()
         )
         if (
             auth_session is None
