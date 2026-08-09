@@ -83,7 +83,6 @@ export function HomePage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     fetchCatalog()
       .then((catalog) => {
         if (!active) return;
