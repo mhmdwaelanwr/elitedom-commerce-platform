@@ -1,9 +1,11 @@
 import {
+  useEffect,
   useRef,
   useState,
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
+  type ReactNode,
 } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthProviderButton } from "@/components/auth/AuthProviderButton";
@@ -63,7 +65,7 @@ function passwordError(value: string) {
   if (!/[A-Z]/.test(value)) return "Add at least one uppercase letter.";
   if (!/[a-z]/.test(value)) return "Add at least one lowercase letter.";
   if (!/\d/.test(value)) return "Add at least one number.";
-  if (!/[!@#$%^&*(),.?\":{}|<>]/.test(value)) return "Add at least one special character.";
+  if (!/[!@#$%^&*(),.?'":{}|<>]/.test(value)) return "Add at least one special character.";
   return "";
 }
 
@@ -265,14 +267,7 @@ function SignIn({ locale, next }: { locale: "en" | "ar"; next: string }) {
       <AuthProviderButton disabled={pending} locale={locale} onClick={() => void provider("apple")} provider="apple" />
       <AuthSeparator label={text.or} />
       <form className="el-auth-form" onSubmit={submit}>
-        <AuthField
-          autoComplete="username"
-          icon="mail"
-          label={text.identifier}
-          onChange={setIdentifier}
-          placeholder={text.identifierPlaceholder}
-          value={identifier}
-        />
+        <AuthField autoComplete="username" icon="mail" label={text.identifier} onChange={setIdentifier} placeholder={text.identifierPlaceholder} value={identifier} />
         {phone ? <p className="el-auth-inline-note"><StoreIcon name="phone" size={14} />{text.phoneHint}</p> : (
           <AuthField
             autoComplete="current-password"
@@ -417,11 +412,10 @@ function OtpVerification({ locale, next }: { locale: "en" | "ar"; next: string }
   const [clock, setClock] = useState(() => Date.now());
   const refs = useRef<Array<HTMLInputElement | null>>([]);
 
-  useState(() => {
+  useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 1000);
-    window.setTimeout(() => window.clearInterval(timer), 10 * 60 * 1000);
-    return 0;
-  });
+    return () => window.clearInterval(timer);
+  }, []);
 
   function setDigit(index: number, value: string) {
     const digit = value.replace(/\D/g, "").slice(-1);
@@ -657,7 +651,7 @@ function AuthField({
   type?: string;
   required?: boolean;
   autoComplete?: string;
-  trailing?: React.ReactNode;
+  trailing?: ReactNode;
 }) {
   return (
     <label className="el-auth-field">
