@@ -1,12 +1,14 @@
 import { createBrowserRouter } from "react-router-dom";
 import { AccountPage } from "@/pages/AccountPage";
 import { AuthPage } from "@/pages/AuthPage";
+import { BusinessLandingPage, BusinessRfqPage } from "@/pages/B2BPage";
 import { CartPage } from "@/pages/CartPage";
 import { CatalogPage } from "@/pages/CatalogPage";
 import { CheckoutPage } from "@/pages/CheckoutPage";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
+import { AdminConsolePage } from "@/pages/admin/AdminConsolePage";
 import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
 
 export const router = createBrowserRouter([
@@ -21,6 +23,10 @@ export const router = createBrowserRouter([
   { path: "/auth/forgot", element: <AuthPage mode="forgot" /> },
   { path: "/auth/reset", element: <AuthPage mode="reset" /> },
   { path: "/account", element: <AccountPage /> },
+  { path: "/business", element: <BusinessLandingPage /> },
+  { path: "/business/rfq", element: <BusinessRfqPage /> },
+  { path: "/business/rfq/:rfqCode", element: <BusinessRfqPage /> },
+  { path: "/admin", element: <AdminConsolePage /> },
   { path: "/admin/launch", element: <LaunchControlPage /> },
   { path: "*", element: <NotFoundPage /> },
 ]);

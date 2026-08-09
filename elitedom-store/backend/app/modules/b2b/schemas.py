@@ -19,6 +19,28 @@ class RFQItemRequest(BaseModel):
     quantity: int = Field(..., ge=1, le=100_000)
 
 
+class ProcurementDetailsRequest(BaseModel):
+    """Commercial context supplied by the institutional buyer for one RFQ."""
+
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    title: str = Field(..., min_length=3, max_length=180)
+    needed_by: date | None = None
+    delivery_location: str | None = Field(default=None, max_length=180)
+    budget_target: Decimal | None = Field(
+        default=None,
+        ge=0,
+        max_digits=14,
+        decimal_places=2,
+    )
+    payment_terms: str | None = Field(default=None, max_length=180)
+
+    @field_validator("delivery_location", "payment_terms")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        return value or None
+
+
 class SubmitRFQRequest(BaseModel):
     """Payload supplied by a B2B client when requesting a quotation."""
 
@@ -26,6 +48,7 @@ class SubmitRFQRequest(BaseModel):
 
     items: list[RFQItemRequest] = Field(..., min_length=1, max_length=100)
     notes: str | None = Field(default=None, max_length=4_000)
+    procurement: ProcurementDetailsRequest | None = None
     # Staff may submit on behalf of a verified institutional customer. B2B
     # clients are always constrained to their own partner record.
     partner_id: int | None = Field(default=None, ge=1)
@@ -122,6 +145,20 @@ class QuoteDetailsResponse(BaseModel):
     issued_by: int | None = None
 
 
+class ProcurementDetailsResponse(BaseModel):
+    """Identity-safe commercial snapshot rendered by the RFQ workspace."""
+
+    title: str | None = None
+    company_name: str | None = None
+    contact_name: str | None = None
+    contact_email: str | None = None
+    contact_phone: str | None = None
+    needed_by: date | None = None
+    delivery_location: str | None = None
+    budget_target: Decimal | None = None
+    payment_terms: str | None = None
+
+
 class B2BRFQResponse(BaseModel):
     """Structured RFQ representation; intentionally excludes raw JSON metadata."""
 
@@ -130,6 +167,7 @@ class B2BRFQResponse(BaseModel):
     partner_id: int
     status: RFQStatus
     items: list[RFQItemResponse]
+    procurement: ProcurementDetailsResponse | None = None
     validity_date: date | None = None
     total_estimated_value: Decimal | None = None
     notes: str | None = None
