@@ -5,6 +5,15 @@ import { fileURLToPath } from "node:url";
 const frontendRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const failures = [];
 
+function source(relativePath) {
+  const absolute = join(frontendRoot, relativePath);
+  if (!existsSync(absolute)) {
+    failures.push(`Figma parity: missing implementation file ${relativePath}`);
+    return "";
+  }
+  return readFileSync(absolute, "utf8");
+}
+
 const pages = [
   { node: "33:219", name: "Storefront / Final / EN", file: "src/pages/HomePage.tsx", signatures: ["el-hero", "el-category-rail", "el-curated", "el-outcomes", "el-b2b-editorial", "SocialDock", "StoreFooter"] },
   { node: "83:339", name: "Storefront / Final / AR RTL", file: "src/pages/HomePage.tsx", signatures: ["locale === \"ar\"", "document.documentElement.dir", "mobileTitle", "mobileCuratedTitle"] },
@@ -20,10 +29,10 @@ const pages = [
   { node: "156:103", name: "Auth / Final / Forgot Password / EN", file: "src/pages/AuthPage.tsx", signatures: ["mode === \"forgot\"", "ForgotPassword"] },
   { node: "156:186", name: "Auth / Final / Reset Password / EN", file: "src/pages/AuthPage.tsx", signatures: ["mode === \"reset\"", "ResetPassword"] },
   { node: "156:280", name: "Auth / Final / Recovery Sent / EN", file: "src/pages/RecoverySentPage.tsx", signatures: ["AuthShell", "Recovery link sent", "el-auth-recovery-panel"] },
-  { node: "91:1263", name: "Account / Final / Overview / EN", file: "src/pages/AccountPage.tsx", signatures: ["StoreHeader", "el-account", "orders", "security", "StoreFooter"] },
+  { node: "91:1263", name: "Account / Final / Overview / EN", file: "src/pages/AccountPage.tsx", signatures: ["StoreHeader", "el-account", "security", "StoreFooter"] },
   { node: "12:2", name: "B2B / Final / Procurement Landing / EN", file: "src/pages/B2BPage.tsx", signatures: ["BusinessLandingPage", "el-b2b-hero", "el-b2b-feature-grid", "StoreFooter"] },
   { node: "12:44", name: "B2B / Final / RFQ Workspace / EN", file: "src/pages/B2BPage.tsx", signatures: ["BusinessRfqPage", "fetchRfqs", "submitRfq", "convertRfq"] },
-  { node: "44:66", name: "Admin / Final / Operations Console", file: "src/pages/admin/AdminOperationsPage.tsx", signatures: ["Operations dashboard", "PAYMENT SUCCESS", "Integration health", "Fulfilment pulse", "Launch control", "ThemeToggle"] },
+  { node: "44:66", name: "Admin / Final / Operations Console", file: "src/pages/admin/AdminDirectoryPage.tsx", signatures: ["Operations command center", "ADMIN_DIRECTORY", "fetchAdminDashboard", "ThemeToggle"] },
   { node: "45:114", name: "Mobile / Final / Storefront / AR RTL", file: "src/styles/p14-responsive.css", signatures: ["@media (max-width: 620px)", "el-hero__title--mobile", "el-category-rail--mobile"] },
   { node: "97:155", name: "Mobile / Final / PDP / AR RTL", file: "src/styles/p14-responsive.css", signatures: ["P14.b — Mobile PDP", "el-pdp-main-media", "el-pdp-technical"] },
   { node: "98:212", name: "Mobile / Final / Checkout / AR RTL", file: "src/styles/p14-responsive.css", signatures: ["el-checkout", "el-payment-method"] },
@@ -31,24 +40,19 @@ const pages = [
   { node: "105:301", name: "Tablet / Final / Storefront / EN", file: "src/styles/p14-responsive.css", signatures: ["@media (max-width: 900px)", "el-store-header__mobile-row"] },
   { node: "244:3", name: "P19 Admin / Final / Orders", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["OrdersSection", "fetchAdminOrders", "updateAdminOrderState"] },
   { node: "244:296", name: "P19 Admin / Final / Payments", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["PAYMENT OPERATIONS", "PaymentsSurface", "fetchPaymentTrail", "requestPaymentRefund"] },
-  { node: "244:589", name: "P19 Admin / Final / Inventory", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["INVENTORY CONTROL", "InventorySurface", "fetchInventoryReport"] },
-  { node: "244:882", name: "P19 Admin / Final / Suppliers & Procurement", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["SUPPLIER & PROCUREMENT", "SuppliersSurface", "fetchSuppliers", "fetchPurchaseOrders"] },
-  { node: "244:1175", name: "P19 Admin / Final / Reporting", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["REPORTING & ANALYTICS", "ReportsSurface", "fetchReportingDashboard"] },
   { node: "244:1761", name: "P19 Admin / Final / RMA & Warranty", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["RmaSection", "fetchAdminRmas", "reviewAdminRma"] },
   { node: "244:2054", name: "P19 Admin / Final / Shipping & Fulfilment", file: "src/pages/admin/AdminConsolePage.tsx", signatures: ["ShipmentsSection", "fetchAdminShipments", "dispatchAdminOrder"] },
   { node: "244:2347", name: "P19 Admin / Final / Integrations & Audit", file: "src/pages/admin/AdminPlatformPage.tsx", signatures: ["INTEGRATIONS & AUDIT", "IntegrationsSurface", "fetchRuntimeReadiness", "fetchAdminAuditLogs"] },
   { node: "244:2640", name: "P19 Account / Final / Loyalty", file: "src/pages/AccountPage.tsx", signatures: ["LoyaltySection", "fetchLoyaltyBalance", "fetchLoyaltyHistory"] },
   { node: "244:2682", name: "P19 Account / Final / Warranty & RMA", file: "src/pages/WarrantyPage.tsx", signatures: ["ACCOUNT / WARRANTY", "fetchWarrantyClaims", "checkWarranty", "submitWarrantyClaim"] },
+  { node: "246:592", name: "System / Final / Route Not Found", file: "src/pages/NotFoundPage.tsx", signatures: ["246:592", "ROUTE CONTROL", "Back to storefront"] },
+  { node: "247:3", name: "P20 Account / Final / Order Detail & Tracking", file: "src/pages/AccountOrdersPage.tsx", signatures: ["247:3", "fetchOrderTracking", "cancelAccountOrder", "redeemPointsForOrder"] },
+  { node: "247:70", name: "P20 Admin / Final / Inventory Tools", file: "src/pages/admin/AdminCompletenessPage.tsx", signatures: ["247:70", "scanInventoryBarcode", "lookupInventorySerial", "adjustInventoryStock"] },
+  { node: "247:135", name: "P20 Admin / Final / Dropshipping Control", file: "src/pages/admin/AdminCompletenessPage.tsx", signatures: ["247:135", "listProductSupplierLinks", "upsertProductSupplierLink", "updateDropshipShipment"] },
+  { node: "247:200", name: "P20 Admin / Final / Catalog Editing Workspace", file: "src/pages/admin/AdminCompletenessPage.tsx", signatures: ["247:200", "updateCatalogContent", "uploadCatalogMedia", "createCatalogAdminCategory", "createCatalogAttributeDefinition"] },
+  { node: "247:265", name: "P20 Admin / Final / Supplier Management", file: "src/pages/admin/AdminCompletenessPage.tsx", signatures: ["247:265", "createSupplier", "updateSupplier", "createPurchaseOrder", "updatePurchaseOrder"] },
+  { node: "247:329", name: "P20 Admin / Final / Reporting Exports", file: "src/pages/admin/AdminCompletenessPage.tsx", signatures: ["247:329", "downloadSalesExport", "fetchReportingDashboard"] },
 ];
-
-function source(relativePath) {
-  const absolute = join(frontendRoot, relativePath);
-  if (!existsSync(absolute)) {
-    failures.push(`Figma parity: missing implementation file ${relativePath}`);
-    return "";
-  }
-  return readFileSync(absolute, "utf8");
-}
 
 for (const page of pages) {
   const text = source(page.file);
@@ -59,15 +63,16 @@ for (const page of pages) {
 
 const account = source("src/pages/AccountPage.tsx");
 const adminConsole = source("src/pages/admin/AdminConsolePage.tsx");
-if (!account.includes("LoyaltySection") || !adminConsole.includes("CustomersSection")) failures.push("Figma 244:1468 requires both customer operations and account loyalty implementation.");
-if (!adminConsole.includes("AuditSection") || !source("src/pages/admin/AdminPlatformPage.tsx").includes("IntegrationsSurface")) failures.push("Figma 244:2347 requires integrations plus immutable audit visibility.");
+if (!account.includes("LoyaltySection") || !adminConsole.includes("CustomersSection")) failures.push("P19 customer and account-loyalty surfaces must both remain implemented.");
+if (!adminConsole.includes("AuditSection") || !source("src/pages/admin/AdminPlatformPage.tsx").includes("IntegrationsSurface")) failures.push("P19 integrations plus immutable audit visibility must remain implemented.");
 
 const router = source("src/router.tsx");
 const routeContracts = [
   ["/", "HomePage"], ["/catalog", "CatalogPage"], ["/products/:productId", "ProductDetailPage"], ["/cart", "CartPage"], ["/checkout", "CheckoutRoute"],
   ["/auth", "AuthPage"], ["/auth/create", "AuthPage"], ["/auth/otp", "AuthPage"], ["/auth/forgot", "AuthPage"], ["/auth/reset", "AuthPage"], ["/auth/recovery-sent", "RecoverySentPage"],
-  ["/account", "AccountPage"], ["/account/warranty", "WarrantyPage"], ["/business", "BusinessLandingPage"], ["/business/rfq", "BusinessRfqPage"], ["/business/rfq/:rfqCode", "BusinessRfqPage"],
-  ["/admin", "AdminRoutePage"], ["/admin/payments", "AdminPlatformPage"], ["/admin/inventory", "AdminPlatformPage"], ["/admin/suppliers", "AdminPlatformPage"], ["/admin/reports", "AdminPlatformPage"], ["/admin/catalog", "AdminPlatformPage"], ["/admin/integrations", "AdminPlatformPage"], ["/admin/launch", "LaunchControlPage"],
+  ["/account", "AccountEntryPage"], ["/account/orders", "AccountOrdersPage"], ["/account/orders/:orderId", "AccountOrderDetailPage"], ["/account/warranty", "WarrantyPage"],
+  ["/business", "BusinessLandingPage"], ["/business/rfq", "BusinessRfqPage"], ["/business/rfq/:rfqCode", "BusinessRfqPage"],
+  ["/admin", "AdminEntryPage"], ["/admin/payments", "AdminPlatformPage"], ["/admin/inventory", "AdminCompletenessPage"], ["/admin/suppliers", "AdminCompletenessPage"], ["/admin/dropshipping", "AdminCompletenessPage"], ["/admin/reports", "AdminCompletenessPage"], ["/admin/catalog", "AdminCompletenessPage"], ["/admin/integrations", "AdminPlatformPage"], ["/admin/launch", "LaunchControlPage"],
 ];
 for (const [route, component] of routeContracts) {
   if (!router.includes(`path: \"${route}\"`) || !router.includes(`<${component}`)) failures.push(`Figma parity: route ${route} must resolve to ${component}`);
@@ -76,13 +81,13 @@ for (const [route, component] of routeContracts) {
 const storeHeader = source("src/components/store/StoreHeader.tsx");
 const authShell = source("src/components/auth/AuthShell.tsx");
 const checkoutThemeRoute = source("src/pages/CheckoutThemeRoute.tsx");
-const adminOperations = source("src/pages/admin/AdminOperationsPage.tsx");
+const adminHub = source("src/pages/admin/AdminDirectoryPage.tsx");
 const adminThemeRoute = source("src/pages/admin/AdminThemeRoute.tsx");
 const theme = source("src/lib/theme.ts");
 const globals = source("src/styles/globals.css");
 const themeHardening = source("src/styles/theme-hardening.css");
 
-for (const [surface, text] of [["store header", storeHeader], ["authentication shell", authShell], ["checkout and checkout-result shell", checkoutThemeRoute], ["admin operations", adminOperations], ["launch control", adminThemeRoute]]) {
+for (const [surface, text] of [["store header", storeHeader], ["authentication shell", authShell], ["checkout and checkout-result shell", checkoutThemeRoute], ["admin hub", adminHub], ["launch control", adminThemeRoute]]) {
   if (!text.includes("ThemeToggle")) failures.push(`Theme parity: ${surface} must expose ThemeToggle`);
 }
 if ((storeHeader.match(/<ThemeToggle/g) ?? []).length < 2) failures.push("Theme parity: StoreHeader must expose theme control in desktop and mobile action rows");
@@ -93,10 +98,10 @@ for (const token of ["--el-control-bg", "--el-control-hover", "--el-input-bg", "
 for (const selector of [".el-auth-provider.is-google", ".el-auth-provider.is-apple", ".el-auth-primary:hover", ".el-account-primary:hover", ".el-store-layer"]) {
   if (!themeHardening.includes(selector)) failures.push(`Theme parity: hardening layer must normalize ${selector}`);
 }
-if (!source("src/main.tsx").includes('import "@/styles/theme-hardening.css"')) failures.push("Theme parity: theme-hardening.css must load globally after shared surfaces");
+const main = source("src/main.tsx");
+if (!main.includes('"@/styles/theme-hardening.css"') || !main.includes('"@/styles/p20-completeness.css"')) failures.push("Theme parity: theme hardening and P20 semantic surfaces must load globally");
 
-const forbiddenPreviewRoutes = ["/figma", "/design-preview", "/theme-preview"];
-for (const route of forbiddenPreviewRoutes) if (router.includes(`path: \"${route}\"`)) failures.push(`Figma parity: duplicate preview route is forbidden: ${route}`);
+for (const route of ["/figma", "/design-preview", "/theme-preview"]) if (router.includes(`path: \"${route}\"`)) failures.push(`Figma parity: duplicate preview route is forbidden: ${route}`);
 
 if (failures.length) {
   console.error("Figma page parity checks failed:\n");
@@ -104,4 +109,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`Figma page parity validated: ${pages.length} final frames, P19 backend surfaces, theme controls and route contracts.`);
+console.log(`Figma page parity validated: ${pages.length} final frames, P19/P20 backend surfaces, theme controls and route contracts.`);
