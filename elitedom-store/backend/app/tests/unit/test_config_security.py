@@ -44,6 +44,31 @@ def test_internal_service_urls_allow_named_container_http_but_not_public_http() 
     assert not is_safe_service_url("https://user:password@odoo.example.com")
 
 
+def test_sentry_requires_an_https_dsn_and_release_when_enabled() -> None:
+    with pytest.raises(ValidationError, match="SENTRY_DSN"):
+        _production_settings(sentry_enabled=True)
+
+    with pytest.raises(ValidationError, match="SENTRY_DSN"):
+        _production_settings(
+            sentry_enabled=True,
+            sentry_dsn="http://public-key@sentry.example.com/1",
+            sentry_release="commit-sha",
+        )
+
+    with pytest.raises(ValidationError, match="SENTRY_RELEASE"):
+        _production_settings(
+            sentry_enabled=True,
+            sentry_dsn="https://public-key@sentry.example.com/1",
+        )
+
+    enabled = _production_settings(
+        sentry_enabled=True,
+        sentry_dsn="https://public-key@sentry.example.com/1",
+        sentry_release="0123456789abcdef",
+    )
+    assert enabled.sentry_enabled is True
+
+
 def test_production_settings_require_distinct_generated_core_secrets() -> None:
     settings = _production_settings()
     assert settings.environment == "production"
