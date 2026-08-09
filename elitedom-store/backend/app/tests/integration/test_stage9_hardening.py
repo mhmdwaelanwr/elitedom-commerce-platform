@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import select
 
 from app.config import Settings
 from app.middleware import security_headers
-from app.models import Partner
+from app.models import Partner, SaleOrder
 from app.modules.auth import mfa
 from app.modules.auth.errors import InvalidMfaError
 from app.modules.auth.mfa_service import AdminMfaService
@@ -99,8 +100,7 @@ async def test_staff_mfa_enrollment_encrypts_seed_and_verifies_recovery(
     assert confirmed.status.verified is True
     assert len(confirmed.recovery_codes) == 8
     assert all(
-        recovery not in credential.recovery_code_hashes
-        for recovery in confirmed.recovery_codes
+        recovery not in credential.recovery_code_hashes for recovery in confirmed.recovery_codes
     )
 
     session.mfa_verified_at = None
@@ -137,6 +137,83 @@ async def test_permission_endpoint_requires_verified_mfa_when_policy_enabled(
 
     assert response.status_code == 403
     assert "ELITE_1008" in response.text
+
+
+@pytest.mark.asyncio
+async def test_customer_compatible_staff_routes_require_verified_mfa(
+    client,
+    db_session,
+    monkeypatch,
+):
+    staff, session = await _staff_with_session(db_session)
+    customer = Partner(
+        name="MFA Route Customer",
+        email="mfa-route-customer@example.com",
+        phone="01099990001",
+        role="customer",
+        company_type="person",
+        is_active=True,
+    )
+    db_session.add(customer)
+    await db_session.flush()
+    order = SaleOrder(
+        name="SO-MFA-ROUTE",
+        partner_id=customer.id,
+        state="sale",
+        payment_method="credit_card",
+        payment_status="paid",
+        amount_subtotal=Decimal("100.00"),
+        amount_shipping=Decimal("0.00"),
+        amount_tax=Decimal("0.00"),
+        amount_total=Decimal("100.00"),
+        currency="EGP",
+        shipping_address="Cairo",
+        shipping_governorate="Cairo",
+        is_dropship=False,
+    )
+    db_session.add(order)
+    await db_session.flush()
+    monkeypatch.setattr(shared_security.settings, "staff_mfa_required", True)
+    headers = _authorization(staff, session)
+
+    protected_requests = (
+        ("GET", "/api/v1/b2b/rfq"),
+        ("GET", "/api/v1/orders"),
+        ("GET", f"/api/v1/orders/{order.id}"),
+        ("POST", f"/api/v1/orders/{order.id}/cancel?reason=security_test"),
+        ("GET", f"/api/v1/payments/{order.id}"),
+        ("POST", f"/api/v1/payments/{order.id}/refund?reason=security_test"),
+        ("GET", "/api/v1/warranty/claims"),
+        ("GET", "/api/v1/warranty/claims/RMA-MISSING"),
+        ("GET", "/api/v1/warranty/check/SERIAL-MISSING"),
+        ("GET", f"/api/v1/shipping/{order.id}/tracking"),
+    )
+    for method, path in protected_requests:
+        response = await client.request(method, path, headers=headers)
+        assert response.status_code == 403, path
+        assert response.json()["detail"]["error_code"] == "ELITE_1008", path
+
+    now = datetime.now(UTC)
+    db_session.add(
+        AdminMfaCredential(
+            partner_id=staff.id,
+            secret_ciphertext="test-encrypted-secret",
+            recovery_code_hashes="[]",
+            enabled_at=now,
+        )
+    )
+    session.mfa_verified_at = now
+    await db_session.flush()
+
+    legitimate_requests = (
+        ("GET", "/api/v1/b2b/rfq", 200),
+        ("GET", "/api/v1/orders", 200),
+        ("GET", f"/api/v1/payments/{order.id}", 200),
+        ("GET", "/api/v1/warranty/claims", 200),
+    )
+    for method, path, expected_status in legitimate_requests:
+        response = await client.request(method, path, headers=headers)
+        assert response.status_code == expected_status, path
 
 
 def _production_settings(**overrides) -> Settings:

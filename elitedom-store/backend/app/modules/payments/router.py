@@ -12,7 +12,7 @@ from app.modules.payments.models import PaymentAttempt, PaymentRefund
 from app.modules.payments.refunds import ensure_full_refund_request
 from app.shared.exceptions import ResourceConflictError, ResourceNotFoundError
 from app.shared.schemas import PaymentStatus
-from app.shared.security import get_current_user
+from app.shared.security import get_current_user, require_staff_access
 
 router = APIRouter()
 
@@ -42,7 +42,11 @@ async def _authorize_cross_owner_staff(
         # Preserve the customer-facing anti-enumeration contract: another
         # customer's order is indistinguishable from a missing order.
         raise ResourceNotFoundError("SaleOrder", order_id)
-    return await access.require(current_user["user_id"], permission.value)
+    return await require_staff_access(
+        db=db,
+        current_user=current_user,
+        permissions=(permission.value,),
+    )
 
 
 async def _latest_attempt(order_id: int, db: AsyncSession) -> PaymentAttempt | None:
@@ -110,7 +114,9 @@ async def get_payment_status(
         "payment_method": order.payment_method,
         "amount_total": order.amount_total,
         "currency": order.currency,
-        "provider": attempt.provider if attempt else ("stripe" if order.stripe_session_id else None),
+        "provider": attempt.provider
+        if attempt
+        else ("stripe" if order.stripe_session_id else None),
         "payment_attempt_id": attempt.id if attempt else None,
         "provider_intention_id": attempt.provider_intention_id if attempt else None,
         "provider_transaction_id": attempt.provider_transaction_id if attempt else None,

@@ -24,7 +24,7 @@ from app.modules.b2b.schemas import (
 from app.modules.b2b.service import B2BService
 from app.shared.exceptions import InsufficientPermissionsError
 from app.shared.schemas import RFQStatus, UserRole
-from app.shared.security import get_current_user
+from app.shared.security import get_current_user, require_staff_access
 
 router = APIRouter()
 
@@ -44,12 +44,11 @@ def require_b2b_or_permission(permission: AdminPermission):
         )
         if persisted_role == UserRole.B2B_CLIENT.value:
             return {**current_user, "role": persisted_role}
-        try:
-            role, permissions = await AdminAccessService(db).require(
-                current_user["user_id"], permission.value
-            )
-        except InsufficientPermissionsError:
-            raise
+        role, permissions = await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=(permission.value,),
+        )
         return {**current_user, "role": role, "permissions": sorted(permissions)}
 
     return checker
