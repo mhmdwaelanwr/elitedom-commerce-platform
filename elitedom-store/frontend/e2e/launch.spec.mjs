@@ -11,6 +11,23 @@ const apiOrigin = requiredOrigin("ELITEDOM_API_URL");
 const apiV1 = `${apiOrigin}/api/v1`;
 let purchasableProduct;
 
+function hasRealProductMedia(product) {
+  if (!Array.isArray(product.images) || product.images.length === 0) return false;
+  const populated = product.images.filter(
+    (image) => typeof image?.url === "string" && image.url.trim().length > 0,
+  );
+  if (populated.length === 0) return false;
+  if (populated.filter((image) => image.is_primary === true).length !== 1) return false;
+  return populated.every(
+    (image) =>
+      !image.url.includes("/images/gpu_card.png") &&
+      !image.url.includes("/template/images/") &&
+      (image.url.startsWith("/media/") ||
+        image.url.startsWith("/") ||
+        image.url.startsWith("https://")),
+  );
+}
+
 async function setLocale(page, locale) {
   await page.addInitScript((selectedLocale) => {
     window.localStorage.setItem("elitedom-locale", selectedLocale);
@@ -47,14 +64,46 @@ test.describe.serial("Elitedom deployed launch gate", () => {
       extraHTTPHeaders: { Accept: "application/json" },
     });
     try {
-      const response = await api.get("/catalog/products?locale=en&limit=100");
+      const publicProducts = [];
+      let expectedTotal = 0;
+      let pageNumber = 1;
+
+      do {
+        const response = await api.get(
+          `/catalog/products?locale=en&page=${pageNumber}&limit=100`,
+        );
+        expect(
+          response.ok(),
+          `Real catalogue discovery failed on page ${pageNumber}: HTTP ${response.status()} ${response.statusText()}`,
+        ).toBeTruthy();
+        const payload = await response.json();
+        expect(Array.isArray(payload.products), "Catalogue response must contain products[].").toBeTruthy();
+        expectedTotal = Number(payload.total_count);
+        expect(Number.isInteger(expectedTotal) && expectedTotal >= 0).toBeTruthy();
+        publicProducts.push(...payload.products);
+        if (payload.products.length === 0) break;
+        pageNumber += 1;
+      } while (publicProducts.length < expectedTotal);
+
+      expect(publicProducts.length, "The public catalogue must contain at least one product.").toBeGreaterThan(0);
+      expect(publicProducts.length, "Public catalogue pagination did not return total_count products.").toBe(expectedTotal);
+
+      const merchandisingFailures = publicProducts.flatMap((product) => {
+        const failures = [];
+        if (!String(product.name ?? "").trim()) failures.push("name");
+        if (!String(product.sku ?? "").trim()) failures.push("sku");
+        if (!String(product.slug ?? "").trim()) failures.push("slug");
+        if (!Number.isFinite(Number(product.list_price)) || Number(product.list_price) <= 0) failures.push("price");
+        if (!product.category?.slug || !product.category?.name) failures.push("category");
+        if (!hasRealProductMedia(product)) failures.push("media");
+        return failures.length > 0 ? [`${product.id}:${failures.join(",")}`] : [];
+      });
       expect(
-        response.ok(),
-        `Real catalogue discovery failed: HTTP ${response.status()} ${response.statusText()}`,
-      ).toBeTruthy();
-      const payload = await response.json();
-      expect(Array.isArray(payload.products), "Catalogue response must contain products[].").toBeTruthy();
-      purchasableProduct = payload.products.find(
+        merchandisingFailures,
+        `Every public product must be launch-ready with identity, positive price, category, and real media. Failures: ${merchandisingFailures.join(" | ")}`,
+      ).toEqual([]);
+
+      purchasableProduct = publicProducts.find(
         (product) => Number(product.stock_qty) > 0 || product.is_dropship_enabled === true,
       );
       expect(
@@ -92,11 +141,27 @@ test.describe.serial("Elitedom deployed launch gate", () => {
     const productApiResponse = await productApiResponsePromise;
     expect(productApiResponse.ok(), "PDP product API request failed.").toBeTruthy();
     expect(new URL(productApiResponse.url()).origin).toBe(apiOrigin);
+    const localizedProduct = await productApiResponse.json();
+    expect(hasRealProductMedia(localizedProduct), "Localized PDP response must retain real product media.").toBeTruthy();
 
     await expect(page.locator("html")).toHaveAttribute("lang", "ar");
     await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: localizedProduct.name })).toBeVisible();
     await expect(page.locator(".el-pdp-price")).toContainText("EGP");
+
+    const mainProductImage = page.locator(".el-pdp-main-media img");
+    await expect(mainProductImage).toBeVisible();
+    const mediaState = await mainProductImage.evaluate((image) => ({
+      complete: image.complete,
+      naturalWidth: image.naturalWidth,
+      naturalHeight: image.naturalHeight,
+      src: image.currentSrc || image.src,
+    }));
+    expect(mediaState.complete, "PDP primary product image must finish loading.").toBeTruthy();
+    expect(mediaState.naturalWidth, `PDP primary media failed to load: ${mediaState.src}`).toBeGreaterThan(0);
+    expect(mediaState.naturalHeight, `PDP primary media failed to load: ${mediaState.src}`).toBeGreaterThan(0);
+    expect(mediaState.src).not.toContain("/images/gpu_card.png");
+    expect(mediaState.src).not.toContain("/template/images/");
 
     const addButton = page.getByRole("button", { name: "أضف للسلة" });
     await expect(addButton).toBeEnabled();
@@ -118,7 +183,7 @@ test.describe.serial("Elitedom deployed launch gate", () => {
     await expect(page).toHaveURL(`${siteOrigin}/checkout`);
     await expect(page.getByRole("heading", { level: 1, name: "إتمام الطلب" })).toBeVisible();
     await expect(page.getByRole("heading", { level: 2, name: "ملخص الطلب" })).toBeVisible();
-    await expect(page.getByText(purchasableProduct.name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(localizedProduct.name, { exact: true }).first()).toBeVisible();
     await expect(page.getByText("بطاقة ائتمان أو خصم", { exact: true })).toBeVisible();
     await expect(page.getByText("محفظة موبايل", { exact: true })).toBeVisible();
     await expect(page.getByText("InstaPay", { exact: true })).toBeVisible();
