@@ -99,34 +99,67 @@ def _callback_type(transaction: Mapping[str, Any]) -> str:
     return "transaction.failed"
 
 
-def _order_reference(transaction: Mapping[str, Any]) -> tuple[int | None, str | None]:
-    order_payload = _mapping(transaction.get("order"))
-    claims = _mapping(transaction.get("payment_key_claims"))
-    extras = _mapping(claims.get("extra")) or _mapping(transaction.get("extras"))
-
-    local_id = _integer(extras.get("order_id"))
-    reference = (
-        _identifier(extras.get("order_number"))
-        or _identifier(order_payload.get("merchant_order_id"))
-        or _identifier(order_payload.get("special_reference"))
-        or _identifier(transaction.get("special_reference"))
-    )
-    return local_id, reference
+def _provider_order_id(transaction: Mapping[str, Any]) -> str | None:
+    return _identifier(_mapping(transaction.get("order")).get("id"))
 
 
-def _provider_references(
+def _binding_error(
     transaction: Mapping[str, Any],
-) -> tuple[str | None, str | None]:
+    attempt: PaymentAttempt,
+    order: SaleOrder,
+) -> str | None:
+    """Require every callback reference to agree with the signed provider object.
+
+    Only HMAC-covered provider identifiers are allowed to select an attempt.
+    Unsigned intention/extras/merchant references are treated as redundant
+    claims and may only confirm the already-selected local object.
+    """
+    provider_order_id = _provider_order_id(transaction)
+    if provider_order_id is None:
+        return "missing_provider_order_id"
+    if not attempt.provider_order_id or provider_order_id != attempt.provider_order_id:
+        return "provider_order_mismatch"
+
+    transaction_id = _identifier(transaction.get("id"))
+    if attempt.provider_transaction_id and transaction_id != attempt.provider_transaction_id:
+        return "transaction_id_mismatch"
+
     order_payload = _mapping(transaction.get("order"))
     claims = _mapping(transaction.get("payment_key_claims"))
     intention_payload = _mapping(transaction.get("intention"))
-    provider_order_id = _identifier(order_payload.get("id"))
-    intention_id = (
-        _identifier(intention_payload.get("id"))
-        or _identifier(claims.get("intention_id"))
-        or _identifier(transaction.get("intention_id"))
+    claim_extras = _mapping(claims.get("extra"))
+    transaction_extras = _mapping(transaction.get("extras"))
+
+    intention_values = (
+        _identifier(intention_payload.get("id")),
+        _identifier(claims.get("intention_id")),
+        _identifier(transaction.get("intention_id")),
     )
-    return intention_id, provider_order_id
+    for intention_id in intention_values:
+        if intention_id is not None and intention_id != attempt.provider_intention_id:
+            return "intention_mismatch"
+
+    for extras in (claim_extras, transaction_extras):
+        local_order_id = _integer(extras.get("order_id"))
+        if local_order_id is not None and local_order_id != order.id:
+            return "local_order_id_mismatch"
+        order_number = _identifier(extras.get("order_number"))
+        if order_number is not None and order_number != order.name:
+            return "order_number_mismatch"
+
+    merchant_order_id = _identifier(order_payload.get("merchant_order_id"))
+    if merchant_order_id is not None and merchant_order_id != order.name:
+        return "merchant_order_id_mismatch"
+
+    expected_reference = attempt.provider_reference or order.name
+    for special_reference in (
+        _identifier(order_payload.get("special_reference")),
+        _identifier(transaction.get("special_reference")),
+    ):
+        if special_reference is not None and special_reference != expected_reference:
+            return "special_reference_mismatch"
+
+    return None
 
 
 def _expected_integration_id(attempt: PaymentAttempt) -> int:
@@ -142,6 +175,10 @@ def _validation_error(
     attempt: PaymentAttempt,
     order: SaleOrder,
 ) -> str | None:
+    binding_error = _binding_error(transaction, attempt, order)
+    if binding_error:
+        return binding_error
+
     amount = _integer(transaction.get("amount_cents"))
     if amount is None:
         return "missing_payment_amount"
@@ -311,61 +348,43 @@ async def _find_attempt_and_order(
     db: AsyncSession,
     transaction: Mapping[str, Any],
 ) -> tuple[PaymentAttempt | None, SaleOrder | None]:
-    local_order_id, order_reference = _order_reference(transaction)
-    intention_id, provider_order_id = _provider_references(transaction)
+    # Resolve only from HMAC-covered Paymob identifiers. Do not allow unsigned
+    # intention/extras/merchant references to choose a local payment object.
+    provider_order_id = _provider_order_id(transaction)
     transaction_id = _identifier(transaction.get("id"))
 
     attempt: PaymentAttempt | None = None
-    predicates = []
-    if transaction_id:
-        predicates.append(PaymentAttempt.provider_transaction_id == transaction_id)
-    if intention_id:
-        predicates.append(PaymentAttempt.provider_intention_id == intention_id)
-    if provider_order_id:
-        predicates.append(PaymentAttempt.provider_order_id == provider_order_id)
-    if order_reference:
-        predicates.append(PaymentAttempt.provider_reference == order_reference)
-
-    for predicate in predicates:
-        attempt = await db.scalar(
-            select(PaymentAttempt)
-            .where(PaymentAttempt.provider == "paymob", predicate)
-            .order_by(PaymentAttempt.created_at.desc())
-            .limit(1)
-        )
-        if attempt is not None:
-            break
-
-    order_predicate = None
-    if attempt is not None:
-        order_predicate = SaleOrder.id == attempt.order_id
-    elif local_order_id is not None:
-        order_predicate = SaleOrder.id == local_order_id
-    elif order_reference:
-        order_predicate = SaleOrder.name == order_reference
-
-    if order_predicate is None:
-        return attempt, None
-
-    order = await db.scalar(
-        select(SaleOrder)
-        .options(selectinload(SaleOrder.order_lines))
-        .where(order_predicate)
-        .with_for_update()
-    )
-    if order is None:
-        return attempt, None
-
-    if attempt is None:
+    if provider_order_id is not None:
         attempt = await db.scalar(
             select(PaymentAttempt)
             .where(
                 PaymentAttempt.provider == "paymob",
-                PaymentAttempt.order_id == order.id,
+                PaymentAttempt.provider_order_id == provider_order_id,
             )
             .order_by(PaymentAttempt.created_at.desc())
             .limit(1)
         )
+    if attempt is None and transaction_id is not None:
+        attempt = await db.scalar(
+            select(PaymentAttempt)
+            .where(
+                PaymentAttempt.provider == "paymob",
+                PaymentAttempt.provider_transaction_id == transaction_id,
+            )
+            .order_by(PaymentAttempt.created_at.desc())
+            .limit(1)
+        )
+    if attempt is None:
+        return None, None
+
+    order = await db.scalar(
+        select(SaleOrder)
+        .options(selectinload(SaleOrder.order_lines))
+        .where(SaleOrder.id == attempt.order_id)
+        .with_for_update()
+    )
+    if order is None:
+        return attempt, None
     return attempt, order
 
 
