@@ -282,6 +282,24 @@ async def process_paymob_transaction(
         )
 
     callback_type = _callback_type(transaction)
+    attempt, order = await _find_attempt_and_order(db, transaction)
+    if attempt is None or order is None:
+        logger.warning(
+            "Ignored unmatched Paymob transaction %s before consuming idempotency",
+            transaction_id,
+        )
+        return "unmatched"
+
+    validation_error = _validation_error(transaction, attempt, order)
+    if validation_error:
+        logger.warning(
+            "Rejected Paymob transaction %s for order %s before consuming idempotency: %s",
+            transaction_id,
+            order.name,
+            validation_error,
+        )
+        return "rejected"
+
     receipt = await _register_event(
         db=db,
         event_key=_event_key(transaction),
@@ -291,28 +309,8 @@ async def process_paymob_transaction(
     if receipt is None:
         return "duplicate"
 
-    attempt, order = await _find_attempt_and_order(db, transaction)
-    if attempt is None or order is None:
-        receipt.processing_status = "unmatched"
-        receipt.processed_at = datetime.now(UTC)
-        await db.flush()
-        return "unmatched"
-
     receipt.attempt_id = attempt.id
     receipt.order_id = order.id
-    validation_error = _validation_error(transaction, attempt, order)
-    if validation_error:
-        receipt.processing_status = f"rejected_{validation_error}"
-        receipt.processed_at = datetime.now(UTC)
-        await db.flush()
-        logger.warning(
-            "Rejected Paymob transaction %s for order %s: %s",
-            transaction_id,
-            order.name,
-            validation_error,
-        )
-        return "rejected"
-
     if callback_type == "transaction.pending":
         attempt.status = "pending"
         attempt.provider_transaction_id = transaction_id
