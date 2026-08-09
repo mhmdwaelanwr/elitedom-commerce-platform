@@ -1,0 +1,125 @@
+name: Deploy Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Protected GitHub Environment to deploy
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+      release_ref:
+        description: Full 40-character Git commit SHA reachable from main
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: ${{ inputs.environment }}
+    outputs:
+      site_url: ${{ steps.target.outputs.site_url }}
+      api_url: ${{ steps.target.outputs.api_url }}
+    env:
+      RELEASE_REF: ${{ inputs.release_ref }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+      SITE_URL: ${{ vars.SITE_URL }}
+      API_URL: ${{ vars.API_URL }}
+
+    steps:
+      - name: Check out deployment tooling
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate release and environment contract
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "release_ref must be a full Git SHA" >&2; exit 2; }
+          git cat-file -e "${RELEASE_REF}^{commit}"
+          git fetch origin main
+          git merge-base --is-ancestor "$RELEASE_REF" origin/main || { echo "release_ref is not reachable from main" >&2; exit 2; }
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_SSH_PRIVATE_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo "Deployment SSH secrets are incomplete" >&2; exit 2; }
+          [[ "$DEPLOY_PATH" = /* ]] || { echo "DEPLOY_PATH must be an absolute environment variable" >&2; exit 2; }
+          [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
+          [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
+          bash -n elitedom-store/infrastructure/scripts/deploy_release.sh
+          printf 'site_url=%s\n' "${SITE_URL%/}" >> "$GITHUB_OUTPUT"
+          printf 'api_url=%s\n' "${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure pinned SSH host identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+          printf '%s\n' "$DEPLOY_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_deploy"
+          chmod 600 "$HOME/.ssh/id_deploy"
+
+      - name: Verify remote deployment host
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/id_deploy" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" \
+            'docker compose version >/dev/null && git --version >/dev/null'
+
+      - name: Execute guarded release deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/elitedom-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          cleanup() {
+            printf -v cleanup_cmd 'rm -f %q' "$remote_script"
+            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            elitedom-store/infrastructure/scripts/deploy_release.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$remote_script"
+          printf -v remote_cmd 'bash %q %q %q %q %q' \
+            "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL"
+          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$remote_cmd" \
+            | tee deployment.log
+
+      - name: Preserve deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: deployment-${{ inputs.environment }}-${{ github.run_id }}
+          path: deployment.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  launch-smoke:
+    name: Verify deployed release
+    needs: deploy
+    uses: ./.github/workflows/launch-smoke.yml
+    with:
+      site_url: ${{ needs.deploy.outputs.site_url }}
+      api_url: ${{ needs.deploy.outputs.api_url }}
+      release_ref: ${{ inputs.release_ref }}
