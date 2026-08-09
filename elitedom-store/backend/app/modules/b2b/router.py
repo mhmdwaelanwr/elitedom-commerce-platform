@@ -8,6 +8,11 @@ from app.database import get_db
 from app.models import Partner
 from app.modules.admin.access import AdminPermission
 from app.modules.admin.access_service import AdminAccessService
+from app.modules.b2b.procurement import (
+    hydrate_rfq_list,
+    hydrate_rfq_response,
+    persist_procurement_snapshot,
+)
 from app.modules.b2b.schemas import (
     B2BRFQListResponse,
     B2BRFQResponse,
@@ -58,6 +63,11 @@ async def submit_rfq(
     current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_QUOTE)),
 ):
     result = await B2BService(db).submit_rfq(payload, current_user)
+    result = await persist_procurement_snapshot(
+        db,
+        rfq=result,
+        procurement=payload.procurement,
+    )
     if current_user.get("role") != UserRole.B2B_CLIENT.value:
         await AdminAccessService(db).record_audit(
             actor=current_user,
@@ -78,12 +88,13 @@ async def list_rfqs(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_VIEW)),
 ):
-    return await B2BService(db).list_rfqs(
+    result = await B2BService(db).list_rfqs(
         current_user,
         page=page,
         limit=limit,
         status_filter=status_filter,
     )
+    return await hydrate_rfq_list(db, result)
 
 
 @router.get("/rfq/{rfq_code}", response_model=B2BRFQResponse)
@@ -92,7 +103,8 @@ async def get_rfq(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_b2b_or_permission(AdminPermission.RFQ_VIEW)),
 ):
-    return await B2BService(db).get_rfq(rfq_code, current_user)
+    result = await B2BService(db).get_rfq(rfq_code, current_user)
+    return await hydrate_rfq_response(db, result)
 
 
 @router.put("/rfq/{rfq_code}/quote", response_model=B2BRFQResponse)
@@ -106,6 +118,7 @@ async def issue_quote(
     if current_user.get("role") == UserRole.B2B_CLIENT.value:
         raise InsufficientPermissionsError()
     result = await B2BService(db).issue_quote(rfq_code, payload, current_user)
+    result = await hydrate_rfq_response(db, result)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="rfq.quote.issue",
