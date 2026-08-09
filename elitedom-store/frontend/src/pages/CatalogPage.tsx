@@ -35,6 +35,7 @@ const copy = {
     advanced: "Advanced specifications",
     products: "products",
     compare: "Compare",
+    sort: "Sort products",
     recommended: "Recommended",
     priceLow: "Price: low to high",
     priceHigh: "Price: high to low",
@@ -68,6 +69,7 @@ const copy = {
     advanced: "مواصفات متقدمة",
     products: "منتج",
     compare: "مقارنة",
+    sort: "ترتيب المنتجات",
     recommended: "المقترح",
     priceLow: "السعر: من الأقل",
     priceHigh: "السعر: من الأعلى",
@@ -198,7 +200,7 @@ export function CatalogPage() {
             <p>{copyText.intro}</p>
             <form className="el-catalog-search" key={query} onSubmit={submitSearch} role="search">
               <StoreIcon name="search" size={18} />
-              <input defaultValue={query} name="q" placeholder={copyText.search} type="search" />
+              <input aria-label={copyText.search} defaultValue={query} name="q" placeholder={copyText.search} type="search" />
             </form>
             <div className="el-quick-filters">
               <button className={params.get("series") === "rtx50" ? "is-active" : ""} onClick={() => updateParam("series", "rtx50")} type="button">{copyText.quickRtx}</button>
@@ -215,7 +217,7 @@ export function CatalogPage() {
               <button aria-disabled="true" className="el-toolbar-pill" type="button"><StoreIcon name="compare" size={16} />{copyText.compare}</button>
               <label className="el-toolbar-pill">
                 <StoreIcon name="sort" size={16} />
-                <select onChange={(event) => updateParam("sort", event.target.value)} value={params.get("sort") ?? "recommended"}>
+                <select aria-label={copyText.sort} onChange={(event) => updateParam("sort", event.target.value)} value={params.get("sort") ?? "recommended"}>
                   <option value="recommended">{copyText.recommended}</option>
                   <option value="price-asc">{copyText.priceLow}</option>
                   <option value="price-desc">{copyText.priceHigh}</option>

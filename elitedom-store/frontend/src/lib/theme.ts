@@ -4,7 +4,8 @@ const THEME_STORAGE_KEY = "elitedom-theme";
 
 export function readTheme(): ElitedomTheme {
   const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
-  return stored === "light" ? "light" : "dark";
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
 }
 
 export function applyTheme(theme: ElitedomTheme) {

@@ -182,13 +182,13 @@ export function HomePage() {
             <div className="el-hero__actions el-hero__actions--mobile">{heroActions}</div>
           </section>
 
-          <section aria-label="Categories" className="el-category-rail el-category-rail--desktop" id="categories">
+          <section aria-label={locale === "ar" ? "فئات المنتجات" : "Product categories"} className="el-category-rail el-category-rail--desktop" id="categories">
             {copy.categories.map((category, index) => (
               <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
             ))}
           </section>
 
-          <section aria-label="Mobile categories" className="el-category-rail el-category-rail--mobile">
+          <section aria-label={locale === "ar" ? "فئات المنتجات على الموبايل" : "Mobile product categories"} className="el-category-rail el-category-rail--mobile">
             {copy.mobileCategories.map((category, index) => (
               <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
             ))}
@@ -243,7 +243,7 @@ export function HomePage() {
           </section>
         </main>
 
-        <SocialDock />
+        <SocialDock locale={locale} />
         <StoreFooter locale={locale} />
       </div>
     </div>

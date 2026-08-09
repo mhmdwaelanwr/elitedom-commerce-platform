@@ -15,14 +15,16 @@ const copy = {
     summary: "Order summary", products: "Products", shipping: "Shipping", calculated: "Calculated at checkout", vat: "VAT",
     included: "Included", total: "Total", continue: "Continue to checkout", secure: "Secure checkout · Encrypted connection",
     emptyTitle: "Your cart is ready for hardware.", emptyText: "Add a product from the catalogue and it will stay linked to your cart.",
-    shop: "Shop hardware", error: "We could not load your cart.", retry: "Retry",
+    shop: "Shop hardware", error: "We could not load your cart.", retry: "Retry", mutationError: "We could not update this cart item. Try again.",
+    decrease: "Decrease quantity", increase: "Increase quantity", loading: "Loading cart",
   },
   ar: {
     title: "سلة التسوق", item: "منتج", items: "منتجات", local: "مخزون محلي", warranty: "الضمان مشمول", remove: "إزالة",
     summary: "ملخص الطلب", products: "المنتجات", shipping: "الشحن", calculated: "يُحسب عند إتمام الطلب", vat: "الضريبة",
     included: "مشمولة", total: "الإجمالي", continue: "متابعة لإتمام الطلب", secure: "إتمام طلب آمن · اتصال مشفر",
     emptyTitle: "السلة جاهزة للهاردوير.", emptyText: "أضف منتج من الكتالوج وهيفضل مرتبط بسلتك.",
-    shop: "تسوّق الهاردوير", error: "تعذر تحميل السلة.", retry: "حاول تاني",
+    shop: "تسوّق الهاردوير", error: "تعذر تحميل السلة.", retry: "حاول تاني", mutationError: "تعذر تحديث المنتج في السلة. حاول تاني.",
+    decrease: "قلّل الكمية", increase: "زوّد الكمية", loading: "جارٍ تحميل السلة",
   },
 } as const;
 
@@ -37,6 +39,7 @@ export function CartPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [pendingItemId, setPendingItemId] = useState<number | null>(null);
+  const [mutationError, setMutationError] = useState<string | null>(null);
   const text = copy[locale];
 
   const reload = useCallback(async () => {
@@ -73,10 +76,13 @@ export function CartPage() {
   async function updateQuantity(itemId: number | undefined, quantity: number) {
     if (!snapshot || !itemId || quantity < 1) return;
     setPendingItemId(itemId);
+    setMutationError(null);
     try {
       await updateRemoteCartItem(itemId, quantity, snapshot.sessionId, snapshot.session);
       await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
+    } catch {
+      setMutationError(text.mutationError);
     } finally {
       setPendingItemId(null);
     }
@@ -85,10 +91,13 @@ export function CartPage() {
   async function removeItem(itemId: number | undefined) {
     if (!snapshot || !itemId) return;
     setPendingItemId(itemId);
+    setMutationError(null);
     try {
       await removeRemoteCartItem(itemId, snapshot.sessionId, snapshot.session);
       await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
+    } catch {
+      setMutationError(text.mutationError);
     } finally {
       setPendingItemId(null);
     }
@@ -104,27 +113,28 @@ export function CartPage() {
         <StoreHeader locale={locale} onLocaleChange={setLocale} />
         <main>
           <section className="el-cart-intro"><h1>{text.title}</h1>{!loading && !error ? <p>{count} {count === 1 ? text.item : text.items} · {text.local} · {text.warranty}</p> : null}</section>
-          {loading ? <div className="el-cart-loading"><div /><div /><div /></div> : null}
+          {loading ? <div aria-busy="true" aria-label={text.loading} className="el-cart-loading"><div /><div /><div /></div> : null}
           {!loading && error ? <div className="el-cart-empty"><StoreIcon name="returns" size={30} /><h2>{text.error}</h2><button onClick={() => void reload()} type="button">{text.retry}</button></div> : null}
           {!loading && !error && items.length === 0 ? <div className="el-cart-empty"><StoreIcon name="cart" size={34} /><h2>{text.emptyTitle}</h2><p>{text.emptyText}</p><Link to="/catalog">{text.shop} <StoreIcon name="arrow" size={15} /></Link></div> : null}
           {!loading && !error && items.length > 0 ? (
             <div className="el-cart-layout">
               <section className="el-cart-items" aria-label={text.title}>
+                {mutationError ? <p aria-live="assertive" className="el-cart-mutation-error" role="alert">{mutationError}</p> : null}
                 {items.map((item) => {
                   const itemPending = pendingItemId === item.serverItemId;
                   return (
                     <article className="el-cart-item" key={item.serverItemId ?? item.product.id}>
                       <div className="el-cart-item__media"><img alt={item.product.name} onError={(event) => { event.currentTarget.hidden = true; }} src={item.product.image} /></div>
                       <div className="el-cart-item__info">
-                        <Link to={`/products/${encodeURIComponent(item.product.id)}`}>{item.product.name}</Link>
-                        <p>{item.product.specs.slice(0, 2).map((spec) => spec.value).join(" · ") || item.product.categoryName} · {text.local} · {text.warranty}</p>
+                        <Link dir="auto" to={`/products/${encodeURIComponent(item.product.id)}`}>{item.product.name}</Link>
+                        <p dir="auto">{item.product.specs.slice(0, 2).map((spec) => spec.value).join(" · ") || item.product.categoryName} · {text.local} · {text.warranty}</p>
                         <button disabled={itemPending} onClick={() => void removeItem(item.serverItemId)} type="button">{text.remove}</button>
                       </div>
-                      <strong className="el-cart-item__price">{formatEgp(item.product.priceEgp * item.quantity, locale)} EGP</strong>
+                      <strong className="el-cart-item__price" dir="ltr">{formatEgp(item.product.priceEgp * item.quantity, locale)} EGP</strong>
                       <div className="el-cart-quantity">
-                        <button aria-label="Decrease quantity" disabled={itemPending || item.quantity <= 1} onClick={() => void updateQuantity(item.serverItemId, item.quantity - 1)} type="button"><StoreIcon name="minus" size={16} /></button>
+                        <button aria-label={text.decrease} disabled={itemPending || item.quantity <= 1} onClick={() => void updateQuantity(item.serverItemId, item.quantity - 1)} type="button"><StoreIcon name="minus" size={16} /></button>
                         <span>{item.quantity}</span>
-                        <button aria-label="Increase quantity" disabled={itemPending} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
+                        <button aria-label={text.increase} disabled={itemPending} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
                       </div>
                     </article>
                   );

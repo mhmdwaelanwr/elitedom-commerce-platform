@@ -104,5 +104,5 @@ type StoreIconProps = {
 };
 
 export function StoreIcon({ name, size = 24, className }: StoreIconProps) {
-  return <img aria-hidden="true" alt="" className={className} height={size} src={iconByName[name]} width={size} />;
+  return <img aria-hidden="true" alt="" className={["el-store-icon", className ?? ""].filter(Boolean).join(" ")} height={size} src={iconByName[name]} width={size} />;
 }

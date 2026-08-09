@@ -13,15 +13,26 @@ const statusRows = [
 type AuthShellProps = {
   children: ReactNode;
   locale: "en" | "ar";
+  onLocaleChange: (locale: "en" | "ar") => void;
 };
 
-export function AuthShell({ children, locale }: AuthShellProps) {
+export function AuthShell({ children, locale, onLocaleChange }: AuthShellProps) {
   const ar = locale === "ar";
   return (
     <div className="el-auth-page" dir={ar ? "rtl" : "ltr"}>
       <header className="el-auth-topbar">
         <Link aria-label="Elitedom home" to="/"><ElitedomBrand /></Link>
-        <div className="el-auth-secure-pill"><span />{ar ? "وصول آمن للحساب" : "SECURE ACCOUNT ACCESS"}</div>
+        <div className="el-auth-topbar__actions">
+          <div className="el-auth-secure-pill"><span />{ar ? "وصول آمن للحساب" : "SECURE ACCOUNT ACCESS"}</div>
+          <button
+            aria-label={ar ? "Switch to English" : "التبديل إلى العربية"}
+            className="el-auth-locale"
+            onClick={() => onLocaleChange(ar ? "en" : "ar")}
+            type="button"
+          >
+            {ar ? "EN" : "AR"}
+          </button>
+        </div>
       </header>
 
       <main className="el-auth-layout">
