@@ -10,7 +10,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { RecoverySentPage } from "@/pages/RecoverySentPage";
 import { AdminRoutePage } from "@/pages/admin/AdminOperationsPage";
-import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
+import { LaunchControlRoute } from "@/pages/admin/AdminThemeRoute";
 
 export const router = createBrowserRouter([
   { path: "/", element: <HomePage /> },
@@ -29,6 +29,6 @@ export const router = createBrowserRouter([
   { path: "/business/rfq", element: <BusinessRfqPage /> },
   { path: "/business/rfq/:rfqCode", element: <BusinessRfqPage /> },
   { path: "/admin", element: <AdminRoutePage /> },
-  { path: "/admin/launch", element: <LaunchControlPage /> },
+  { path: "/admin/launch", element: <LaunchControlRoute /> },
   { path: "*", element: <NotFoundPage /> },
 ]);
