@@ -74,4 +74,4 @@ jobs:
         run: python -m alembic upgrade head
 
       - name: Exercise refresh and OTP races
-        run: python scripts/security_concurrency_smoke.py
+        run: PYTHONPATH=. python scripts/security_concurrency_smoke.py
