@@ -1,0 +1,118 @@
+/* P19 theme hardening
+   This file intentionally loads after all route/component styles. It normalizes
+   legacy literal dark states onto the semantic theme without changing the
+   approved visual hierarchy. */
+
+.el-auth-provider.is-google {
+  color: var(--el-control-text);
+  background: var(--el-provider-google-bg);
+  border-color: var(--el-provider-border);
+}
+
+.el-auth-provider.is-apple {
+  color: var(--el-control-text);
+  background: var(--el-provider-apple-bg);
+  border-color: var(--el-provider-border);
+}
+
+.el-auth-locale,
+.el-icon-button,
+.el-admin-topbar__actions > button,
+.el-platform-topbar > div:last-child > button:not(.el-theme-toggle) {
+  color: var(--el-control-text);
+  background: var(--el-control-bg);
+  border-color: var(--el-control-border);
+}
+
+.el-auth-locale:hover,
+.el-icon-button:hover,
+.el-admin-topbar__actions > button:hover,
+.el-platform-topbar > div:last-child > button:not(.el-theme-toggle):hover {
+  background: var(--el-control-hover);
+  border-color: color-mix(in srgb, var(--el-accent-primary) 42%, var(--el-control-border));
+}
+
+.el-auth-field > div,
+.el-account-input input,
+.el-admin-mfa-card input,
+.el-warranty-card input,
+.el-warranty-card textarea {
+  color: var(--el-control-text);
+  background: var(--el-input-bg);
+  border-color: var(--el-control-border);
+}
+
+.el-primary-button,
+.el-surface-primary,
+.el-auth-primary,
+.el-account-primary,
+.el-checkout-primary,
+.el-cart-primary {
+  color: var(--el-button-primary-text);
+  background: var(--el-button-primary-bg);
+}
+
+.el-primary-button:hover,
+.el-surface-primary:hover:not(:disabled),
+.el-auth-primary:hover:not(:disabled),
+.el-account-primary:hover:not(:disabled),
+.el-checkout-primary:hover:not(:disabled),
+.el-cart-primary:hover:not(:disabled) {
+  color: var(--el-accent-on);
+  background: var(--el-accent-primary);
+}
+
+.el-outline-button,
+.el-surface-secondary {
+  color: var(--el-button-secondary-text);
+  background: var(--el-button-secondary-bg);
+  border-color: var(--el-control-border);
+}
+
+.el-collection-surface__icon,
+.el-auth-recovery-icon {
+  color: var(--el-accent-on);
+}
+
+.el-search-overlay,
+.el-mini-cart,
+.el-mobile-menu-panel,
+.el-mega-menu,
+.el-compare-tray,
+.el-compare-dialog,
+.el-feedback-toast {
+  box-shadow: var(--el-shadow-elevated);
+}
+
+.el-store-layer {
+  background: var(--el-overlay);
+}
+
+:root[data-theme="light"] .el-auth-control-panel,
+:root[data-theme="light"] .el-auth-card,
+:root[data-theme="light"] .el-account-nav,
+:root[data-theme="light"] .el-account-order,
+:root[data-theme="light"] .el-account-form,
+:root[data-theme="light"] .el-security-summary,
+:root[data-theme="light"] .el-warranty-card,
+:root[data-theme="light"] .el-platform-panel,
+:root[data-theme="light"] .el-platform-kpis article {
+  box-shadow: var(--el-shadow-soft);
+}
+
+:root[data-theme="light"] .el-auth-provider__mark img,
+:root[data-theme="light"] .el-auth-provider.is-google .el-auth-provider__mark img {
+  filter: none;
+}
+
+:root[data-theme="light"] input,
+:root[data-theme="light"] textarea,
+:root[data-theme="light"] select {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] input,
+:root[data-theme="dark"] textarea,
+:root[data-theme="dark"] select {
+  color-scheme: dark;
+}
