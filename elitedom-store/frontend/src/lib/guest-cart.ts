@@ -1,7 +1,11 @@
 const GUEST_CART_KEY = "elitedom-guest-cart-session";
 
+export function readGuestCartSessionId() {
+  return window.localStorage.getItem(GUEST_CART_KEY) || undefined;
+}
+
 export function getGuestCartSessionId() {
-  const existing = window.localStorage.getItem(GUEST_CART_KEY);
+  const existing = readGuestCartSessionId();
   if (existing) return existing;
 
   const sessionId =
@@ -11,4 +15,8 @@ export function getGuestCartSessionId() {
 
   window.localStorage.setItem(GUEST_CART_KEY, sessionId);
   return sessionId;
+}
+
+export function clearGuestCartSessionId() {
+  window.localStorage.removeItem(GUEST_CART_KEY);
 }
