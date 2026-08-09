@@ -68,7 +68,12 @@ def _integer(value: Any) -> int | None:
 
 
 def _event_key(transaction: Mapping[str, Any]) -> str:
-    """Keep terminal state changes distinct while making retries idempotent."""
+    """Keep retries idempotent without letting unsigned claims poison a valid event."""
+    order_payload = _mapping(transaction.get("order"))
+    claims = _mapping(transaction.get("payment_key_claims"))
+    intention_payload = _mapping(transaction.get("intention"))
+    claim_extras = _mapping(claims.get("extra"))
+    transaction_extras = _mapping(transaction.get("extras"))
     state = {
         "id": transaction.get("id"),
         "pending": _boolean(transaction.get("pending")),
@@ -77,6 +82,23 @@ def _event_key(transaction: Mapping[str, Any]) -> str:
         "voided": _boolean(transaction.get("is_voided")),
         "amount": transaction.get("amount_cents"),
         "currency": transaction.get("currency"),
+        # Binding-relevant claims are included even when Paymob does not cover
+        # them with the transaction HMAC. A tampered rejected callback therefore
+        # cannot consume the idempotency key of the legitimate callback that
+        # carries the same signed transaction fields.
+        "provider_order_id": _identifier(order_payload.get("id")),
+        "intention_id": (
+            _identifier(intention_payload.get("id"))
+            or _identifier(claims.get("intention_id"))
+            or _identifier(transaction.get("intention_id"))
+        ),
+        "claim_order_id": _integer(claim_extras.get("order_id")),
+        "claim_order_number": _identifier(claim_extras.get("order_number")),
+        "transaction_order_id": _integer(transaction_extras.get("order_id")),
+        "transaction_order_number": _identifier(transaction_extras.get("order_number")),
+        "merchant_order_id": _identifier(order_payload.get("merchant_order_id")),
+        "order_special_reference": _identifier(order_payload.get("special_reference")),
+        "transaction_special_reference": _identifier(transaction.get("special_reference")),
     }
     digest = hashlib.sha256(
         json.dumps(state, sort_keys=True, separators=(",", ":")).encode()
