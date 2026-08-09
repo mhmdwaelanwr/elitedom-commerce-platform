@@ -97,7 +97,8 @@ export function AccountOrderDetailPage() {
   const { orderId } = useParams();
   const ar = locale === "ar";
   const numericId = Number(orderId);
-  const [state, setState] = useState<RemoteState>("loading");
+  const invalidOrderId = !Number.isInteger(numericId) || numericId < 1;
+  const [state, setState] = useState<RemoteState>(invalidOrderId ? "error" : "loading");
   const [session, setSession] = useState<CustomerSession | null>(null);
   const [order, setOrder] = useState<AccountOrder | null>(null);
   const [tracking, setTracking] = useState<OrderTracking | null>(null);
@@ -123,11 +124,7 @@ export function AccountOrderDetailPage() {
   }, [locale, numericId]);
 
   useEffect(() => {
-    if (!Number.isInteger(numericId) || numericId < 1) {
-      setError(ar ? "رقم الطلب غير صالح." : "Invalid order reference.");
-      setState("error");
-      return;
-    }
+    if (invalidOrderId) return;
     let active = true;
     void restoreSession().then(async (current) => {
       if (!active) return;
@@ -146,7 +143,7 @@ export function AccountOrderDetailPage() {
       }
     });
     return () => { active = false; };
-  }, [ar, load, navigate, numericId]);
+  }, [invalidOrderId, load, navigate, numericId]);
 
   const products = useMemo(() => new Map(catalog.map((product) => [Number(product.id), product])), [catalog]);
   const canCancel = Boolean(order && !["done", "cancel"].includes(order.state) && tracking?.fulfillment_status !== "shipped" && tracking?.fulfillment_status !== "delivered");
@@ -188,7 +185,7 @@ export function AccountOrderDetailPage() {
         <main className="el-p20-account-main">
           <div className="el-p20-breadcrumb"><Link to="/account?section=orders">{ar ? "الطلبات" : "Orders"}</Link><span>/</span><b>{order ? `#${order.name}` : `#${numericId}`}</b></div>
           {state === "loading" ? <SurfaceState text={ar ? "بنحمّل تفاصيل الطلب…" : "Loading order details…"} /> : null}
-          {state === "error" ? <SurfaceState error text={error} action={{ href: "/account?section=orders", label: ar ? "العودة للطلبات" : "Back to orders" }} /> : null}
+          {state === "error" ? <SurfaceState error text={invalidOrderId ? (ar ? "رقم الطلب غير صالح." : "Invalid order reference.") : error} action={{ href: "/account?section=orders", label: ar ? "العودة للطلبات" : "Back to orders" }} /> : null}
           {state === "ready" && order ? <>
             <header className="el-p20-page-heading el-p20-page-heading--order"><div><p className="el-p20-eyebrow">ACCOUNT / ORDER</p><h1>#{order.name}</h1><p>{date(order.created_at, locale)} · {order.shipping_governorate || (ar ? "عنوان الشحن المسجل" : "Saved shipping address")}</p></div><div className="el-p20-order-badges"><Status value={order.state} /><Status value={order.payment_status} /></div></header>
             {notice ? <p className="el-p20-notice" role="status">{notice}</p> : null}
@@ -225,7 +222,7 @@ function TrackingTimeline({ tracking, ar, locale }: { tracking: OrderTracking | 
 }
 
 function SurfaceState({ text, error = false, action }: { text: string; error?: boolean; action?: { href: string; label: string } }) {
-  return <section className={`el-p20-state${error ? " is-error" : ""}`}><StoreIcon name={error ? "warning" : "package"} size={34} /><p>{text}</p>{action ? <Link className="el-p20-primary" to={action.href}>{action.label}</Link> : null}</section>;
+  return <section className={`el-p20-state${error ? " is-error" : ""}`}><StoreIcon name={error ? "returns" : "package"} size={34} /><p>{text}</p>{action ? <Link className="el-p20-primary" to={action.href}>{action.label}</Link> : null}</section>;
 }
 
 function Status({ value }: { value: string }) {
