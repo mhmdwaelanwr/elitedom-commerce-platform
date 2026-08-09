@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import logging
 import time
 from collections import defaultdict
@@ -44,11 +45,25 @@ return {current, ttl}
 
 
 def _client_ip(request: Request) -> str:
+    """Return the client immediately upstream of the one configured trusted proxy."""
     peer_ip = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded and peer_ip in settings.trusted_proxy_ip_set:
-        return forwarded.split(",")[0].strip() or peer_ip
-    return peer_ip
+    if not forwarded or peer_ip not in settings.trusted_proxy_ip_set:
+        return peer_ip
+
+    # Nginx Proxy Manager commonly appends the socket client to an existing
+    # X-Forwarded-For chain. The right-most hop is therefore the only value we
+    # can bind to our single, explicitly trusted proxy; taking the first value
+    # would let a browser-supplied header choose another user's rate bucket.
+    hops = [part.strip() for part in forwarded.split(",") if part.strip()]
+    if not hops:
+        return peer_ip
+    candidate = hops[-1]
+    try:
+        ipaddress.ip_address(candidate)
+    except ValueError:
+        return peer_ip
+    return candidate
 
 
 def _policy(path: str) -> tuple[int, int, str]:
