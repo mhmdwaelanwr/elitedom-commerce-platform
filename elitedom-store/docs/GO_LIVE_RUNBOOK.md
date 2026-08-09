@@ -47,6 +47,7 @@ The current manual gate set covers:
 7. Confirm production image references/build inputs are immutable or otherwise reproducible.
 8. Confirm rollback owner, communication owner, and provider contacts/merchant access.
 9. Confirm the target GitHub Environment contains the approved `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, pinned `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`, `SITE_URL`, and `API_URL` values. Production approval rules belong on the GitHub Environment and are not bypassed by the workflow.
+10. For an environment already deployed through P16, confirm the requested release is a forward promotion from the last successful deployed SHA. If an older release is required, stop the normal deployment path and use the rollback section instead.
 
 ## Database backup and restore
 
@@ -64,18 +65,21 @@ The P16 remote deployer creates pre-migration application/Odoo dumps for any pre
 
 The implemented single-VPS execution entry point is `.github/workflows/deploy.yml`. Dispatch it with the protected target Environment and a full 40-character `release_ref` reachable from `main`. The workflow pins SSH host identity and invokes `elitedom-store/infrastructure/scripts/deploy_release.sh` on the configured VPS.
 
+The normal deployment path is forward-only after the first successful P16 bootstrap. The remote deployer records the last successful release in the sibling host path `.elitedom-deployment-state/release_ref`, validates that value as a full Git SHA, and requires that it be an ancestor of the newly requested release. The state file is advanced only after runtime health and the Odoo smoke succeed; a failed deployment cannot silently become the new baseline.
+
 The guarded remote sequence is:
 
-1. reject an unexpected Git origin, tracked local modifications, unsafe `.env` permissions, invalid target origins, or a release that is not reachable from `origin/main`;
-2. check out exactly the requested commit without deleting untracked production configuration;
-3. validate the production Compose topology;
-4. wait for PostgreSQL/application DB initialization and take validated application/Odoo pre-migration backups;
-5. build the release containers;
-6. run `alembic upgrade head` against the application database;
-7. upgrade the bundled Odoo connector;
-8. start the target Compose topology with bounded health waiting;
-9. run the repository Odoo integration smoke;
-10. only after remote deployment succeeds, call the reusable Launch Smoke for the same public URLs and exact `release_ref`.
+1. reject a shallow deployment clone, unexpected Git origin, tracked local modifications, unsafe `.env` permissions, invalid target origins, invalid persisted release state, or a release that is not reachable from `origin/main`;
+2. when a last-successful release exists, reject a requested commit that moves backward or onto an incompatible Git line;
+3. check out exactly the requested commit without deleting untracked production configuration;
+4. validate the production Compose topology;
+5. wait for PostgreSQL/application DB initialization and take validated application/Odoo pre-migration backups;
+6. build the release containers;
+7. run `alembic upgrade head` against the application database;
+8. upgrade the bundled Odoo connector;
+9. start the target Compose topology with bounded health waiting;
+10. run the repository Odoo integration smoke, verify the exact checked-out release, and atomically record it as the last successful deployment;
+11. only after remote deployment succeeds, call the reusable Launch Smoke for the same public URLs and exact `release_ref`.
 
 A remote failure stops execution for operator assessment. The deployer deliberately does not run database downgrade, automatic restore, destructive `git reset --hard`, or `git clean`.
 
@@ -150,18 +154,19 @@ Confirm the release can be observed before opening traffic:
 
 ## Rollback
 
-Rollback must be designed before launch, not improvised after failure.
+Rollback must be designed before launch, not improvised after failure. The normal P16 deployment workflow is deliberately not a rollback mechanism: once `.elitedom-deployment-state/release_ref` exists, it refuses to deploy a commit older than the recorded last-successful release.
 
 Record:
 
 - previous known-good application image/ref;
 - database compatibility between new and previous application versions;
 - whether the latest migration has a safe downgrade path for the actual data already written;
+- Odoo addon compatibility with the intended application rollback;
 - provider/webhook/DNS configuration that must be reverted;
 - traffic reversal procedure;
 - owner and stop conditions.
 
-Do not execute destructive database downgrade/restore solely because application rollback is required. If a new release has written data incompatible with the previous schema or behavior, use the incident/recovery plan appropriate to that state. The P16 deployer intentionally records the previous release and pre-migration backup location but does not decide or execute a destructive rollback automatically.
+Do not edit `.elitedom-deployment-state/release_ref` backward to bypass the guard. Preserve it as evidence of the last successfully verified release. Do not execute destructive database downgrade/restore solely because application rollback is required. If a new release has written data incompatible with the previous schema or behavior, use the incident/recovery plan appropriate to that state. The P16 deployer intentionally creates pre-migration backups but does not decide or execute a destructive rollback automatically.
 
 ## Release sign-off
 
@@ -202,4 +207,4 @@ Repository CI proves code/tests/migration/container/launch/deployment-asset cont
 
 ## Change policy
 
-Update this runbook in the same pull request that changes launch gates, deployment topology/execution, backup/restore procedure, provider acceptance, public smoke behavior, or rollback requirements. Preserve previous release evidence as historical audit information rather than rewriting it to match a new release.
+Update this runbook in the same pull request that changes launch gates, deployment topology/execution, backup/restore procedure, provider acceptance, public smoke behavior, release-state behavior, or rollback requirements. Preserve previous release evidence as historical audit information rather than rewriting it to match a new release.

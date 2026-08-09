@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Deploy one immutable Elitedom release on the existing single-VPS Compose host.
+# Normal deployments are forward-only after the first successful P16 deployment.
 # This script never restores/downgrades databases automatically on failure.
 
 set -Eeuo pipefail
@@ -23,17 +24,42 @@ command -v gzip >/dev/null || fail "gzip is required"
 
 cd "$REPO_PATH"
 [[ -d .git ]] || fail "deployment path is not a Git repository"
+[[ "$(git rev-parse --is-shallow-repository)" == "false" ]] || fail "deployment repository must not be shallow"
 origin="$(git config --get remote.origin.url || true)"
 [[ "$origin" == *"mhmdwaelanwr/elitedom-erp-architecture"* ]] || fail "unexpected Git origin"
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "tracked deployment checkout has local changes"
 
-previous_ref="$(git rev-parse HEAD)"
-echo "Previous release: $previous_ref"
+checkout_ref="$(git rev-parse HEAD)"
+STATE_DIR="$(dirname "$REPO_PATH")/.elitedom-deployment-state"
+STATE_FILE="$STATE_DIR/release_ref"
+[[ ! -L "$STATE_DIR" ]] || fail "deployment state directory must not be a symlink"
+[[ ! -L "$STATE_FILE" ]] || fail "deployment state file must not be a symlink"
+
+previous_release_ref=""
+if [[ -e "$STATE_FILE" ]]; then
+  [[ -f "$STATE_FILE" ]] || fail "deployment state release_ref is not a regular file"
+  previous_release_ref="$(tr -d '\r\n' < "$STATE_FILE")"
+  [[ "$previous_release_ref" =~ ^[0-9a-fA-F]{40}$ ]] || fail "deployment state contains an invalid release ref"
+fi
+
+echo "Checkout before deploy: $checkout_ref"
+if [[ -n "$previous_release_ref" ]]; then
+  echo "Last successful deployed release: $previous_release_ref"
+else
+  echo "Last successful deployed release: unrecorded bootstrap"
+fi
 echo "Requested release: $RELEASE_REF"
 
 git fetch --prune origin main
 git cat-file -e "${RELEASE_REF}^{commit}" || fail "release commit does not exist"
 git merge-base --is-ancestor "$RELEASE_REF" origin/main || fail "release is not reachable from origin/main"
+
+if [[ -n "$previous_release_ref" ]]; then
+  git cat-file -e "${previous_release_ref}^{commit}" || fail "recorded deployed release is missing from the Git object database"
+  git merge-base --is-ancestor "$previous_release_ref" "$RELEASE_REF" \
+    || fail "normal deployment is forward-only; use the controlled rollback procedure for an older release"
+fi
+
 git checkout --detach "$RELEASE_REF"
 
 ENV_FILE="$REPO_PATH/elitedom-store/.env"
@@ -102,7 +128,14 @@ echo "Starting release and waiting for service health..."
 actual_ref="$(git rev-parse HEAD)"
 [[ "$actual_ref" == "$RELEASE_REF" ]] || fail "working tree moved during deployment"
 
+install -d -m 700 "$STATE_DIR"
+state_tmp="$(mktemp "$STATE_DIR/.release_ref.XXXXXX")"
+printf '%s\n' "$actual_ref" > "$state_tmp"
+chmod 600 "$state_tmp"
+mv -f "$state_tmp" "$STATE_FILE"
+
 echo "Deployment completed successfully."
 echo "Release: $actual_ref"
+echo "Recorded deployment state: $STATE_FILE"
 echo "Backup directory: $BACKUP_DIR"
 "${COMPOSE[@]}" ps
