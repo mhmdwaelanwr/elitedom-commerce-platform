@@ -1,7 +1,8 @@
 """Regression tests for Paymob callback object binding."""
 
+from collections.abc import Callable
 from copy import deepcopy
-from typing import Any, Callable
+from typing import Any
 
 import pytest
 from httpx import AsyncClient
