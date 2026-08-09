@@ -350,6 +350,10 @@ class Settings(BaseSettings):
             raise ValueError("STAFF_MFA_REQUIRED must be true in staging and production.")
         if self.rate_limit_backend != "redis":
             raise ValueError("RATE_LIMIT_BACKEND must be redis in staging and production.")
+        if not self.trusted_proxy_ip_set:
+            raise ValueError(
+                "TRUSTED_PROXY_IPS must identify the trusted reverse proxy in staging and production."
+            )
         required_secrets = {
             "SECRET_KEY": self.secret_key,
             "JWT_SECRET_KEY": self.jwt_secret_key,

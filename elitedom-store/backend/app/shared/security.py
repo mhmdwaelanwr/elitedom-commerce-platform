@@ -80,6 +80,43 @@ def decode_token(token: str) -> dict:
         raise InvalidCredentialsError() from None
 
 
+async def validate_access_token(token: str, db: AsyncSession) -> dict:
+    """Validate one access token against its mandatory tracked session."""
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        raise InvalidCredentialsError()
+
+    user_id = payload.get("sub")
+    session_id = payload.get("sid")
+    if user_id is None or not session_id:
+        # Stateless compatibility access tokens cannot participate in logout,
+        # logout-all, MFA session state, or device revocation, so fail closed.
+        raise InvalidCredentialsError()
+
+    try:
+        normalized_user_id = int(user_id)
+    except (TypeError, ValueError) as error:
+        raise InvalidCredentialsError() from error
+
+    active_session = await db.scalar(
+        select(AuthSession.id).where(
+            AuthSession.id == str(session_id),
+            AuthSession.partner_id == normalized_user_id,
+            AuthSession.revoked_at.is_(None),
+            AuthSession.expires_at > func.now(),
+        )
+    )
+    if active_session is None:
+        raise InvalidCredentialsError()
+
+    return {
+        "user_id": normalized_user_id,
+        "email": payload.get("email"),
+        "role": payload.get("role"),
+        "session_id": str(session_id),
+    }
+
+
 async def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
     db: AsyncSession = Depends(get_db),
@@ -87,34 +124,7 @@ async def get_current_user(
     """Validate an access token and its tracked device session."""
     if credentials is None:
         raise InvalidCredentialsError()
-
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "access":
-        raise InvalidCredentialsError()
-
-    user_id = payload.get("sub")
-    if user_id is None:
-        raise InvalidCredentialsError()
-
-    session_id = payload.get("sid")
-    if session_id:
-        active_session = await db.scalar(
-            select(AuthSession.id).where(
-                AuthSession.id == str(session_id),
-                AuthSession.partner_id == int(user_id),
-                AuthSession.revoked_at.is_(None),
-                AuthSession.expires_at > func.now(),
-            )
-        )
-        if active_session is None:
-            raise InvalidCredentialsError()
-
-    return {
-        "user_id": int(user_id),
-        "email": payload.get("email"),
-        "role": payload.get("role"),
-        "session_id": str(session_id) if session_id else None,
-    }
+    return await validate_access_token(credentials.credentials, db)
 
 
 def require_role(*allowed_roles: UserRole):

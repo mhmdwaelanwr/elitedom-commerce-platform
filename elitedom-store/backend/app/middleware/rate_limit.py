@@ -47,7 +47,13 @@ def _client_ip(request: Request) -> str:
     peer_ip = request.client.host if request.client else "unknown"
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded and peer_ip in settings.trusted_proxy_ip_set:
-        return forwarded.split(",")[0].strip() or peer_ip
+        # The supported production topology has exactly one trusted application
+        # proxy hop. Nginx appends the address of its direct client to any
+        # pre-existing X-Forwarded-For value, so the right-most hop is the one
+        # the trusted proxy actually observed. Taking the left-most value would
+        # allow a public client to pre-seed a spoofed identity.
+        observed_client = forwarded.rsplit(",", 1)[-1].strip()
+        return observed_client or peer_ip
     return peer_ip
 
 
