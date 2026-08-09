@@ -61,6 +61,19 @@ def is_safe_service_url(value: str) -> bool:
     ).casefold() in _ALLOWED_INTERNAL_HTTP_HOSTS
 
 
+def is_valid_sentry_dsn(value: str) -> bool:
+    """Accept hosted or self-hosted HTTPS DSNs without treating the public key as a secret."""
+
+    parsed = urlsplit(value.strip())
+    return (
+        parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and bool(parsed.username)
+        and parsed.password is None
+        and parsed.path not in {"", "/"}
+    )
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -82,6 +95,11 @@ class Settings(BaseSettings):
     otel_service_name: str = "elitedom-fastapi"
     otel_exporter_otlp_endpoint: str = ""
     otel_trace_sample_ratio: float = Field(default=0.1, ge=0, le=1)
+    sentry_enabled: bool = False
+    sentry_dsn: str = ""
+    sentry_release: str = ""
+    sentry_error_sample_rate: float = Field(default=1.0, ge=0, le=1)
+    sentry_traces_sample_rate: float = Field(default=0.1, ge=0, le=1)
     trusted_proxy_ips: str = ""
     staff_mfa_required: bool = False
     rate_limit_backend: Literal["memory", "redis"] = "memory"
@@ -302,6 +320,14 @@ class Settings(BaseSettings):
             integration_errors.append("ZEPTOMAIL_API_KEY")
         if self.zeptomail_enabled and not is_https_url(self.zeptomail_api_url):
             integration_errors.append("ZEPTOMAIL_API_URL")
+        if self.sentry_enabled:
+            if not is_valid_sentry_dsn(self.sentry_dsn):
+                integration_errors.append("SENTRY_DSN")
+            if (
+                self.environment in {"staging", "production"}
+                and not self.sentry_release.strip()
+            ):
+                integration_errors.append("SENTRY_RELEASE")
         if integration_errors:
             raise ValueError(
                 "Enabled integrations require valid, non-placeholder configuration for: "

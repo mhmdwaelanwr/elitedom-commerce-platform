@@ -37,9 +37,11 @@ from app.modules.shipping.router import router as shipping_router
 from app.modules.suppliers.router import router as suppliers_router
 from app.modules.warranty.router import router as warranty_router
 from app.observability import RequestContextMiddleware, configure_observability
+from app.sentry_monitoring import configure_sentry
 from app.shared.outbox_tasks import register_default_outbox_routes
 
 settings = get_settings()
+configure_sentry(settings, service_name="elitedom-fastapi")
 
 
 @asynccontextmanager

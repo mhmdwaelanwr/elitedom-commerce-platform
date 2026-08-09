@@ -6,8 +6,14 @@ Background task processing with Redis broker.
 from celery import Celery
 
 from app.config import get_settings
+from app.sentry_monitoring import configure_sentry
 
 settings = get_settings()
+configure_sentry(
+    settings,
+    service_name="elitedom-celery",
+    monitor_celery_beat=True,
+)
 
 celery_app = Celery(
     "elitedom",
