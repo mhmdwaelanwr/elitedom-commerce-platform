@@ -8,6 +8,7 @@ import { CheckoutPage } from "@/pages/CheckoutPage";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
+import { RecoverySentPage } from "@/pages/RecoverySentPage";
 import { AdminConsolePage } from "@/pages/admin/AdminConsolePage";
 import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
 
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
   { path: "/auth/otp", element: <AuthPage mode="otp" /> },
   { path: "/auth/forgot", element: <AuthPage mode="forgot" /> },
   { path: "/auth/reset", element: <AuthPage mode="reset" /> },
+  { path: "/auth/recovery-sent", element: <RecoverySentPage /> },
   { path: "/account", element: <AccountPage /> },
   { path: "/business", element: <BusinessLandingPage /> },
   { path: "/business/rfq", element: <BusinessRfqPage /> },

@@ -1,7 +1,20 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
+import {
+  FeedbackToast,
+  MegaMenu,
+  MiniCart,
+  MobileMenu,
+  SearchOverlay,
+  type StoreToast,
+} from "@/components/store/StoreExperiencePanels";
 import { StoreIcon } from "@/components/store/StoreIcon";
+import { restoreSession } from "@/lib/auth-session";
+import { loadGuestCart, type GuestCartSnapshot } from "@/lib/cart-data";
+import { fetchRichCatalog } from "@/lib/catalog-api";
+import type { Product } from "@/types/store";
 
 export type StoreLocale = "en" | "ar";
 
@@ -13,41 +26,47 @@ type StoreHeaderProps = {
 const copy = {
   en: {
     search: "Search hardware",
+    hardware: "Hardware",
     navigation: [
       ["GPUs", "/catalog"],
-      ["CPUs", "/#categories"],
-      ["PC builds", "/#outcomes"],
-      ["Displays", "/#categories"],
-      ["Deals", "/#curated"],
+      ["CPUs", "/catalog?q=CPU"],
+      ["PC builds", "/catalog?q=PC%20build"],
+      ["Displays", "/catalog?q=Monitor"],
+      ["Deals", "/catalog?sort=price-asc"],
       ["Business", "/business"],
     ],
     menu: "Open navigation",
     closeMenu: "Close navigation",
     home: "Elitedom home",
     primary: "Primary navigation",
-    mobilePrimary: "Mobile navigation",
     account: "Account",
     cart: "Cart",
-    language: "العربية",
+    addedTitle: "Added to cart",
+    addedMessage: "Your cart was updated successfully.",
+    cartErrorTitle: "Something needs attention",
+    cartErrorMessage: "We could not load your cart. Your progress is safe.",
   },
   ar: {
     search: "ابحث في الهاردوير",
+    hardware: "الهاردوير",
     navigation: [
       ["كروت الشاشة", "/catalog"],
-      ["المعالجات", "/#categories"],
-      ["تجميعات PC", "/#outcomes"],
-      ["الشاشات", "/#categories"],
-      ["العروض", "/#curated"],
+      ["المعالجات", "/catalog?q=CPU"],
+      ["تجميعات PC", "/catalog?q=PC%20build"],
+      ["الشاشات", "/catalog?q=Monitor"],
+      ["العروض", "/catalog?sort=price-asc"],
       ["الشركات", "/business"],
     ],
     menu: "افتح القائمة",
     closeMenu: "اقفل القائمة",
     home: "الرئيسية في Elitedom",
     primary: "التنقل الرئيسي",
-    mobilePrimary: "التنقل على الموبايل",
     account: "الحساب",
     cart: "السلة",
-    language: "English",
+    addedTitle: "تمت الإضافة للسلة",
+    addedMessage: "تم تحديث سلتك بنجاح.",
+    cartErrorTitle: "في حاجة محتاجة انتباه",
+    cartErrorMessage: "مقدرناش نحمل السلة، لكن تقدمك محفوظ.",
   },
 } as const;
 
@@ -65,135 +84,187 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [megaOpen, setMegaOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [cartOpen, setCartOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [cartSnapshot, setCartSnapshot] = useState<GuestCartSnapshot | null>(null);
+  const [cartLoading, setCartLoading] = useState(false);
+  const [toast, setToast] = useState<StoreToast | null>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const labels = copy[locale];
   const nextLocale: StoreLocale = locale === "en" ? "ar" : "en";
 
+  const openCart = useCallback(async () => {
+    setCartOpen(true);
+    setSearchOpen(false);
+    setMegaOpen(false);
+    setCartLoading(true);
+    try {
+      const session = await restoreSession();
+      setCartSnapshot(await loadGuestCart(locale, session));
+    } catch {
+      setCartSnapshot({ items: [] });
+      setToast({ tone: "error", title: labels.cartErrorTitle, message: labels.cartErrorMessage });
+    } finally {
+      setCartLoading(false);
+    }
+  }, [labels.cartErrorMessage, labels.cartErrorTitle, locale]);
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    let active = true;
+    const timer = window.setTimeout(() => {
+      if (active) setSearchLoading(true);
+      fetchRichCatalog({ locale, query: query.trim() || undefined, limit: 3 })
+        .then((products) => { if (active) setSearchResults(products.slice(0, 3)); })
+        .catch(() => { if (active) setSearchResults([]); })
+        .finally(() => { if (active) setSearchLoading(false); });
+    }, 160);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [locale, query, searchOpen]);
+
   useEffect(() => {
     if (!mobileOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [mobileOpen]);
+
+  useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (mobileOpen) menuButtonRef.current?.focus();
       setMobileOpen(false);
-      menuButtonRef.current?.focus();
+      setMegaOpen(false);
+      setSearchOpen(false);
+      setCartOpen(false);
     }
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
   }, [mobileOpen]);
 
+  useEffect(() => {
+    function cartUpdated() {
+      setToast({ tone: "success", title: labels.addedTitle, message: labels.addedMessage });
+      if (cartOpen) void openCart();
+    }
+    window.addEventListener("elitedom:cart-updated", cartUpdated);
+    return () => window.removeEventListener("elitedom:cart-updated", cartUpdated);
+  }, [cartOpen, labels.addedMessage, labels.addedTitle, openCart]);
+
+  useEffect(() => {
+    if (!toast) return;
+    const timer = window.setTimeout(() => setToast(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    searchAll();
+  }
+
+  function searchAll() {
     const normalized = query.trim();
     navigate(normalized ? `/catalog?q=${encodeURIComponent(normalized)}` : "/catalog");
+    setSearchOpen(false);
     setMobileOpen(false);
   }
 
-  function openMobileSearch() {
-    navigate("/catalog");
+  function changeLocale(value: StoreLocale = nextLocale) {
+    onLocaleChange(value);
     setMobileOpen(false);
-  }
-
-  function changeLocale() {
-    onLocaleChange(nextLocale);
-    setMobileOpen(false);
+    setMegaOpen(false);
   }
 
   function activeHref(href: string) {
-    if (href === "/business") return location.pathname.startsWith("/business");
-    if (href === "/catalog") return location.pathname.startsWith("/catalog") || location.pathname.startsWith("/products/");
+    const path = href.split("?")[0];
+    if (path === "/business") return location.pathname.startsWith("/business");
+    if (path === "/catalog") return location.pathname.startsWith("/catalog") || location.pathname.startsWith("/products/");
     return false;
   }
 
+  const portalRoot = typeof document === "undefined" ? null : document.body;
+
   return (
-    <header className="el-store-header" data-testid="store-header">
-      <div className="el-store-header__left">
-        <Link aria-label={labels.home} className="el-store-header__brand" to="/">
-          <span className="el-store-header__desktop-brand"><ElitedomBrand /></span>
-        </Link>
-
-        <nav aria-label={labels.primary} className="el-store-header__nav">
-          {labels.navigation.map(([label, href]) => (
-            <Link className={activeHref(href) ? "is-active" : undefined} to={href} key={label}>
-              {label}
-            </Link>
-          ))}
-        </nav>
-      </div>
-
-      <div className="el-store-header__actions">
-        <form className="el-store-search" onSubmit={submitSearch} role="search">
-          <button aria-label={labels.search} className="el-store-search__submit" style={searchButtonStyle} type="submit">
-            <StoreIcon name="search" size={18} />
-          </button>
-          <input
-            aria-label={labels.search}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder={labels.search}
-            type="search"
-            value={query}
-          />
-        </form>
-
-        <button
-          aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"}
-          className="el-icon-button el-locale-button"
-          onClick={changeLocale}
-          type="button"
-        >
-          {nextLocale === "ar" ? "AR" : "EN"}
-        </button>
-
-        <Link aria-label={labels.account} className="el-icon-button" to="/account">
-          <StoreIcon name="account" size={20} />
-        </Link>
-        <Link aria-label={labels.cart} className="el-icon-button" to="/cart">
-          <StoreIcon name="cart" size={20} />
-        </Link>
-      </div>
-
-      <div className="el-store-header__mobile-row">
-        <div className="el-store-header__mobile-brand-group">
-          <Link aria-label={labels.home} className="el-store-header__mobile-brand" to="/">
-            <ElitedomBrand compact />
+    <>
+      <header className="el-store-header" data-testid="store-header">
+        <div className="el-store-header__left">
+          <Link aria-label={labels.home} className="el-store-header__brand" to="/">
+            <span className="el-store-header__desktop-brand"><ElitedomBrand /></span>
           </Link>
-          <button
-            aria-expanded={mobileOpen}
-            aria-controls="el-mobile-navigation"
-            aria-label={mobileOpen ? labels.closeMenu : labels.menu}
-            className="el-icon-button el-menu-button"
-            onClick={() => setMobileOpen((open) => !open)}
-            ref={menuButtonRef}
-            type="button"
-          >
-            <StoreIcon name="menu" size={20} />
-          </button>
+
+          <nav aria-label={labels.primary} className="el-store-header__nav">
+            <button aria-expanded={megaOpen} className="el-store-header__hardware" onClick={() => { setMegaOpen((open) => !open); setSearchOpen(false); setCartOpen(false); }} type="button">
+              {labels.hardware}<StoreIcon name="chevron" size={14} />
+            </button>
+            {labels.navigation.map(([label, href]) => (
+              <Link className={activeHref(href) ? "is-active" : undefined} to={href} key={label}>
+                {label}
+              </Link>
+            ))}
+          </nav>
         </div>
 
-        <div className="el-store-header__mobile-actions">
-          <button aria-label={labels.search} className="el-icon-button" onClick={openMobileSearch} type="button">
-            <StoreIcon name="search" size={20} />
-          </button>
-          <Link aria-label={labels.account} className="el-icon-button" to="/account">
-            <StoreIcon name="account" size={20} />
-          </Link>
-          <Link aria-label={labels.cart} className="el-icon-button" to="/cart">
-            <StoreIcon name="cart" size={20} />
-          </Link>
-        </div>
-      </div>
+        <div className="el-store-header__actions">
+          <form className="el-store-search" onSubmit={submitSearch} role="search">
+            <button aria-label={labels.search} className="el-store-search__submit" style={searchButtonStyle} type="submit">
+              <StoreIcon name="search" size={18} />
+            </button>
+            <input
+              aria-label={labels.search}
+              onChange={(event) => setQuery(event.target.value)}
+              onFocus={() => { setSearchOpen(true); setSearchLoading(true); setMegaOpen(false); setCartOpen(false); }}
+              placeholder={labels.search}
+              type="search"
+              value={query}
+            />
+          </form>
 
-      {mobileOpen ? (
-        <nav aria-label={labels.mobilePrimary} className="el-mobile-nav" id="el-mobile-navigation">
-          {labels.navigation.map(([label, href]) => (
-            <Link key={label} onClick={() => setMobileOpen(false)} to={href}>
-              {label}
-            </Link>
-          ))}
-          <button className="el-mobile-nav__locale" onClick={changeLocale} type="button">
-            {labels.language}
+          <button aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"} className="el-icon-button el-locale-button" onClick={() => changeLocale()} type="button">
+            {nextLocale === "ar" ? "AR" : "EN"}
           </button>
-        </nav>
+
+          <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
+          <button aria-label={labels.cart} className="el-icon-button" onClick={() => void openCart()} type="button"><StoreIcon name="cart" size={20} /></button>
+        </div>
+
+        <div className="el-store-header__mobile-row">
+          <div className="el-store-header__mobile-brand-group">
+            <Link aria-label={labels.home} className="el-store-header__mobile-brand" to="/"><ElitedomBrand compact /></Link>
+            <button aria-expanded={mobileOpen} aria-label={mobileOpen ? labels.closeMenu : labels.menu} className="el-icon-button el-menu-button" onClick={() => { setMobileOpen(true); setSearchOpen(false); setCartOpen(false); }} ref={menuButtonRef} type="button"><StoreIcon name="menu" size={20} /></button>
+          </div>
+          <div className="el-store-header__mobile-actions">
+            <button aria-label={labels.search} className="el-icon-button" onClick={() => { setSearchOpen(true); setSearchLoading(true); setCartOpen(false); }} type="button"><StoreIcon name="search" size={20} /></button>
+            <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
+            <button aria-label={labels.cart} className="el-icon-button" onClick={() => void openCart()} type="button"><StoreIcon name="cart" size={20} /></button>
+          </div>
+        </div>
+
+        {megaOpen ? <MegaMenu featured={searchResults[0]} locale={locale} onClose={() => setMegaOpen(false)} /> : null}
+      </header>
+
+      {portalRoot && searchOpen ? createPortal(
+        <div className="el-store-layer is-search" onMouseDown={(event) => { if (event.target === event.currentTarget) setSearchOpen(false); }}>
+          <SearchOverlay loading={searchLoading} locale={locale} onClose={() => setSearchOpen(false)} onQueryChange={setQuery} onSearchAll={searchAll} products={searchResults} query={query} />
+        </div>, portalRoot,
       ) : null}
-    </header>
+
+      {portalRoot && cartOpen ? createPortal(
+        <div className="el-store-layer is-cart" onMouseDown={(event) => { if (event.target === event.currentTarget) setCartOpen(false); }}>
+          <MiniCart items={cartSnapshot?.items ?? []} loading={cartLoading} locale={locale} onClose={() => setCartOpen(false)} />
+        </div>, portalRoot,
+      ) : null}
+
+      {portalRoot && mobileOpen ? createPortal(
+        <div className="el-store-layer is-mobile-menu" onMouseDown={(event) => { if (event.target === event.currentTarget) setMobileOpen(false); }}>
+          <MobileMenu locale={locale} onClose={() => setMobileOpen(false)} onLocaleChange={onLocaleChange} />
+        </div>, portalRoot,
+      ) : null}
+
+      {portalRoot && toast ? createPortal(<div aria-live="polite" className="el-toast-region"><FeedbackToast onClose={() => setToast(null)} toast={toast} /></div>, portalRoot) : null}
+    </>
   );
 }

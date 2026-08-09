@@ -30,7 +30,7 @@ services:
       - pg-data:/var/lib/postgresql/data
     networks: [elitedom-net]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elitedom}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-elitedom} -d ${POSTGRES_DB:-elitedom_db}"]
       interval: 10s
       timeout: 5s
       retries: 5

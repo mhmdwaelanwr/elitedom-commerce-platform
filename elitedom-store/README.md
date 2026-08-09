@@ -30,9 +30,10 @@ Component entry points:
 cp .env.example .env
 make verify-repo
 make dev
-make migrate
 make seed
 ```
+
+`make dev` is migration-safe: it builds the application images, waits for PostgreSQL and Redis, creates the application database when needed, applies Alembic migrations, and only then starts FastAPI, Celery, Odoo and the storefront. `make migrate` remains available for explicit migration runs after pulling a migration-only change.
 
 Use `make admin-bootstrap` to create a development administrator interactively. There is no default production administrator password.
 
