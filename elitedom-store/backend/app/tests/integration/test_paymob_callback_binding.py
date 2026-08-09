@@ -110,3 +110,54 @@ async def test_hmac_valid_callback_rejects_conflicting_unsigned_reference(
     await db_session.refresh(persisted_order)
     assert persisted_order.payment_status == "pending"
     assert persisted_order.state == "draft"
+
+
+@pytest.mark.asyncio
+async def test_rejected_unsigned_tamper_does_not_poison_legitimate_callback(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    product = await _create_product(db_session)
+    await _add_guest_item(client, product.id, "paymob-binding-poison")
+    settings = _patch_paymob_checkout(monkeypatch)
+    checkout = await client.post(
+        "/api/v1/orders/checkout?session_id=paymob-binding-poison",
+        json=_guest_checkout_payload(),
+    )
+    assert checkout.status_code == 201
+    order = checkout.json()["order"]
+
+    clean_transaction = _transaction(
+        order=order,
+        transaction_id=7899,
+        intention_id="pi_paymob_test",
+        provider_order_id="9988",
+    )
+    signature = calculate_transaction_hmac(
+        clean_transaction,
+        settings.paymob_hmac_secret,
+    )
+    tampered_transaction = deepcopy(clean_transaction)
+    _set_intention(tampered_transaction, order)
+    assert (
+        calculate_transaction_hmac(tampered_transaction, settings.paymob_hmac_secret)
+        == signature
+    )
+
+    rejected = await client.post(
+        f"/api/v1/webhooks/paymob/transaction?hmac={signature}",
+        json={"type": "TRANSACTION", "obj": tampered_transaction},
+    )
+    legitimate = await client.post(
+        f"/api/v1/webhooks/paymob/transaction?hmac={signature}",
+        json={"type": "TRANSACTION", "obj": clean_transaction},
+    )
+
+    assert rejected.json() == {"status": "rejected"}
+    assert legitimate.json() == {"status": "processed"}
+    persisted_order = await db_session.get(SaleOrder, order["id"])
+    assert persisted_order is not None
+    await db_session.refresh(persisted_order)
+    assert persisted_order.payment_status == "paid"
+    assert persisted_order.state == "sale"
