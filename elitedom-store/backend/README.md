@@ -36,6 +36,27 @@ make test
 
 For direct backend execution, install `requirements-dev.txt`, set the required environment variables from `../.env.example`, and run commands from this directory so `app` is importable.
 
+## Sentry error and performance monitoring
+
+Sentry is disabled unless `SENTRY_ENABLED=true`. FastAPI and Celery share the
+PII-safe initialization in `app/sentry_monitoring.py`; request bodies, cookies,
+query strings, authorization data, task arguments, and local variables are not
+sent. Health and metrics routes are excluded from performance sampling.
+
+Set these values in the deployment secret store, never in source control:
+
+```dotenv
+SENTRY_ENABLED=true
+SENTRY_DSN=https://<public-key>@<sentry-host>/<project-id>
+SENTRY_RELEASE=<deployed-git-commit-sha>
+SENTRY_ERROR_SAMPLE_RATE=1.0
+SENTRY_TRACES_SAMPLE_RATE=0.1
+```
+
+The existing `ENVIRONMENT` value is used for Sentry environment separation.
+In staging and production, enabling Sentry without a valid HTTPS DSN and a
+release identifier fails configuration validation before the service starts.
+
 ## Database changes
 
 All durable schema changes require Alembic migrations. A migration is not complete until the repository migration smoke test can:
