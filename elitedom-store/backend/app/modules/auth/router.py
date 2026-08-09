@@ -153,7 +153,7 @@ async def recover_password(
         session_id=current_user.get("session_id"),
         new_password=payload.new_password,
     )
-    _no_store(response)
+    _clear_refresh_cookie(response)
     return None
 
 
