@@ -67,7 +67,7 @@ const routeContracts = [
   ["/business/rfq", "BusinessRfqPage"],
   ["/business/rfq/:rfqCode", "BusinessRfqPage"],
   ["/admin", "AdminRoutePage"],
-  ["/admin/launch", "LaunchControlRoute"],
+  ["/admin/launch", "LaunchControlPage"],
 ];
 for (const [route, component] of routeContracts) {
   if (!router.includes(`path: \"${route}\"`) || !router.includes(`<${component}`)) {
