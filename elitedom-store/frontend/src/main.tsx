@@ -6,6 +6,7 @@ import { router } from "@/router";
 import "@/styles/globals.css";
 import "@/styles/p14-responsive.css";
 import "@/styles/figma-surfaces.css";
+import "@/styles/theme-hardening.css";
 
 const root = document.getElementById("root");
 
