@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "8b3822d51b3d45ccf6250b46fc0b4780014dd6b7"
+verified_against: "91a075088eeb3d7ede20c6ad7e0e8450b70c2966"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -103,10 +103,15 @@ Run `.github/workflows/launch-smoke.yml` against the public HTTPS storefront and
 
 Before browser UAT, `elitedom-store/scripts/verify_release.py` verifies release provenance by reusing the hardened public-target checks and comparing `/health/live.version` with the requested `release_ref`. Production Compose maps `RELEASE_REF` into FastAPI `APP_VERSION`, so a healthy but stale or wrong deployment fails before it can be signed off.
 
-The same manually dispatched workflow then runs the deployed browser E2E gate in Chromium. It discovers a purchasable Product ID from the real `/api/v1/catalog/products` response and does not mock or fulfill application API routes. The browser gate proves:
+The same manually dispatched workflow then runs the deployed browser E2E gate in Chromium. It paginates the complete public `/api/v1/catalog/products` response and does not mock or fulfill application API routes. Before choosing the product used for the commerce journey, the gate requires every public product to have a non-empty identity, positive backend-authoritative price, category, and real product media. Public placeholder/template product media is a launch blocker, and the selected PDP primary image must complete loading with real pixel dimensions.
+
+The browser gate proves:
 
 - the deployed frontend is wired to the API origin supplied for the release;
-- 390px Arabic/RTL PDP rendering reaches the backend-authoritative product and price state;
+- the public catalogue pagination reaches the backend `total_count` rather than validating only the first page;
+- every public product has launch-ready identity, price, category, and real product media;
+- 390px Arabic/RTL PDP rendering reaches the localized backend-authoritative product, price and media state;
+- the PDP primary image loads successfully rather than silently falling back to placeholder/template media;
 - a guest can add that real product to the server-backed cart;
 - the same guest cart reaches the Arabic checkout review with the real product summary and all supported customer-facing payment choices rendered;
 - the order-submit control is visible, while the gate explicitly fails if checkout or payment mutation endpoints are called before operator-controlled provider UAT;
@@ -117,7 +122,7 @@ The same manually dispatched workflow then runs the deployed browser E2E gate in
 
 The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. It tracks the checkout and payment mutation boundaries during the checkout review and requires zero such mutations. Those flows remain explicit provider/UAT gates with controlled test data.
 
-Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, expected/deployed release-ref evidence, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
+Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, expected/deployed release-ref evidence, complete-public-catalog browser assertions, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
 
 ## Monitoring and alerting
 
