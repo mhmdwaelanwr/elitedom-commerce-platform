@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
+verified_against: "44b9cd851c319f24ea82a95f03538e3753c6e6b6"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -98,9 +98,20 @@ Critical commerce UAT includes catalogue/search/product details, account/session
 
 ## External smoke test
 
-Run `.github/workflows/launch-smoke.yml` or invoke the equivalent `elitedom-store/scripts/live_smoke.py` procedure against the public HTTPS storefront and API. The smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
+Run `.github/workflows/launch-smoke.yml` against the public HTTPS storefront and API. The workflow first invokes `elitedom-store/scripts/live_smoke.py`; the smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
 
-Expected smoke coverage includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, and defensive security headers.
+The same manually dispatched workflow then runs the deployed browser E2E gate in Chromium. It discovers a purchasable Product ID from the real `/api/v1/catalog/products` response and does not mock or fulfill application API routes. The browser gate proves:
+
+- the deployed frontend is wired to the API origin supplied for the release;
+- 390px Arabic/RTL PDP rendering reaches the backend-authoritative product and price state;
+- a guest can add that real product to the server-backed cart and the test removes its item afterward;
+- Home, Catalog and PDP stay free of horizontal overflow at 430px and 1024px reference widths;
+- the document `lang` and semantic `dir` values follow EN/LTR and AR/RTL state;
+- unhandled browser exceptions fail the gate.
+
+The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. Those flows remain explicit provider/UAT gates with controlled test data.
+
+Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
 
 ## Monitoring and alerting
 
@@ -143,6 +154,8 @@ Launch evidence references should identify the external proof without copying se
 - `.github/workflows/launch-smoke.yml`
 - `elitedom-store/scripts/live_smoke.py`
 - `elitedom-store/scripts/validate_launch_assets.py`
+- `elitedom-store/frontend/playwright.launch.config.mjs`
+- `elitedom-store/frontend/e2e/launch.spec.mjs`
 - `elitedom-store/backend/app/modules/admin/control_service.py`
 - `elitedom-store/backend/app/modules/admin/control_schemas.py`
 - `elitedom-store/backend/app/modules/admin/models.py`
