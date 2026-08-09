@@ -1,0 +1,215 @@
+name: Real Stack E2E
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "elitedom-store/**"
+      - ".github/workflows/real-e2e.yml"
+  pull_request:
+    paths:
+      - "elitedom-store/**"
+      - ".github/workflows/real-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: real-e2e-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  browser-integration:
+    name: Real browser integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Prepare isolated E2E environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > elitedom-store/.env <<'EOF'
+          ENVIRONMENT=development
+          DEBUG=false
+          SECRET_KEY=e2e-app-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          JWT_SECRET_KEY=e2e-jwt-secret-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          APP_NAME=Elitedom Store E2E
+          APP_VERSION=e2e
+          RELEASE_REF=e2e
+          ALLOWED_HOSTS=localhost,127.0.0.1,fastapi
+          CORS_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
+          LOG_LEVEL=INFO
+          METRICS_ENABLED=false
+          STAFF_MFA_REQUIRED=true
+          RATE_LIMIT_BACKEND=memory
+          VITE_API_URL=http://127.0.0.1:8000/api/v1
+          VITE_SITE_URL=http://127.0.0.1:3000
+          VITE_DEMO_CATALOG_FALLBACK=false
+          POSTGRES_USER=elitedom
+          POSTGRES_PASSWORD=e2e-postgres-password
+          POSTGRES_DB=elitedom_odoo_e2e
+          APP_POSTGRES_DB=elitedom_store_e2e
+          POSTGRES_HOST=postgres
+          POSTGRES_PORT=5432
+          DATABASE_URL=postgresql+asyncpg://elitedom:e2e-postgres-password@postgres:5432/elitedom_store_e2e
+          REDIS_HOST=redis
+          REDIS_PORT=6379
+          REDIS_PASSWORD=e2e-redis-password
+          REDIS_URL=redis://:e2e-redis-password@redis:6379/0
+          CELERY_BROKER_URL=redis://:e2e-redis-password@redis:6379/1
+          CELERY_RESULT_BACKEND=redis://:e2e-redis-password@redis:6379/2
+          ODOO_SYNC_ENABLED=false
+          ODOO_WEBHOOKS_ENABLED=false
+          ODOO_URL=http://odoo:8069
+          ODOO_DB=elitedom_odoo_e2e
+          ODOO_API_USER=e2e-odoo-user
+          ODOO_API_KEY=e2e-odoo-key
+          ODOO_WEBHOOK_SECRET=e2e-odoo-webhook-secret-cccccccccccccccccccccccc
+          PAYMOB_ENABLED=false
+          PAYMOB_CARD_PAYMENT_METHOD_ID=0
+          PAYMOB_WALLET_PAYMENT_METHOD_ID=0
+          FASTAPI_WORKERS=1
+          CELERY_WORKER_CONCURRENCY=1
+          FASTAPI_PORT=8000
+          FRONTEND_PORT=3000
+          ODOO_PORT=18069
+          REDIS_PORT=6379
+          E2E_CUSTOMER_EMAIL=e2e-customer@example.com
+          E2E_B2B_EMAIL=e2e-b2b@example.com
+          E2E_ADMIN_EMAIL=e2e-admin@example.com
+          E2E_PASSWORD=E2eTest!2026
+          EOF
+          chmod 600 elitedom-store/.env
+
+      - name: Validate E2E Compose topology
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file ../.env \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            config --quiet
+
+      - name: Build application containers
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          docker compose \
+            --env-file ../.env \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            build fastapi frontend celery-worker celery-beat
+
+      - name: Bootstrap PostgreSQL and Redis
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          "${compose[@]}" up -d postgres redis app-db-init
+          "${compose[@]}" wait app-db-init
+
+      - name: Migrate and seed real application data
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          "${compose[@]}" run --rm --no-deps -w /app fastapi sh -lc \
+            'PYTHONPATH=/app alembic upgrade head && PYTHONPATH=/app python -m app.scripts.seed_e2e' \
+            | tee ../e2e-seed.json
+
+      - name: Install real Odoo connector
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          "${compose[@]}" run --rm --no-deps odoo \
+            -d elitedom_odoo_e2e \
+            -i elitedom_connector \
+            --without-demo=all \
+            --stop-after-init \
+            --no-http
+
+      - name: Start full integration stack
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          "${compose[@]}" up -d --wait odoo fastapi frontend celery-worker celery-beat
+
+      - name: Verify stack and Odoo module state
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:8000/health/ready > ../e2e-readiness.json
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:3000/ > /dev/null
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:18069/web/login > /dev/null
+          module_state="$("${compose[@]}" exec -T postgres psql -U elitedom -d elitedom_odoo_e2e -tAc "SELECT state FROM ir_module_module WHERE name = 'elitedom_connector'")"
+          test "$(echo "$module_state" | xargs)" = "installed"
+
+      - name: Install pinned browser runner
+        working-directory: elitedom-store/frontend
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Run real browser journeys
+        working-directory: elitedom-store/frontend
+        env:
+          E2E_SITE_URL: http://127.0.0.1:3000
+          E2E_API_URL: http://127.0.0.1:8000
+          E2E_CUSTOMER_EMAIL: e2e-customer@example.com
+          E2E_B2B_EMAIL: e2e-b2b@example.com
+          E2E_ADMIN_EMAIL: e2e-admin@example.com
+          E2E_PASSWORD: E2eTest!2026
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.integration.config.mjs
+
+      - name: Capture Compose logs
+        if: always()
+        working-directory: elitedom-store/infrastructure
+        run: |
+          docker compose \
+            --env-file ../.env \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            logs --no-color > ../e2e-compose.log 2>&1 || true
+
+      - name: Preserve P22 evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p22-real-e2e-${{ github.run_id }}
+          path: |
+            elitedom-store/e2e-seed.json
+            elitedom-store/e2e-readiness.json
+            elitedom-store/e2e-compose.log
+            elitedom-store/frontend/playwright-integration-report
+            elitedom-store/frontend/test-results-integration
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Tear down isolated stack
+        if: always()
+        working-directory: elitedom-store/infrastructure
+        run: |
+          docker compose \
+            --env-file ../.env \
+            -f docker-compose.yml \
+            -f docker-compose.e2e.yml \
+            down -v --remove-orphans || true
