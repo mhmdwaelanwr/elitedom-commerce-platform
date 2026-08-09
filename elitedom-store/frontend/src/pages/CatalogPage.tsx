@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
+import { CommerceCollectionState } from "@/components/store/CommerceCollectionState";
 import { ProductCard } from "@/components/store/ProductCard";
+import { CompareDialog, CompareTray } from "@/components/store/StoreExperiencePanels";
 import { StoreFooter } from "@/components/store/StoreFooter";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreIcon } from "@/components/store/StoreIcon";
@@ -39,10 +41,6 @@ const copy = {
     recommended: "Recommended",
     priceLow: "Price: low to high",
     priceHigh: "Price: high to low",
-    noResults: "No products match this search and filter combination.",
-    clear: "Clear filters",
-    error: "The catalogue could not be loaded. Your query is preserved.",
-    retry: "Retry",
     next: "Next",
     previous: "Previous",
     quickRtx: "RTX 50 Series",
@@ -73,10 +71,6 @@ const copy = {
     recommended: "المقترح",
     priceLow: "السعر: من الأقل",
     priceHigh: "السعر: من الأعلى",
-    noResults: "مفيش منتجات مطابقة للبحث والفلاتر الحالية.",
-    clear: "امسح الفلاتر",
-    error: "تعذر تحميل الكتالوج. البحث الحالي محفوظ.",
-    retry: "حاول تاني",
     next: "التالي",
     previous: "السابق",
     quickRtx: "RTX 50 Series",
@@ -106,11 +100,15 @@ export function CatalogPage() {
   const [locale, setLocale] = useStoreLocale();
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<CatalogState>({ status: "loading", products: [] });
+  const [requestVersion, setRequestVersion] = useState(0);
+  const [compared, setCompared] = useState<Product[]>([]);
+  const [compareOpen, setCompareOpen] = useState(false);
   const query = params.get("q")?.trim() ?? "";
   const copyText = copy[locale];
 
   useEffect(() => {
     let active = true;
+    setState((current) => ({ status: "loading", products: current.products }));
     fetchRichCatalog({ locale, query: query || undefined, limit: 100 })
       .then((products) => {
         if (active) setState({ status: "ready", products });
@@ -119,7 +117,7 @@ export function CatalogPage() {
         if (active) setState((current) => ({ status: "error", products: current.products }));
       });
     return () => { active = false; };
-  }, [locale, query]);
+  }, [locale, query, requestVersion]);
 
   const brands = useMemo(
     () => [...new Set(state.products.map((product) => product.brand).filter(Boolean))].slice(0, 8),
@@ -188,6 +186,14 @@ export function CatalogPage() {
     setParams(next);
   }
 
+  function toggleCompare(product: Product) {
+    setCompared((current) => {
+      if (current.some((item) => item.id === product.id)) return current.filter((item) => item.id !== product.id);
+      if (current.length >= 4) return current;
+      return [...current, product];
+    });
+  }
+
   return (
     <div className="el-commerce-page">
       <div className="el-storefront__shell">
@@ -214,7 +220,7 @@ export function CatalogPage() {
           <div className="el-catalog-toolbar">
             <span>{filtered.length} {copyText.products}</span>
             <div>
-              <button aria-disabled="true" className="el-toolbar-pill" type="button"><StoreIcon name="compare" size={16} />{copyText.compare}</button>
+              <button aria-pressed={compared.length > 0} className="el-toolbar-pill" onClick={() => document.querySelector<HTMLButtonElement>(".el-product-card__compare")?.focus()} type="button"><StoreIcon name="compare" size={16} />{copyText.compare}{compared.length > 0 ? ` · ${compared.length}/4` : ""}</button>
               <label className="el-toolbar-pill">
                 <StoreIcon name="sort" size={16} />
                 <select aria-label={copyText.sort} onChange={(event) => updateParam("sort", event.target.value)} value={params.get("sort") ?? "recommended"}>
@@ -250,24 +256,12 @@ export function CatalogPage() {
             </aside>
 
             <section className="el-catalog-results">
-              {state.status === "loading" ? <CatalogSkeleton /> : null}
-              {state.status === "error" ? (
-                <div className="el-collection-state">
-                  <StoreIcon name="returns" size={28} />
-                  <h2>{copyText.error}</h2>
-                  <button onClick={() => window.location.reload()} type="button">{copyText.retry}</button>
-                </div>
-              ) : null}
-              {state.status === "ready" && visibleProducts.length === 0 ? (
-                <div className="el-collection-state">
-                  <StoreIcon name="search" size={28} />
-                  <h2>{copyText.noResults}</h2>
-                  <button onClick={resetFilters} type="button">{copyText.clear}</button>
-                </div>
-              ) : null}
+              {state.status === "loading" ? <CommerceCollectionState locale={locale} state="loading" /> : null}
+              {state.status === "error" ? <CommerceCollectionState locale={locale} onAction={() => setRequestVersion((version) => version + 1)} state="error" /> : null}
+              {state.status === "ready" && visibleProducts.length === 0 ? <CommerceCollectionState locale={locale} onAction={resetFilters} state="empty" /> : null}
               {state.status === "ready" && visibleProducts.length > 0 ? (
                 <div className="el-catalog-grid">
-                  {visibleProducts.map((product) => <ProductCard key={product.id} locale={locale} product={product} />)}
+                  {visibleProducts.map((product) => <ProductCard compareSelected={compared.some((item) => item.id === product.id)} key={product.id} locale={locale} onCompareToggle={() => toggleCompare(product)} product={product} />)}
                 </div>
               ) : null}
 
@@ -286,6 +280,9 @@ export function CatalogPage() {
 
         <StoreFooter locale={locale} />
       </div>
+
+      {compared.length > 0 ? <CompareTray locale={locale} onCompare={() => setCompareOpen(true)} onRemove={(productId) => setCompared((current) => current.filter((item) => item.id !== productId))} products={compared} /> : null}
+      {compareOpen ? <div className="el-store-layer is-compare" onMouseDown={(event) => { if (event.target === event.currentTarget) setCompareOpen(false); }}><CompareDialog locale={locale} onClose={() => setCompareOpen(false)} products={compared} /></div> : null}
     </div>
   );
 }
@@ -303,10 +300,6 @@ function FilterOption({ active, label, onChange }: { active: boolean; label: str
       {label}
     </label>
   );
-}
-
-function CatalogSkeleton() {
-  return <div aria-label="Loading products" className="el-catalog-grid">{Array.from({ length: 6 }, (_, index) => <div className="el-product-skeleton" key={index} />)}</div>;
 }
 
 function updatePage(
