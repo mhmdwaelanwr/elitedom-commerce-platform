@@ -262,7 +262,7 @@ async def test_guest_checkout_cannot_attach_an_order_to_a_registered_email(
 
 
 @pytest.mark.asyncio
-async def test_registration_claims_a_passwordless_guest_contact(
+async def test_registration_cannot_claim_a_passwordless_guest_without_identity_proof(
     client: AsyncClient, db_session: AsyncSession
 ) -> None:
     guest = Partner(
@@ -284,15 +284,50 @@ async def test_registration_claims_a_passwordless_guest_contact(
             "password": "StrongPassword1!",
         },
     )
-    assert response.status_code == 201
-    assert response.json()["user_id"] == guest.id
+    assert response.status_code == 409
+    assert response.json()["detail"]["error_code"] == "ELITE_1004"
     await db_session.refresh(guest)
-    assert guest.name == "Claimed Customer"
-    assert guest.password_hash is not None
+    assert guest.name == "Guest Buyer"
+    assert guest.phone == "01012345678"
+    assert guest.password_hash is None
 
     login_response = await client.post(
         "/api/v1/auth/login",
         json={"email": "CLAIMABLE.GUEST@elitedom.store", "password": "StrongPassword1!"},
     )
-    assert login_response.status_code == 200
-    assert login_response.json()["user_id"] == guest.id
+    assert login_response.status_code == 401
+
+    challenge = await client.post(
+        "/api/v1/auth/otp/request",
+        json={"mobile": "+201012345678", "name": "Guest Buyer"},
+    )
+    assert challenge.status_code == 201
+    challenge_payload = challenge.json()
+
+    verification = await client.post(
+        "/api/v1/auth/otp/verify",
+        json={
+            "challenge_id": challenge_payload["challenge_id"],
+            "mobile": "+201012345678",
+            "code": challenge_payload["debug_code"],
+        },
+    )
+    assert verification.status_code == 200
+    assert verification.json()["user_id"] == guest.id
+
+    recovery = await client.post(
+        "/api/v1/auth/password/recovery",
+        headers={"Authorization": f"Bearer {verification.json()['access_token']}"},
+        json={"new_password": "VerifiedOwnerPassword1!"},
+    )
+    assert recovery.status_code == 204
+
+    verified_login = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "claimable.guest@elitedom.store",
+            "password": "VerifiedOwnerPassword1!",
+        },
+    )
+    assert verified_login.status_code == 200
+    assert verified_login.json()["user_id"] == guest.id

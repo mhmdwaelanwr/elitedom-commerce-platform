@@ -93,19 +93,10 @@ class AuthService:
         partner = existing.scalar_one_or_none()
 
         if partner is not None:
-            # Guest checkout may have created a contact-only partner. The
-            # verified email owner may claim that record, but an established
-            # password or OAuth account must never be replaced.
-            linked_identity = await self.db.scalar(
-                select(AuthIdentity.id).where(AuthIdentity.partner_id == partner.id)
-            )
-            if partner.password_hash or partner.email_verified or linked_identity:
-                raise AccountAlreadyExistsError()
-            partner.name = request.name
-            partner.phone = request.mobile
-            partner.password_hash = hash_password(request.password)
-            partner.company_type = "person"
-            partner.role = "customer"
+            # Email equality is not proof that the caller owns a guest contact.
+            # A passwordless guest can safely establish credentials only through
+            # the verified phone-OTP password-recovery flow.
+            raise AccountAlreadyExistsError()
         else:
             partner = Partner(
                 name=request.name,
@@ -401,9 +392,7 @@ class AuthService:
             "sid": session_id,
         }
         access_token = create_access_token(token_data)
-        refresh_token = create_refresh_token(
-            {**token_data, "jti": secrets.token_urlsafe(24)}
-        )
+        refresh_token = create_refresh_token({**token_data, "jti": secrets.token_urlsafe(24)})
 
         if existing_session is None:
             auth_session = AuthSession(
@@ -452,9 +441,7 @@ class AuthService:
         )
         now = _now()
         if identity:
-            partner = await self.db.scalar(
-                select(Partner).where(Partner.id == identity.partner_id)
-            )
+            partner = await self.db.scalar(select(Partner).where(Partner.id == identity.partner_id))
             if not partner or not partner.is_active:
                 raise InvalidCredentialsError()
             identity.last_used_at = now
@@ -521,9 +508,7 @@ class AuthService:
         )
         now = _now()
         if identity:
-            partner = await self.db.scalar(
-                select(Partner).where(Partner.id == identity.partner_id)
-            )
+            partner = await self.db.scalar(select(Partner).where(Partner.id == identity.partner_id))
             if not partner or not partner.is_active:
                 raise InvalidCredentialsError()
             identity.last_used_at = now

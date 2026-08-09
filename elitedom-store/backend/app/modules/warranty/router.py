@@ -15,14 +15,26 @@ from app.modules.warranty.service import (
     WarrantyCheckResponse,
     WarrantyService,
 )
+from app.shared.exceptions import InsufficientPermissionsError
 from app.shared.schemas import RMAStatus
-from app.shared.security import get_current_user, require_permission
+from app.shared.security import get_current_user, require_permission, require_staff_access
 
 router = APIRouter()
 
 
-async def _permissions(db: AsyncSession, user_id: int) -> frozenset[str]:
-    _, permissions = await AdminAccessService(db).resolve_permissions(user_id)
+async def _permissions(
+    db: AsyncSession,
+    current_user: dict,
+    *required: AdminPermission,
+) -> frozenset[str]:
+    try:
+        _, permissions = await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=tuple(permission.value for permission in required),
+        )
+    except InsufficientPermissionsError:
+        return frozenset()
     return permissions
 
 
@@ -44,7 +56,7 @@ async def list_rma_claims(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    permissions = await _permissions(db, current_user["user_id"])
+    permissions = await _permissions(db, current_user, AdminPermission.SUPPORT_VIEW)
     return await WarrantyService(db).list_claims(
         current_user["user_id"],
         include_all=AdminPermission.SUPPORT_VIEW.value in permissions,
@@ -60,7 +72,7 @@ async def get_rma_claim(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    permissions = await _permissions(db, current_user["user_id"])
+    permissions = await _permissions(db, current_user, AdminPermission.SUPPORT_VIEW)
     return await WarrantyService(db).get_claim(
         ticket_number,
         current_user["user_id"],
@@ -76,9 +88,7 @@ async def review_rma_claim(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(require_permission(AdminPermission.SUPPORT_MANAGE.value)),
 ):
-    result = await WarrantyService(db).review_claim(
-        ticket_number, current_user["user_id"], payload
-    )
+    result = await WarrantyService(db).review_claim(ticket_number, current_user["user_id"], payload)
     await AdminAccessService(db).record_audit(
         actor=current_user,
         action="support.rma.review",
@@ -96,7 +106,12 @@ async def check_warranty(
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user),
 ):
-    permissions = await _permissions(db, current_user["user_id"])
+    permissions = await _permissions(
+        db,
+        current_user,
+        AdminPermission.SUPPORT_VIEW,
+        AdminPermission.INVENTORY_VIEW,
+    )
     include_all = bool(
         {
             AdminPermission.SUPPORT_VIEW.value,

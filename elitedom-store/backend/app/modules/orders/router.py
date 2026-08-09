@@ -35,6 +35,7 @@ from app.shared.security import (
     decode_token,
     get_current_user,
     require_permission,
+    require_staff_access,
     security_scheme,
 )
 
@@ -46,8 +47,15 @@ async def _has_order_permission(
     current_user: dict,
     permission: AdminPermission,
 ) -> bool:
-    _, permissions = await AdminAccessService(db).resolve_permissions(current_user["user_id"])
-    return permission.value in permissions
+    try:
+        await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=(permission.value,),
+        )
+    except InsufficientPermissionsError:
+        return False
+    return True
 
 
 async def _get_optional_current_user(
@@ -145,9 +153,7 @@ async def get_cart(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).get_cart(
-        partner_id=partner_id, session_id=guest_session_id
-    )
+    return await OrderService(db).get_cart(partner_id=partner_id, session_id=guest_session_id)
 
 
 @router.post("/cart/items")
@@ -317,8 +323,10 @@ async def cancel_order(
     before = {"state": order.state, "payment_status": order.payment_status}
     privileged = order.partner_id != current_user["user_id"]
     if privileged:
-        role, permissions = await AdminAccessService(db).require(
-            current_user["user_id"], AdminPermission.ORDERS_MANAGE.value
+        role, permissions = await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=(AdminPermission.ORDERS_MANAGE.value,),
         )
         current_user = {**current_user, "role": role, "permissions": sorted(permissions)}
     result = await OrderCancellationService(db).cancel(order_id, reason=reason)
