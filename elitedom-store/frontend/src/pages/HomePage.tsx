@@ -13,15 +13,20 @@ const content = {
   en: {
     eyebrow: "ELITEDOM / CURATED PERFORMANCE",
     title: <>Performance,<br />without the noise.</>,
+    mobileTitle: <>Build your PC,<br />your way.</>,
     intro: "Premium PC hardware with clear Egyptian pricing, real local availability, and the technical depth when you actually need it.",
+    mobileIntro: "Original hardware, clear pricing, and technical detail exactly when you need it.",
     build: "Build your PC",
     shop: "Shop GPUs",
     trust: ["Local warranty", "Secure payments", "Nationwide delivery"],
     heroStock: "Local stock",
     heroWarranty: "Local warranty",
     categories: ["GPUs", "CPUs", "Motherboards", "RAM & SSD", "Displays", "PC builds", "Peripherals", "Networking"],
+    mobileCategories: ["GPU", "CPU", "PC builds", "SSD", "Displays"],
     curatedEyebrow: "CURATED THIS WEEK",
     curatedTitle: "Hardware worth your attention.",
+    mobileCuratedTitle: "Good places to start.",
+    mobileCuratedIntro: "The essentials first. Full technical depth stays inside each product.",
     viewAll: "View all hardware",
     outcomeTitle: "Shop by what you want to do.",
     outcomes: [
@@ -40,15 +45,20 @@ const content = {
   ar: {
     eyebrow: "ELITEDOM / أداء مختار بعناية",
     title: <>أداء قوي،<br />من غير زحمة.</>,
+    mobileTitle: <>ابني جهازك<br />على مزاجك.</>,
     intro: "هاردوير احترافي بأسعار واضحة بالجنيه المصري، توافر محلي حقيقي، والتفاصيل التقنية تظهر وقت ما تحتاجها.",
-    build: "ابني جهازك",
-    shop: "تسوّق كروت الشاشة",
+    mobileIntro: "قطع أصلية، أسعار واضحة، وتفاصيل تقنية تظهر وقت ما تحتاجها.",
+    build: "ابني PC",
+    shop: "تسوق كروت الشاشة",
     trust: ["ضمان محلي", "دفع آمن", "توصيل لكل المحافظات"],
     heroStock: "مخزون محلي",
     heroWarranty: "ضمان محلي",
     categories: ["كروت الشاشة", "المعالجات", "اللوحات الأم", "RAM & SSD", "الشاشات", "تجميعات PC", "الإكسسوارات", "الشبكات"],
+    mobileCategories: ["GPU", "CPU", "تجميعات PC", "SSD", "شاشات"],
     curatedEyebrow: "مختارات الأسبوع",
     curatedTitle: "قطع تستاهل اهتمامك.",
+    mobileCuratedTitle: "اختيارات تستاهل تبدأ منها",
+    mobileCuratedIntro: "المهم بس في الأول، والتفاصيل الكاملة جوه المنتج.",
     viewAll: "عرض كل المنتجات",
     outcomeTitle: "اختار حسب استخدامك.",
     outcomes: [
@@ -111,6 +121,19 @@ export function HomePage() {
     return (preferred.length >= 3 ? preferred : products).slice(0, 3);
   }, [products]);
 
+  const heroActions = (
+    <>
+      <a className="el-primary-button" href="#outcomes">
+        <span>{copy.build}</span>
+        <StoreIcon name="package" size={17} />
+      </a>
+      <a className="el-outline-button" href="#curated">
+        <span>{copy.shop}</span>
+        <StoreIcon name="arrow" size={17} />
+      </a>
+    </>
+  );
+
   return (
     <div className="el-storefront" data-locale={locale}>
       <div className="el-storefront__shell">
@@ -120,19 +143,12 @@ export function HomePage() {
           <section className="el-hero" id="top">
             <div className="el-hero__copy">
               <p className="el-eyebrow">{copy.eyebrow}</p>
-              <h1>{copy.title}</h1>
-              <p className="el-hero__intro">{copy.intro}</p>
-              <div className="el-hero__actions">
-                <a className="el-primary-button" href="#outcomes">
-                  <StoreIcon name="package" size={17} />
-                  <span>{copy.build}</span>
-                </a>
-                <a className="el-outline-button" href="#curated">
-                  <span>{copy.shop}</span>
-                  <StoreIcon name="arrow" size={17} />
-                </a>
-              </div>
-              <div className="el-trust-row">
+              <h1 className="el-hero__title el-hero__title--desktop">{copy.title}</h1>
+              <h1 className="el-hero__title el-hero__title--mobile">{copy.mobileTitle}</h1>
+              <p className="el-hero__intro el-hero__intro--desktop">{copy.intro}</p>
+              <p className="el-hero__intro el-hero__intro--mobile">{copy.mobileIntro}</p>
+              <div className="el-hero__actions el-hero__actions--desktop">{heroActions}</div>
+              <div className="el-trust-row el-trust-row--desktop">
                 <span><StoreIcon name="warranty" size={14} />{copy.trust[0]}</span>
                 <span><StoreIcon name="payment" size={14} />{copy.trust[1]}</span>
                 <span><StoreIcon name="delivery" size={14} />{copy.trust[2]}</span>
@@ -162,10 +178,18 @@ export function HomePage() {
                 <span><i />{heroProduct ? `${heroProduct.warrantyMonths}m ${copy.heroWarranty}` : copy.heroWarranty}</span>
               </div>
             </div>
+
+            <div className="el-hero__actions el-hero__actions--mobile">{heroActions}</div>
           </section>
 
-          <section aria-label="Categories" className="el-category-rail" id="categories">
+          <section aria-label="Categories" className="el-category-rail el-category-rail--desktop" id="categories">
             {copy.categories.map((category, index) => (
+              <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
+            ))}
+          </section>
+
+          <section aria-label="Mobile categories" className="el-category-rail el-category-rail--mobile">
+            {copy.mobileCategories.map((category, index) => (
               <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
             ))}
           </section>
@@ -173,10 +197,12 @@ export function HomePage() {
           <section className="el-curated" id="curated">
             <div className="el-section-header">
               <div>
-                <p className="el-eyebrow">{copy.curatedEyebrow}</p>
-                <h2>{copy.curatedTitle}</h2>
+                <p className="el-eyebrow el-curated__desktop-only">{copy.curatedEyebrow}</p>
+                <h2 className="el-curated__desktop-only">{copy.curatedTitle}</h2>
+                <h2 className="el-curated__mobile-title">{copy.mobileCuratedTitle}</h2>
+                <p className="el-curated__mobile-intro">{copy.mobileCuratedIntro}</p>
               </div>
-              <a href="#categories">{copy.viewAll} <StoreIcon name="arrow" size={15} /></a>
+              <a className="el-curated__desktop-only" href="#categories">{copy.viewAll} <StoreIcon name="arrow" size={15} /></a>
             </div>
 
             {loading ? <div className="el-data-state">{copy.loading}</div> : null}
@@ -212,7 +238,7 @@ export function HomePage() {
               <p className="el-eyebrow">{copy.b2bEyebrow}</p>
               <h2>{copy.b2bTitle}</h2>
               <p>{copy.b2bText}</p>
-              <Link to="/b2b">{copy.b2bCta} <StoreIcon name="arrow" size={15} /></Link>
+              <Link to="/business">{copy.b2bCta} <StoreIcon name="arrow" size={15} /></Link>
             </div>
           </section>
         </main>
