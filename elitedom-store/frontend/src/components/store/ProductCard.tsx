@@ -6,6 +6,8 @@ import type { Product } from "@/types/store";
 type ProductCardProps = {
   product: Product;
   locale: StoreLocale;
+  compareSelected?: boolean;
+  onCompareToggle?: () => void;
 };
 
 function formatEgp(value: number, locale: StoreLocale) {
@@ -20,11 +22,11 @@ function decisionSpec(product: Product) {
   return `${product.categoryName} · ${product.warrantyMonths}-month warranty`;
 }
 
-export function ProductCard({ product, locale }: ProductCardProps) {
+export function ProductCard({ product, locale, compareSelected = false, onCompareToggle }: ProductCardProps) {
   const inStock = product.stockQty > 0;
   const labels = locale === "ar"
-    ? { badge: "مختار", stock: inStock ? "متوفر" : "حسب الطلب", view: "عرض التفاصيل" }
-    : { badge: "NEW DROP", stock: inStock ? "In stock" : "On request", view: "View details" };
+    ? { badge: "مختار", stock: inStock ? "متوفر" : "حسب الطلب", view: "عرض التفاصيل", compare: compareSelected ? "إزالة من المقارنة" : "أضف للمقارنة" }
+    : { badge: "NEW DROP", stock: inStock ? "In stock" : "On request", view: "View details", compare: compareSelected ? "Remove from compare" : "Add to compare" };
 
   return (
     <article className="el-product-card">
@@ -39,6 +41,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
           src={product.image}
         />
         <span className="el-product-card__badge">{labels.badge}</span>
+        {onCompareToggle ? <button aria-label={`${labels.compare}: ${product.name}`} aria-pressed={compareSelected} className="el-product-card__compare" onClick={onCompareToggle} type="button"><StoreIcon name="compare" size={18} /></button> : null}
       </div>
       <p className="el-product-card__brand" dir="auto">{product.brand} / {product.categoryName}</p>
       <h3 dir="auto"><Link to={`/products/${encodeURIComponent(product.id)}`}>{product.name}</Link></h3>
