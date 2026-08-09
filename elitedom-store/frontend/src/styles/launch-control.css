@@ -1,0 +1,41 @@
+.el-launch-control-page {
+  min-height: 100vh;
+  padding: 28px clamp(18px, 5vw, 72px) 70px;
+  background: var(--el-bg-canvas);
+  color: var(--el-text-primary);
+}
+
+.el-launch-control-page > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--el-border-subtle);
+}
+
+.el-launch-control-page > header > div { display: flex; align-items: center; gap: 13px; }
+.el-launch-control-page > header .el-brand__wordmark { display: none; }
+.el-launch-control-page > header a { color: var(--el-accent-primary); font-size: 10px; }
+
+.el-launch-control-page > section {
+  width: min(100%, 780px);
+  margin: 90px auto 0;
+  padding: 30px;
+  border: 1px solid var(--el-border-subtle);
+  border-radius: 22px;
+  background: var(--el-surface-1);
+}
+
+.el-launch-control-page h1 { margin: 18px 0 10px; font-size: 34px; font-weight: 600; }
+.el-launch-control-page section > p { max-width: 680px; margin: 0; color: var(--el-text-secondary); font-size: 12px; line-height: 1.7; }
+.el-launch-control-page dl { display: grid; margin: 26px 0 0; border-top: 1px solid var(--el-border-subtle); }
+.el-launch-control-page dl > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; padding: 15px 0; border-bottom: 1px solid var(--el-border-subtle); }
+.el-launch-control-page dt { color: var(--el-text-muted); font-size: 9px; }
+.el-launch-control-page dd { margin: 0; color: var(--el-text-primary); font-family: "Roboto Mono", ui-monospace, monospace; font-size: 9px; }
+
+@media (max-width: 600px) {
+  .el-launch-control-page > header { align-items: flex-start; flex-direction: column; }
+  .el-launch-control-page > section { margin-top: 48px; padding: 20px; }
+  .el-launch-control-page dl > div { grid-template-columns: 1fr; gap: 6px; }
+}
