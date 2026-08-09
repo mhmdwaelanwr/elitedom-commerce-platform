@@ -39,6 +39,16 @@ const copy = {
   },
 } as const;
 
+const searchButtonStyle = {
+  appearance: "none",
+  display: "grid",
+  placeItems: "center",
+  padding: 0,
+  border: 0,
+  background: "transparent",
+  cursor: "pointer",
+} as const;
+
 export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -72,7 +82,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
 
       <div className="el-store-header__actions">
         <form className="el-store-search" onSubmit={submitSearch} role="search">
-          <button aria-label={labels.search} className="el-store-search__submit" type="submit">
+          <button aria-label={labels.search} className="el-store-search__submit" style={searchButtonStyle} type="submit">
             <StoreIcon name="search" size={18} />
           </button>
           <input
