@@ -26,6 +26,13 @@ def _set_local_order_id(transaction: dict[str, Any], order: dict[str, Any]) -> N
     transaction["payment_key_claims"]["extra"]["order_id"] = str(order["id"] + 999)
 
 
+def _set_malformed_local_order_id(
+    transaction: dict[str, Any],
+    _order: dict[str, Any],
+) -> None:
+    transaction["payment_key_claims"]["extra"]["order_id"] = "not-an-order-id"
+
+
 def _set_order_number(transaction: dict[str, Any], _order: dict[str, Any]) -> None:
     transaction["payment_key_claims"]["extra"]["order_number"] = "SO-ATTACKER"
 
@@ -41,6 +48,7 @@ def _set_special_reference(transaction: dict[str, Any], _order: dict[str, Any]) 
 _MUTATIONS = [
     _set_intention,
     _set_local_order_id,
+    _set_malformed_local_order_id,
     _set_order_number,
     _set_merchant_reference,
     _set_special_reference,
@@ -54,6 +62,7 @@ _MUTATIONS = [
     ids=[
         "intention-id",
         "local-order-id",
+        "malformed-local-order-id",
         "order-number",
         "merchant-reference",
         "special-reference",
