@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
+import { ThemeToggle } from "@/components/store/ThemeToggle";
 
 const statusRows = [
   ["account.identity", "READY", "success"],
@@ -24,6 +25,7 @@ export function AuthShell({ children, locale, onLocaleChange }: AuthShellProps) 
         <Link aria-label="Elitedom home" to="/"><ElitedomBrand /></Link>
         <div className="el-auth-topbar__actions">
           <div className="el-auth-secure-pill"><span />{ar ? "وصول آمن للحساب" : "SECURE ACCOUNT ACCESS"}</div>
+          <ThemeToggle className="el-auth-theme" locale={locale} />
           <button
             aria-label={ar ? "Switch to English" : "التبديل إلى العربية"}
             className="el-auth-locale"
