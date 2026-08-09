@@ -1,16 +1,21 @@
 """Stage 10 coverage for release-scoped launch readiness, evidence, RBAC, and audit."""
 
+from datetime import UTC, datetime, timedelta
+from uuid import uuid4
+
 import pytest
 from sqlalchemy import select
 
 from app.models import Partner
 from app.modules.admin.models import AdminAuditLog, LaunchAcceptance
+from app.modules.auth.models import AuthSession
 from app.shared.security import create_access_token
 
 pytestmark = pytest.mark.asyncio
 
 _RELEASE_A = "stage10-release-a"
 _RELEASE_B = "stage10-release-b"
+_SESSION_IDS: dict[int, str] = {}
 
 
 def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[str, str]:
@@ -19,6 +24,7 @@ def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[s
             "sub": str(partner.id),
             "email": partner.email,
             "role": token_role or partner.role,
+            "sid": _SESSION_IDS[partner.id],
         }
     )
     return {"Authorization": f"Bearer {token}"}
@@ -39,6 +45,18 @@ async def _partner(db_session, *, email: str, role: str) -> Partner:
     )
     db_session.add(partner)
     await db_session.flush()
+    session_id = str(uuid4())
+    db_session.add(
+        AuthSession(
+            id=session_id,
+            partner_id=partner.id,
+            refresh_token_hash="0" * 64,
+            auth_method="test",
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+    )
+    await db_session.flush()
+    _SESSION_IDS[partner.id] = session_id
     return partner
 
 
