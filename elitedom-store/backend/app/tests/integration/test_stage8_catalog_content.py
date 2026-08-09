@@ -24,20 +24,9 @@ from app.modules.products.catalog_models import (
     ProductAttributeValue,
     ProductCatalogContent,
 )
-from app.shared.security import create_access_token
+from app.tests.auth_helpers import authorization as _authorization
 
 pytestmark = pytest.mark.asyncio
-
-
-def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[str, str]:
-    token = create_access_token(
-        {
-            "sub": str(partner.id),
-            "email": partner.email,
-            "role": token_role or partner.role,
-        }
-    )
-    return {"Authorization": f"Bearer {token}"}
 
 
 async def _partner(db_session, *, email: str, role: str) -> Partner:
