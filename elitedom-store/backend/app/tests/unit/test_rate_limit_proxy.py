@@ -27,8 +27,11 @@ def test_untrusted_client_cannot_spoof_forwarded_for(monkeypatch) -> None:
     assert rate_limit._client_ip(request) == "198.51.100.4"
 
 
-def test_configured_proxy_forwards_client_address(monkeypatch) -> None:
+def test_configured_proxy_uses_the_immediately_adjacent_forwarded_client(monkeypatch) -> None:
     monkeypatch.setattr(rate_limit.settings, "trusted_proxy_ips", "10.0.0.1")
     request = _request(peer_ip="10.0.0.1", forwarded_for="203.0.113.8, 10.0.0.2")
 
-    assert rate_limit._client_ip(request) == "203.0.113.8"
+    # The left-most value is caller-controlled unless every hop in the chain is
+    # independently trusted. With one pinned Nginx proxy, only the right-most
+    # forwarded hop is bound to the trusted peer.
+    assert rate_limit._client_ip(request) == "10.0.0.2"
