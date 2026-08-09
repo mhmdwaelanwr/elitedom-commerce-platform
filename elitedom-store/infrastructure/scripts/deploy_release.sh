@@ -18,6 +18,7 @@ fail() { echo "ERROR: $*" >&2; exit 1; }
 command -v git >/dev/null || fail "git is required"
 command -v docker >/dev/null || fail "docker is required"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
+docker compose wait --help >/dev/null 2>&1 || fail "Docker Compose must support the wait command"
 command -v gzip >/dev/null || fail "gzip is required"
 
 cd "$REPO_PATH"
@@ -50,8 +51,10 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$INFRA/docker-compose.yml" -f
 
 "${COMPOSE[@]}" config --quiet
 
-echo "Ensuring PostgreSQL is healthy before backup..."
-"${COMPOSE[@]}" up -d --wait --wait-timeout 120 postgres app-db-init
+echo "Ensuring PostgreSQL and the one-shot app DB initializer complete before backup..."
+"${COMPOSE[@]}" up -d postgres app-db-init
+"${COMPOSE[@]}" wait app-db-init
+"${COMPOSE[@]}" exec -T postgres sh -ec 'pg_isready -U "$POSTGRES_USER" -d postgres'
 
 BACKUP_DIR="${DEPLOY_BACKUP_DIR:-$(dirname "$REPO_PATH")/elitedom-backups}"
 mkdir -p "$BACKUP_DIR"
