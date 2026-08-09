@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, type FormEvent } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
 
@@ -14,11 +14,11 @@ const copy = {
   en: {
     search: "Search hardware",
     navigation: [
-      ["GPUs", "#curated"],
-      ["CPUs", "#categories"],
-      ["PC builds", "#outcomes"],
-      ["Displays", "#categories"],
-      ["Deals", "#curated"],
+      ["GPUs", "/catalog"],
+      ["CPUs", "/#categories"],
+      ["PC builds", "/#outcomes"],
+      ["Displays", "/#categories"],
+      ["Deals", "/#curated"],
     ],
     menu: "Open navigation",
     account: "Account",
@@ -27,11 +27,11 @@ const copy = {
   ar: {
     search: "ابحث في الهاردوير",
     navigation: [
-      ["كروت الشاشة", "#curated"],
-      ["المعالجات", "#categories"],
-      ["تجميعات PC", "#outcomes"],
-      ["الشاشات", "#categories"],
-      ["العروض", "#curated"],
+      ["كروت الشاشة", "/catalog"],
+      ["المعالجات", "/#categories"],
+      ["تجميعات PC", "/#outcomes"],
+      ["الشاشات", "/#categories"],
+      ["العروض", "/#curated"],
     ],
     menu: "افتح القائمة",
     account: "الحساب",
@@ -40,9 +40,18 @@ const copy = {
 } as const;
 
 export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [query, setQuery] = useState("");
   const labels = copy[locale];
   const nextLocale: StoreLocale = locale === "en" ? "ar" : "en";
+
+  function submitSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const normalized = query.trim();
+    navigate(normalized ? `/catalog?q=${encodeURIComponent(normalized)}` : "/catalog");
+    setMobileOpen(false);
+  }
 
   return (
     <header className="el-store-header" data-testid="store-header">
@@ -54,19 +63,26 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
 
         <nav aria-label="Primary" className="el-store-header__nav">
           {labels.navigation.map(([label, href], index) => (
-            <a className={index === 0 ? "is-active" : undefined} href={href} key={label}>
+            <Link className={index === 0 ? "is-active" : undefined} to={href} key={label}>
               {label}
-            </a>
+            </Link>
           ))}
         </nav>
       </div>
 
       <div className="el-store-header__actions">
-        <label className="el-store-search">
-          <StoreIcon name="search" size={18} />
-          <span className="sr-only">{labels.search}</span>
-          <input aria-label={labels.search} placeholder={labels.search} type="search" />
-        </label>
+        <form className="el-store-search" onSubmit={submitSearch} role="search">
+          <button aria-label={labels.search} className="el-store-search__submit" type="submit">
+            <StoreIcon name="search" size={18} />
+          </button>
+          <input
+            aria-label={labels.search}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={labels.search}
+            type="search"
+            value={query}
+          />
+        </form>
 
         <button
           aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"}
@@ -98,9 +114,9 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
       {mobileOpen ? (
         <nav aria-label="Mobile primary" className="el-mobile-nav">
           {labels.navigation.map(([label, href]) => (
-            <a href={href} key={label} onClick={() => setMobileOpen(false)}>
+            <Link key={label} onClick={() => setMobileOpen(false)} to={href}>
               {label}
-            </a>
+            </Link>
           ))}
         </nav>
       ) : null}
