@@ -9,7 +9,7 @@ import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
 import { RecoverySentPage } from "@/pages/RecoverySentPage";
-import { AdminConsolePage } from "@/pages/admin/AdminConsolePage";
+import { AdminRoutePage } from "@/pages/admin/AdminOperationsPage";
 import { LaunchControlPage } from "@/pages/admin/LaunchControlPage";
 
 export const router = createBrowserRouter([
@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
   { path: "/business", element: <BusinessLandingPage /> },
   { path: "/business/rfq", element: <BusinessRfqPage /> },
   { path: "/business/rfq/:rfqCode", element: <BusinessRfqPage /> },
-  { path: "/admin", element: <AdminConsolePage /> },
+  { path: "/admin", element: <AdminRoutePage /> },
   { path: "/admin/launch", element: <LaunchControlPage /> },
   { path: "*", element: <NotFoundPage /> },
 ]);
