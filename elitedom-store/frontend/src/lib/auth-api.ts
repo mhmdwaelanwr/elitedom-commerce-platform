@@ -3,6 +3,8 @@ import { clientEnv } from "@/lib/env";
 import type { CustomerSession } from "@/types/store";
 
 const API_BASE_URL = clientEnv.apiUrl;
+const AUTH_SESSION_KEY = "elitedom-auth-session";
+const AUTH_CHANGED_EVENT = "elitedom:auth-changed";
 
 type AuthPayload = {
   access_token: string;
@@ -183,6 +185,23 @@ export async function oauthLogin(
 export async function refreshSession(): Promise<CustomerSession> {
   const result = await authRequest<AuthPayload>("/auth/refresh", { method: "POST" });
   return toCustomerSession(result);
+}
+
+export async function recoverPassword(
+  newPassword: string,
+  session: CustomerSession,
+): Promise<void> {
+  await authRequest<void>(
+    "/auth/password/recovery",
+    { method: "POST", body: JSON.stringify({ new_password: newPassword }) },
+    session.accessToken,
+  );
+
+  // The recovery endpoint revokes every server session, including the fresh
+  // phone-OTP session that authorized the reset. Remove its cached access token
+  // immediately so the browser cannot treat the revoked session as active.
+  window.sessionStorage.removeItem(AUTH_SESSION_KEY);
+  window.dispatchEvent(new CustomEvent(AUTH_CHANGED_EVENT));
 }
 
 export async function fetchMfaStatus(session: CustomerSession): Promise<MfaStatus> {

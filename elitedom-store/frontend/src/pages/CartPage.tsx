@@ -5,6 +5,7 @@ import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreIcon } from "@/components/store/StoreIcon";
 import { useStoreLocale } from "@/hooks/useStoreLocale";
 import { removeRemoteCartItem, updateRemoteCartItem } from "@/lib/api";
+import { restoreSession } from "@/lib/auth-session";
 import { cartItemCount, cartSubtotal, loadGuestCart, type GuestCartSnapshot } from "@/lib/cart-data";
 import "@/styles/checkout.css";
 
@@ -13,14 +14,14 @@ const copy = {
     title: "Your cart", item: "item", items: "items", local: "Local stock", warranty: "Warranty included", remove: "Remove",
     summary: "Order summary", products: "Products", shipping: "Shipping", calculated: "Calculated at checkout", vat: "VAT",
     included: "Included", total: "Total", continue: "Continue to checkout", secure: "Secure checkout · Encrypted connection",
-    emptyTitle: "Your cart is ready for hardware.", emptyText: "Add a product from the catalogue and it will stay linked to this guest session.",
+    emptyTitle: "Your cart is ready for hardware.", emptyText: "Add a product from the catalogue and it will stay linked to your cart.",
     shop: "Shop hardware", error: "We could not load your cart.", retry: "Retry",
   },
   ar: {
     title: "سلة التسوق", item: "منتج", items: "منتجات", local: "مخزون محلي", warranty: "الضمان مشمول", remove: "إزالة",
     summary: "ملخص الطلب", products: "المنتجات", shipping: "الشحن", calculated: "يُحسب عند إتمام الطلب", vat: "الضريبة",
     included: "مشمولة", total: "الإجمالي", continue: "متابعة لإتمام الطلب", secure: "إتمام طلب آمن · اتصال مشفر",
-    emptyTitle: "السلة جاهزة للهاردوير.", emptyText: "أضف منتج من الكتالوج وهيفضل مرتبط بنفس جلسة الزائر.",
+    emptyTitle: "السلة جاهزة للهاردوير.", emptyText: "أضف منتج من الكتالوج وهيفضل مرتبط بسلتك.",
     shop: "تسوّق الهاردوير", error: "تعذر تحميل السلة.", retry: "حاول تاني",
   },
 } as const;
@@ -41,7 +42,8 @@ export function CartPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setSnapshot(await loadGuestCart(locale));
+      const currentSession = await restoreSession();
+      setSnapshot(await loadGuestCart(locale, currentSession));
       setError(false);
     } catch {
       setError(true);
@@ -52,7 +54,8 @@ export function CartPage() {
 
   useEffect(() => {
     let active = true;
-    void loadGuestCart(locale)
+    restoreSession()
+      .then((currentSession) => loadGuestCart(locale, currentSession))
       .then((next) => {
         if (!active) return;
         setSnapshot(next);
@@ -71,7 +74,7 @@ export function CartPage() {
     if (!snapshot || !itemId || quantity < 1) return;
     setPendingItemId(itemId);
     try {
-      await updateRemoteCartItem(itemId, quantity, snapshot.sessionId);
+      await updateRemoteCartItem(itemId, quantity, snapshot.sessionId, snapshot.session);
       await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
     } finally {
@@ -83,7 +86,7 @@ export function CartPage() {
     if (!snapshot || !itemId) return;
     setPendingItemId(itemId);
     try {
-      await removeRemoteCartItem(itemId, snapshot.sessionId);
+      await removeRemoteCartItem(itemId, snapshot.sessionId, snapshot.session);
       await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
     } finally {

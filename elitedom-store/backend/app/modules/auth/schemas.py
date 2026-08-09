@@ -18,6 +18,18 @@ def normalize_egyptian_mobile(value: str) -> str:
     )
 
 
+def validate_password_strength_value(value: str) -> str:
+    if not re.search(r"[A-Z]", value):
+        raise ValueError("Password must contain at least one uppercase letter")
+    if not re.search(r"[a-z]", value):
+        raise ValueError("Password must contain at least one lowercase letter")
+    if not re.search(r"\d", value):
+        raise ValueError("Password must contain at least one digit")
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
+        raise ValueError("Password must contain at least one special character")
+    return value
+
+
 class RegisterRequest(BaseModel):
     name: str = Field(..., min_length=2, max_length=128)
     email: EmailStr
@@ -32,15 +44,7 @@ class RegisterRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password_strength(cls, value: str) -> str:
-        if not re.search(r"[A-Z]", value):
-            raise ValueError("Password must contain at least one uppercase letter")
-        if not re.search(r"[a-z]", value):
-            raise ValueError("Password must contain at least one lowercase letter")
-        if not re.search(r"\d", value):
-            raise ValueError("Password must contain at least one digit")
-        if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", value):
-            raise ValueError("Password must contain at least one special character")
-        return value
+        return validate_password_strength_value(value)
 
 
 class RegisterResponse(BaseModel):
@@ -67,6 +71,17 @@ class LoginResponse(BaseModel):
     mfa_required: bool = False
     mfa_enrolled: bool = False
     mfa_verified: bool = False
+
+
+class PasswordRecoveryRequest(BaseModel):
+    """Set a new password after a fresh phone-OTP authentication session."""
+
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, value: str) -> str:
+        return validate_password_strength_value(value)
 
 
 class OAuthRequest(BaseModel):

@@ -6,6 +6,7 @@ import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreIcon } from "@/components/store/StoreIcon";
 import { useStoreLocale } from "@/hooks/useStoreLocale";
 import { addRemoteCartItem } from "@/lib/api";
+import { restoreSession } from "@/lib/auth-session";
 import { fetchRichCatalog, fetchRichProduct } from "@/lib/catalog-api";
 import { getGuestCartSessionId } from "@/lib/guest-cart";
 import type { Product } from "@/types/store";
@@ -127,9 +128,11 @@ export function ProductDetailPage() {
     if (!product || cartState === "adding") return false;
     setCartState("adding");
     try {
+      const session = await restoreSession();
       await addRemoteCartItem(
         { productId: product.id, quantity },
-        getGuestCartSessionId(),
+        session ? undefined : getGuestCartSessionId(),
+        session ?? undefined,
       );
       setCartState("added");
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));

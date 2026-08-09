@@ -2,16 +2,20 @@ import { fetchRemoteCart, mapRemoteCart } from "@/lib/api";
 import { fetchRichCatalog } from "@/lib/catalog-api";
 import { getGuestCartSessionId } from "@/lib/guest-cart";
 import type { StoreLocale } from "@/components/store/StoreHeader";
-import type { CartItem } from "@/types/store";
+import type { CartItem, CustomerSession } from "@/types/store";
 
 export type GuestCartSnapshot = {
-  sessionId: string;
+  sessionId?: string;
+  session?: CustomerSession;
   items: CartItem[];
 };
 
-export async function loadGuestCart(locale: StoreLocale): Promise<GuestCartSnapshot> {
-  const sessionId = getGuestCartSessionId();
-  const cart = await fetchRemoteCart(sessionId);
+export async function loadGuestCart(
+  locale: StoreLocale,
+  session?: CustomerSession | null,
+): Promise<GuestCartSnapshot> {
+  const sessionId = session ? undefined : getGuestCartSessionId();
+  const cart = await fetchRemoteCart(sessionId, session);
   const serverItems = mapRemoteCart(cart);
 
   let richProducts = [] as Awaited<ReturnType<typeof fetchRichCatalog>>;
@@ -38,7 +42,7 @@ export async function loadGuestCart(locale: StoreLocale): Promise<GuestCartSnaps
     };
   });
 
-  return { sessionId, items };
+  return { sessionId, session: session ?? undefined, items };
 }
 
 export function cartSubtotal(items: CartItem[]) {

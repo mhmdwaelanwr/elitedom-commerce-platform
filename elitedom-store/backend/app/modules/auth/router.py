@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.database import get_db
 from app.modules.auth.mfa_service import AdminMfaService
+from app.modules.auth.password_recovery import PasswordRecoveryService
 from app.modules.auth.schemas import (
     LoginRequest,
     LoginResponse,
@@ -18,6 +19,7 @@ from app.modules.auth.schemas import (
     OtpChallengeResponse,
     OtpRequest,
     OtpVerifyRequest,
+    PasswordRecoveryRequest,
     RegisterRequest,
     RegisterResponse,
     SessionListResponse,
@@ -136,6 +138,23 @@ async def refresh_token(
     result = await _service(db, request).refresh(token)
     _set_refresh_cookie(response, result.refresh_token)
     return result
+
+
+@router.post("/password/recovery", status_code=204)
+async def recover_password(
+    payload: PasswordRecoveryRequest,
+    response: Response,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Replace a password only from a freshly verified phone-OTP session."""
+    await PasswordRecoveryService(db).recover(
+        partner_id=current_user["user_id"],
+        session_id=current_user.get("session_id"),
+        new_password=payload.new_password,
+    )
+    _clear_refresh_cookie(response)
+    return None
 
 
 @router.get("/mfa/status", response_model=MfaStatusResponse)

@@ -5,6 +5,7 @@ import { StoreFooter } from "@/components/store/StoreFooter";
 import { StoreIcon, type StoreIconName } from "@/components/store/StoreIcon";
 import { useStoreLocale } from "@/hooks/useStoreLocale";
 import { submitCheckout } from "@/lib/api";
+import { restoreSession } from "@/lib/auth-session";
 import { cartSubtotal, loadGuestCart, type GuestCartSnapshot } from "@/lib/cart-data";
 import type { CheckoutDetails, CheckoutResult } from "@/types/store";
 import "@/styles/checkout.css";
@@ -66,7 +67,8 @@ export function CheckoutPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      setSnapshot(await loadGuestCart(locale));
+      const currentSession = await restoreSession();
+      setSnapshot(await loadGuestCart(locale, currentSession));
       setLoadError(false);
     } catch {
       setLoadError(true);
@@ -77,7 +79,8 @@ export function CheckoutPage() {
 
   useEffect(() => {
     let active = true;
-    void loadGuestCart(locale)
+    restoreSession()
+      .then((currentSession) => loadGuestCart(locale, currentSession))
       .then((next) => {
         if (!active) return;
         setSnapshot(next);
@@ -111,7 +114,7 @@ export function CheckoutPage() {
 
     setSubmitState({ status: "submitting" });
     try {
-      const result: CheckoutResult = await submitCheckout(details, undefined, snapshot.sessionId);
+      const result: CheckoutResult = await submitCheckout(details, snapshot.session, snapshot.sessionId);
       if (result.paymentGatewayUrl) {
         setSubmitState({ status: "redirecting", orderNumber: result.orderNumber });
         window.location.assign(result.paymentGatewayUrl);
