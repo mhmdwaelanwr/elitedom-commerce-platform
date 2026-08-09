@@ -3,6 +3,12 @@
 # Use together with docker-compose.yml.
 # =============================================================================
 
+networks:
+  elitedom-net:
+    ipam:
+      config:
+        - subnet: "${ELITEDOM_DOCKER_SUBNET:-172.30.0.0/24}"
+
 services:
   fastapi:
     environment:
@@ -11,6 +17,8 @@ services:
       APP_VERSION: "${RELEASE_REF:?Set RELEASE_REF to the deployed Git commit SHA}"
       STAFF_MFA_REQUIRED: "true"
       RATE_LIMIT_BACKEND: redis
+      # Only the pinned Nginx Proxy Manager peer may supply X-Forwarded-For.
+      TRUSTED_PROXY_IPS: "${NGINX_PROXY_INTERNAL_IP:-172.30.0.10}"
 
   celery-worker:
     environment:
@@ -31,3 +39,8 @@ services:
         VITE_DEMO_CATALOG_FALLBACK: "${VITE_DEMO_CATALOG_FALLBACK:-false}"
         VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-}"
         VITE_APPLE_CLIENT_ID: "${VITE_APPLE_CLIENT_ID:-}"
+
+  nginx-proxy-manager:
+    networks:
+      elitedom-net:
+        ipv4_address: "${NGINX_PROXY_INTERNAL_IP:-172.30.0.10}"
