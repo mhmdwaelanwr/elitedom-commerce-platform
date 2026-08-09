@@ -1235,6 +1235,315 @@
     min-width: 0;
   }
 
+  /* P14.e — Customer account responsive and RTL hardening. */
+  .el-account-page main {
+    width: calc(100% - 40px);
+    max-width: 350px;
+    min-height: 0;
+    margin-inline: auto;
+  }
+
+  .el-account-intro,
+  [dir="rtl"] .el-account-intro {
+    min-height: 138px;
+    align-items: stretch;
+    gap: 10px;
+    padding: 26px 0 20px;
+    text-align: start;
+  }
+
+  .el-account-intro h1 {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    font-size: 30px;
+    line-height: 1.45;
+    text-align: start;
+    unicode-bidi: plaintext;
+  }
+
+  .el-account-intro p {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Tahoma, Arial, sans-serif;
+    font-size: 13px;
+    line-height: 1.6;
+    text-align: start;
+  }
+
+  .el-account-layout {
+    display: block;
+    width: 100%;
+    padding-bottom: 42px;
+  }
+
+  .el-account-nav {
+    width: 100%;
+    min-height: 0;
+    margin-bottom: 22px;
+    padding: 8px;
+    overflow: hidden;
+    border-radius: 18px;
+  }
+
+  .el-account-nav__identity {
+    display: none;
+  }
+
+  .el-account-nav nav {
+    display: flex;
+    width: 100%;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .el-account-nav nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .el-account-nav nav a,
+  .el-account-nav > button {
+    min-height: 44px;
+    flex: 0 0 auto;
+    padding-inline: 12px;
+    touch-action: manipulation;
+  }
+
+  .el-account-nav nav a.is-active,
+  [dir="rtl"] .el-account-nav nav a.is-active {
+    box-shadow: inset 0 -2px 0 var(--el-accent-primary);
+  }
+
+  .el-account-nav > button {
+    width: 100%;
+    margin-top: 6px;
+  }
+
+  .el-account-content,
+  .el-account-block {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .el-account-heading {
+    min-height: 44px;
+  }
+
+  .el-account-heading h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    font-size: 22px;
+    line-height: 1.45;
+  }
+
+  .el-account-heading a,
+  .el-account-heading button {
+    min-height: 44px;
+    flex: 0 0 auto;
+    touch-action: manipulation;
+  }
+
+  .el-account-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .el-account-metric {
+    min-height: 126px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    gap: 8px 10px;
+    padding: 14px;
+    border-radius: 18px;
+  }
+
+  .el-account-metric > div {
+    width: 40px;
+    height: 40px;
+  }
+
+  .el-account-metric span,
+  .el-account-metric strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .el-account-metric strong {
+    font-size: 16px;
+    line-height: 1.35;
+  }
+
+  .el-account-order {
+    min-height: 128px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    padding: 16px;
+    border-radius: 16px;
+  }
+
+  .el-account-order__icon,
+  .el-account-order__action {
+    display: none;
+  }
+
+  .el-account-order__main h3,
+  .el-account-order__main p {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .el-account-order > strong {
+    align-self: start;
+    font-size: 13px;
+    direction: ltr;
+  }
+
+  .el-account-form {
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .el-account-input input {
+    width: 100%;
+    min-height: 52px;
+    height: auto;
+    text-align: start;
+  }
+
+  [dir="rtl"] .el-account-input input[dir="ltr"] {
+    text-align: right;
+  }
+
+  .el-account-primary,
+  .el-account-danger {
+    min-height: 48px;
+    touch-action: manipulation;
+  }
+
+  .el-address-list,
+  .el-saved-grid,
+  .el-loyalty-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .el-address-card {
+    min-width: 0;
+    padding: 18px;
+  }
+
+  .el-address-card h3,
+  .el-address-card p,
+  .el-address-card > div > span {
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+  }
+
+  .el-address-card footer {
+    flex-wrap: wrap;
+    gap: 4px 14px;
+  }
+
+  .el-address-card footer button,
+  .el-saved-card button,
+  .el-account-empty a,
+  .el-session-list button {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    touch-action: manipulation;
+  }
+
+  .el-saved-card__media {
+    height: 180px;
+  }
+
+  .el-saved-card > div > a {
+    min-height: 44px;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+  }
+
+  .el-security-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 18px;
+  }
+
+  .el-security-summary > div,
+  .el-security-summary > div > span {
+    min-width: 0;
+  }
+
+  .el-security-summary small {
+    overflow-wrap: anywhere;
+  }
+
+  .el-session-list article {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .el-session-list article > span {
+    display: none;
+  }
+
+  .el-session-list article > div,
+  .el-session-list article > div span {
+    min-width: 0;
+  }
+
+  .el-session-list strong,
+  .el-session-list small {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .el-loyalty-hero > div {
+    min-height: 130px;
+    padding: 18px;
+  }
+
+  .el-loyalty-hero strong {
+    overflow-wrap: anywhere;
+    font-size: 24px;
+  }
+
+  .el-loyalty-history article {
+    min-width: 0;
+    gap: 12px;
+  }
+
+  .el-loyalty-history article > div,
+  .el-loyalty-history article span {
+    min-width: 0;
+  }
+
+  .el-loyalty-history strong,
+  .el-loyalty-history small {
+    overflow-wrap: anywhere;
+  }
+
+  .el-account-loading {
+    min-height: 420px;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .el-account-loading span {
+    height: 126px;
+    border-radius: 18px;
+  }
+
   .el-mobile-nav {
     inset-inline: 12px;
   }
