@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { ProductCard } from "@/components/store/ProductCard";
 import { StoreFooter } from "@/components/store/StoreFooter";
 import { StoreHeader } from "@/components/store/StoreHeader";
@@ -23,53 +23,67 @@ type CartState = "idle" | "adding" | "added" | "error";
 const copy = {
   en: {
     media: "PRODUCT MEDIA",
+    breadcrumb: "Product breadcrumb",
+    store: "Store",
     inStock: "In stock — local availability",
     onRequest: "Available on request",
+    outOfStock: "Currently out of stock",
     vat: "VAT included · Secure payments · Installment options may be available",
     add: "Add to cart",
     adding: "Adding…",
     added: "Added to cart",
+    unavailable: "Currently unavailable",
     buy: "Buy now",
     warranty: "local warranty",
     delivery: "Tracked nationwide delivery",
     returns: "30-day return eligibility applies",
-    technical: "Technical depth, when you want it.",
+    technical: "Technical details",
     overview: "Overview",
     specs: "Technical specifications",
     support: "Warranty & support",
     deliveryTab: "Delivery",
     compatibility: "Compatibility depends on the complete build. Confirm PSU, case clearance and platform before checkout.",
-    related: "Compare similar products.",
+    related: "Related products",
     error: "We could not load this product.",
     missing: "This product is no longer available in the catalogue.",
     retry: "Retry",
     back: "Back to catalogue",
     cartError: "Could not update the cart. Try again.",
+    decrease: "Decrease quantity",
+    increase: "Increase quantity",
+    loading: "Loading product",
   },
   ar: {
     media: "صور المنتج",
-    inStock: "متوفر — توافر محلي",
+    breadcrumb: "مسار المنتج",
+    store: "المتجر",
+    inStock: "متوفر في المخزن المحلي",
     onRequest: "متاح حسب الطلب",
+    outOfStock: "غير متوفر حاليًا",
     vat: "السعر شامل الضريبة · دفع آمن · قد تتوفر خيارات تقسيط",
     add: "أضف للسلة",
     adding: "جارٍ الإضافة…",
     added: "تمت الإضافة للسلة",
+    unavailable: "غير متوفر حاليًا",
     buy: "اشترِ الآن",
     warranty: "ضمان محلي",
     delivery: "توصيل متتبع لكل المحافظات",
     returns: "تطبق أهلية الإرجاع خلال 30 يومًا",
-    technical: "التفاصيل التقنية، وقت ما تحتاجها.",
+    technical: "التفاصيل التقنية",
     overview: "نظرة عامة",
     specs: "المواصفات التقنية",
     support: "الضمان والدعم",
     deliveryTab: "التوصيل",
     compatibility: "التوافق يعتمد على التجميعة كاملة. راجع مزود الطاقة ومساحة الكيسة والمنصة قبل إتمام الطلب.",
-    related: "قارن بمنتجات مشابهة.",
+    related: "منتجات مرتبطة",
     error: "تعذر تحميل المنتج.",
     missing: "المنتج ده مش متاح حاليًا في الكتالوج.",
     retry: "حاول تاني",
     back: "ارجع للكتالوج",
     cartError: "تعذر تحديث السلة. حاول تاني.",
+    decrease: "قلّل الكمية",
+    increase: "زوّد الكمية",
+    loading: "جارٍ تحميل المنتج",
   },
 } as const;
 
@@ -123,9 +137,12 @@ export function ProductDetailPage() {
   const product = state.status === "ready" ? state.product : undefined;
   const gallery = product?.gallery.length ? product.gallery : product ? [product.image] : [];
   const keySpecs = useMemo(() => product?.specs.slice(0, 4) ?? [], [product]);
+  const isInStock = Boolean(product && product.stockQty > 0);
+  const canPurchase = Boolean(product && (isInStock || product.dropshipEnabled));
+  const maximumQuantity = product ? (isInStock ? product.stockQty : 10) : 1;
 
   async function addToCart() {
-    if (!product || cartState === "adding") return false;
+    if (!product || !canPurchase || cartState === "adding") return false;
     setCartState("adding");
     try {
       const session = await restoreSession();
@@ -153,7 +170,7 @@ export function ProductDetailPage() {
       <div className="el-storefront__shell">
         <StoreHeader locale={locale} onLocaleChange={setLocale} />
 
-        {state.status === "loading" ? <PdpSkeleton /> : null}
+        {state.status === "loading" ? <PdpSkeleton label={text.loading} /> : null}
         {state.status === "error" || state.status === "missing" ? (
           <main className="el-pdp-state">
             <StoreIcon name={state.status === "missing" ? "search" : "returns"} size={32} />
@@ -166,8 +183,14 @@ export function ProductDetailPage() {
         ) : null}
 
         {product ? (
-          <main>
-            <div className="el-pdp-crumb">STORE / {product.categoryName} / {product.brand} / {product.sku}</div>
+          <main className="el-pdp-content">
+            <nav aria-label={text.breadcrumb} className="el-pdp-crumb">
+              <Link to="/">{text.store}</Link>
+              <span aria-hidden="true">/</span>
+              <Link to={`/catalog?category=${encodeURIComponent(product.category)}`}>{product.categoryName}</Link>
+              <span aria-hidden="true">/</span>
+              <span dir="auto">{product.sku}</span>
+            </nav>
             <section className="el-pdp-hero">
               <div className="el-pdp-media-column">
                 <div className="el-pdp-main-media">
@@ -183,7 +206,14 @@ export function ProductDetailPage() {
                 {gallery.length > 1 ? (
                   <div className="el-pdp-thumbnails">
                     {gallery.slice(0, 6).map((image, index) => (
-                      <button className={selectedImage === index ? "is-active" : ""} key={`${image}-${index}`} onClick={() => setSelectedImage(index)} type="button">
+                      <button
+                        aria-label={`${text.media} ${index + 1}`}
+                        aria-pressed={selectedImage === index}
+                        className={selectedImage === index ? "is-active" : ""}
+                        key={`${image}-${index}`}
+                        onClick={() => setSelectedImage(index)}
+                        type="button"
+                      >
                         <img alt="" onError={(event) => { event.currentTarget.hidden = true; }} src={image} />
                       </button>
                     ))}
@@ -192,38 +222,42 @@ export function ProductDetailPage() {
               </div>
 
               <div className="el-pdp-purchase">
-                <p className="el-commerce-crumb">{product.brand} / {product.categoryName} / SKU {product.sku}</p>
-                <h1>{product.name}</h1>
-                <p className="el-pdp-description">{product.longDescription ?? product.description}</p>
+                <p className="el-commerce-crumb" dir="auto">{product.brand} / {product.categoryName} / SKU {product.sku}</p>
+                <h1 dir="auto">{product.name}</h1>
+                <p className="el-pdp-description" dir="auto">{product.longDescription ?? product.description}</p>
 
                 <div className="el-pdp-key-specs">
                   {keySpecs.map((spec) => (
                     <div key={spec.code ?? spec.label}>
-                      <span>{spec.label}</span>
-                      <strong>{spec.value}</strong>
+                      <span dir="auto">{spec.label}</span>
+                      <strong dir="auto">{spec.value}</strong>
                     </div>
                   ))}
                 </div>
 
-                <p className={product.stockQty > 0 ? "el-stock-status is-in-stock" : "el-stock-status"}>
-                  <i /> {product.stockQty > 0 ? text.inStock : text.onRequest}
+                <p
+                  aria-live="polite"
+                  className={isInStock ? "el-stock-status is-in-stock" : product.dropshipEnabled ? "el-stock-status is-on-request" : "el-stock-status is-out-of-stock"}
+                >
+                  <StoreIcon name={isInStock ? "check" : product.dropshipEnabled ? "clock" : "returns"} size={16} />
+                  {isInStock ? text.inStock : product.dropshipEnabled ? text.onRequest : text.outOfStock}
                 </p>
-                <strong className="el-pdp-price">{formatEgp(product.priceEgp, locale)} EGP</strong>
+                <strong className="el-pdp-price" dir="ltr">{formatEgp(product.priceEgp, locale)} EGP</strong>
                 <p className="el-pdp-vat">{text.vat}</p>
 
                 <div className="el-purchase-actions">
                   <div className="el-quantity-control">
-                    <button aria-label="Decrease quantity" disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} type="button"><StoreIcon name="minus" size={16} /></button>
+                    <button aria-label={text.decrease} disabled={quantity <= 1} onClick={() => setQuantity((value) => Math.max(1, value - 1))} type="button"><StoreIcon name="minus" size={16} /></button>
                     <span>{quantity}</span>
-                    <button aria-label="Increase quantity" disabled={quantity >= Math.max(1, product.stockQty || 10)} onClick={() => setQuantity((value) => value + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
+                    <button aria-label={text.increase} disabled={quantity >= maximumQuantity} onClick={() => setQuantity((value) => Math.min(maximumQuantity, value + 1))} type="button"><StoreIcon name="plus" size={16} /></button>
                   </div>
-                  <button className="el-add-cart-button" disabled={cartState === "adding"} onClick={addToCart} type="button">
+                  <button className="el-add-cart-button" disabled={!canPurchase || cartState === "adding"} onClick={addToCart} type="button">
                     <StoreIcon name="cart" size={18} />
-                    {cartState === "adding" ? text.adding : cartState === "added" ? text.added : text.add}
+                    {!canPurchase ? text.unavailable : cartState === "adding" ? text.adding : cartState === "added" ? text.added : text.add}
                   </button>
-                  <button className="el-buy-now-button" disabled={cartState === "adding"} onClick={buyNow} type="button">{text.buy} <StoreIcon name="arrow" size={18} /></button>
+                  <button className="el-buy-now-button" disabled={!canPurchase || cartState === "adding"} onClick={buyNow} type="button">{text.buy} <StoreIcon name="arrow" size={18} /></button>
                 </div>
-                {cartState === "error" ? <p className="el-cart-error">{text.cartError}</p> : null}
+                {cartState === "error" ? <p aria-live="assertive" className="el-cart-error" role="alert">{text.cartError}</p> : null}
 
                 <div className="el-pdp-service-notes">
                   <span><StoreIcon name="warranty" size={14} /> {product.warrantyMonths}m {text.warranty}</span>
@@ -243,7 +277,7 @@ export function ProductDetailPage() {
               </div>
               <div className="el-spec-table">
                 {product.specs.length ? product.specs.map((spec) => (
-                  <div key={spec.code ?? spec.label}><span>{spec.label}</span><strong>{spec.value}</strong></div>
+                  <div key={spec.code ?? spec.label}><span dir="auto">{spec.label}</span><strong dir="auto">{spec.value}</strong></div>
                 )) : <div><span>SKU</span><strong>{product.sku}</strong></div>}
                 <div><span>{locale === "ar" ? "الضمان" : "Warranty"}</span><strong>{product.warrantyMonths} months</strong></div>
               </div>
@@ -265,9 +299,9 @@ export function ProductDetailPage() {
   );
 }
 
-function PdpSkeleton() {
+function PdpSkeleton({ label }: { label: string }) {
   return (
-    <main className="el-pdp-skeleton" aria-label="Loading product">
+    <main aria-busy="true" aria-label={label} className="el-pdp-skeleton">
       <div />
       <div />
     </main>

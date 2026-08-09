@@ -40,9 +40,9 @@ export function ProductCard({ product, locale }: ProductCardProps) {
         />
         <span className="el-product-card__badge">{labels.badge}</span>
       </div>
-      <p className="el-product-card__brand">{product.brand} / {product.categoryName}</p>
-      <h3>{product.name}</h3>
-      <p className="el-product-card__spec">{decisionSpec(product)}</p>
+      <p className="el-product-card__brand" dir="auto">{product.brand} / {product.categoryName}</p>
+      <h3 dir="auto">{product.name}</h3>
+      <p className="el-product-card__spec" dir="auto">{decisionSpec(product)}</p>
       <div className="el-product-card__price-row">
         <strong>{formatEgp(product.priceEgp, locale)} EGP</strong>
         <span className={inStock ? "is-in-stock" : "is-on-request"}>{labels.stock}</span>

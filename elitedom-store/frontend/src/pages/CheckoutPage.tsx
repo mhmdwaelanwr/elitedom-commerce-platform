@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent, type InputHTMLAttribu
 import { Link, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreFooter } from "@/components/store/StoreFooter";
+import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreIcon, type StoreIconName } from "@/components/store/StoreIcon";
 import { useStoreLocale } from "@/hooks/useStoreLocale";
 import { submitCheckout } from "@/lib/api";
@@ -29,7 +30,7 @@ const copy = {
     instapay: "InstaPay", instapayMeta: "Pay using your InstaPay account", cod: "Cash on delivery", codMeta: "Available for eligible orders",
     reviewMeta: "Delivery address · payment method · products · final total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
     qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Total",
-    encrypted: "Encrypted checkout · Protected over HTTPS", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
+    encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
     retry: "Retry", redirecting: "Order created. Redirecting to secure payment…", successTitle: "Order confirmed.",
     successText: "Your order is confirmed and can be tracked from your account once you sign in.", pendingTitle: "Order created — payment pending.",
     pendingText: "The order exists, but the payment redirect was not returned. Do not place a duplicate order; retry payment from the order when available.",
@@ -44,7 +45,7 @@ const copy = {
     instapay: "InstaPay", instapayMeta: "ادفع من حساب InstaPay", cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
     reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي النهائي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
     qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي",
-    encrypted: "دفع مشفر · اتصال HTTPS آمن", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
+    encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
     redirecting: "تم إنشاء الطلب. جاري التحويل لصفحة الدفع الآمنة…", successTitle: "تم تأكيد الطلب.", successText: "طلبك اتأكد وتقدر تتابعه من حسابك بعد تسجيل الدخول.",
     pendingTitle: "تم إنشاء الطلب — الدفع قيد الانتظار.", pendingText: "الطلب اتسجل، لكن رابط الدفع ما رجعش. ما تعملش طلب مكرر؛ أعد محاولة الدفع من الطلب لما يبقى متاح.",
     failedTitle: "إتمام الطلب ما اكتملش.", continueShopping: "كمّل تسوق", orderLabel: "طلب",
@@ -56,7 +57,7 @@ function formatEgp(value: number, locale: "en" | "ar") {
 }
 
 export function CheckoutPage() {
-  const [locale] = useStoreLocale();
+  const [locale, setLocale] = useStoreLocale();
   const [snapshot, setSnapshot] = useState<GuestCartSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -136,6 +137,7 @@ export function CheckoutPage() {
   return (
     <div className="el-checkout-page">
       <div className="el-storefront__shell">
+        <div className="el-checkout-store-header"><StoreHeader locale={locale} onLocaleChange={setLocale} /></div>
         <header className="el-checkout-header"><Link to="/"><ElitedomBrand /></Link><span><StoreIcon name="warranty" size={16} />{text.secure}</span></header>
         <main>
           <section className="el-checkout-intro"><h1>{text.title}</h1><p>{text.intro}</p><div className="el-checkout-steps"><span className="is-active">01 · {text.delivery}</span><span className="is-active">02 · {text.payment}</span><span>03 · {text.review}</span></div></section>
@@ -145,19 +147,19 @@ export function CheckoutPage() {
           {!loading && !loadError && items.length > 0 ? (
             <form className="el-checkout-layout" onSubmit={placeOrder}>
               <div className="el-checkout-form-stack">
-                <section className="el-checkout-panel">
+                <section className="el-checkout-panel el-checkout-delivery">
                   <PanelHeading number="01" title={text.delivery} />
                   <div className="el-checkout-fields">
-                    <CheckoutField icon="account" label={text.fullName} name="fullName" placeholder={text.fullNamePlaceholder} required />
-                    <CheckoutField icon="mail" label={text.email} name="email" placeholder={text.emailPlaceholder} required type="email" />
+                    <CheckoutField autoComplete="name" icon="account" label={text.fullName} name="fullName" placeholder={text.fullNamePlaceholder} required />
+                    <CheckoutField autoComplete="email" icon="mail" inputMode="email" label={text.email} name="email" placeholder={text.emailPlaceholder} required type="email" />
                     <div className="el-checkout-fields__two">
-                      <CheckoutField icon="phone" label={text.phone} name="phone" pattern="^(?:\+20|0)1[0125][0-9]{8}$" placeholder={text.phonePlaceholder} required type="tel" />
-                      <CheckoutField icon="location" label={text.governorate} name="governorate" placeholder={text.governoratePlaceholder} required />
+                      <CheckoutField autoComplete="tel" icon="phone" inputMode="tel" label={text.phone} name="phone" pattern="^(?:\+20|0)1[0125][0-9]{8}$" placeholder={text.phonePlaceholder} required type="tel" />
+                      <CheckoutField autoComplete="address-level1" icon="location" label={text.governorate} name="governorate" placeholder={text.governoratePlaceholder} required />
                     </div>
-                    <CheckoutField icon="location" label={text.street} minLength={5} name="street" placeholder={text.streetPlaceholder} required />
+                    <CheckoutField autoComplete="street-address" icon="location" label={text.street} minLength={5} name="street" placeholder={text.streetPlaceholder} required />
                   </div>
                 </section>
-                <section className="el-checkout-panel">
+                <section className="el-checkout-panel el-checkout-payment">
                   <PanelHeading number="02" title={text.payment} /><p className="el-checkout-panel__hint">{text.choosePayment}</p>
                   <div className="el-payment-methods">
                     <PaymentMethod active={payment === "card"} icon="payment" meta={text.cardMeta} onSelect={() => setPayment("card")} title={text.card} />
@@ -168,8 +170,13 @@ export function CheckoutPage() {
                 </section>
                 <section className="el-checkout-panel el-checkout-review">
                   <PanelHeading number="03" title={text.review} /><p>{text.reviewMeta}</p>
-                  <button className="el-place-order" disabled={submitState.status === "submitting"} type="submit"><StoreIcon name="check" size={17} />{submitState.status === "submitting" ? text.placing : `${text.placeOrder} — ${formatEgp(subtotal, locale)} EGP`}</button>
+                  <button className="el-place-order" disabled={submitState.status === "submitting"} type="submit">
+                    <StoreIcon name="check" size={17} />
+                    {submitState.status === "submitting" ? text.placing : text.placeOrder}
+                    {submitState.status !== "submitting" ? <span className="el-place-order__total"> — {formatEgp(subtotal, locale)} EGP</span> : null}
+                  </button>
                 </section>
+                <p className="el-checkout-mobile-security">{text.encrypted}</p>
               </div>
               <aside className="el-order-summary el-order-summary--checkout">
                 <h2>{text.yourOrder}</h2>
@@ -192,11 +199,12 @@ function PanelHeading({ number, title }: { number: string; title: string }) {
 }
 
 function CheckoutField({ icon, label, ...inputProps }: { icon: StoreIconName; label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return <label className="el-checkout-field"><span>{label}</span><div><StoreIcon name={icon} size={18} /><input {...inputProps} /></div></label>;
+  const technicalInput = inputProps.type === "email" || inputProps.type === "tel";
+  return <label className="el-checkout-field"><span>{label}</span><div><StoreIcon name={icon} size={18} /><input dir={technicalInput ? "ltr" : "auto"} {...inputProps} /></div></label>;
 }
 
 function PaymentMethod({ active, icon, title, meta, onSelect }: { active: boolean; icon: StoreIconName; title: string; meta: string; onSelect: () => void }) {
-  return <button aria-pressed={active} className={active ? "el-payment-method is-active" : "el-payment-method"} onClick={onSelect} type="button"><span className="el-payment-method__icon"><StoreIcon name={icon} size={22} /></span><span className="el-payment-method__copy"><strong>{title}</strong><small>{meta}</small></span><i /></button>;
+  return <button aria-pressed={active} className={active ? "el-payment-method is-active" : "el-payment-method"} onClick={onSelect} type="button"><span className="el-payment-method__icon"><StoreIcon name={icon} size={22} /></span><span className="el-payment-method__copy"><strong dir="auto">{title}</strong><small dir="auto">{meta}</small></span><i /></button>;
 }
 
 function SummaryRow({ label, value, emphasis = false }: { label: string; value: string; emphasis?: boolean }) {

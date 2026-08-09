@@ -340,6 +340,14 @@
   gap: 20px;
 }
 
+.el-checkout-store-header {
+  display: none;
+}
+
+.el-checkout-mobile-security {
+  display: none;
+}
+
 .el-checkout-header > span {
   display: inline-flex;
   align-items: center;
