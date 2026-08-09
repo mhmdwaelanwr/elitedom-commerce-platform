@@ -1079,6 +1079,162 @@
     border-radius: 18px;
   }
 
+  /* P14.d — Auth responsive and semantic RTL hardening. */
+  .el-auth-page {
+    width: 100%;
+    padding: 14px 18px 40px;
+    overflow-x: clip;
+  }
+
+  .el-auth-topbar {
+    width: 100%;
+    height: 58px;
+    margin-bottom: 14px;
+  }
+
+  .el-auth-topbar .el-brand__wordmark {
+    display: none;
+  }
+
+  .el-auth-topbar .el-brand__mark {
+    width: 44px;
+    height: 50px;
+  }
+
+  .el-auth-secure-pill {
+    display: none;
+  }
+
+  .el-auth-layout {
+    display: block;
+    width: 100%;
+    min-height: 0;
+  }
+
+  .el-auth-control-panel {
+    display: none;
+  }
+
+  .el-auth-card,
+  [dir="rtl"] .el-auth-card {
+    width: min(100%, 538px);
+    min-height: 0;
+    align-items: stretch;
+    gap: 16px;
+    margin: 0 auto;
+    padding: 28px 20px;
+    border-radius: 22px;
+    text-align: start;
+  }
+
+  .el-auth-card > .el-brand--compact {
+    align-self: flex-start;
+  }
+
+  .el-auth-card h2,
+  .el-auth-recovery-panel h2 {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    font-size: 28px;
+    line-height: 1.4;
+    text-align: start;
+  }
+
+  .el-auth-card__intro,
+  .el-auth-switch,
+  .el-auth-legal,
+  .el-auth-inline-note,
+  .el-auth-security-note,
+  .el-auth-error {
+    width: 100%;
+    overflow-wrap: anywhere;
+    text-align: start;
+  }
+
+  .el-auth-provider,
+  .el-auth-form,
+  .el-auth-separator,
+  .el-otp-cells {
+    width: 100%;
+  }
+
+  .el-auth-provider {
+    min-height: 52px;
+    height: auto;
+    padding-block: 9px;
+    touch-action: manipulation;
+  }
+
+  .el-auth-provider > span:last-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+    text-align: start;
+  }
+
+  .el-auth-field > span {
+    text-align: start;
+  }
+
+  .el-auth-field > div {
+    min-height: 54px;
+    height: auto;
+  }
+
+  .el-auth-field input {
+    width: 100%;
+    text-align: start;
+  }
+
+  [dir="rtl"] .el-auth-field input[dir="ltr"] {
+    text-align: right;
+  }
+
+  .el-auth-eye {
+    width: 44px;
+    height: 44px;
+    flex: 0 0 44px;
+    touch-action: manipulation;
+  }
+
+  .el-auth-primary {
+    width: 100%;
+    min-height: 52px;
+    touch-action: manipulation;
+  }
+
+  .el-auth-primary--fit,
+  .el-auth-primary--link {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .el-auth-link,
+  .el-auth-secondary-link,
+  .el-auth-switch a,
+  .el-auth-text-button {
+    display: inline-flex;
+    min-height: 44px;
+    align-items: center;
+    touch-action: manipulation;
+  }
+
+  .el-otp-cells {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .el-otp-cells input {
+    min-height: 44px;
+    border-radius: 11px;
+    font-size: 19px;
+  }
+
+  .el-auth-recovery-panel {
+    min-width: 0;
+  }
+
   .el-mobile-nav {
     inset-inline: 12px;
   }
