@@ -182,7 +182,7 @@ async def remove_from_cart(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).remove_cart_item(
+    return await OrderService(db).remove_from_cart(
         item_id,
         partner_id=partner_id,
         session_id=guest_session_id,
