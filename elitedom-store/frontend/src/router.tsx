@@ -1,5 +1,4 @@
 import { createBrowserRouter } from "react-router-dom";
-import { ThemeToggle } from "@/components/store/ThemeToggle";
 import { AccountPage } from "@/pages/AccountPage";
 import { AuthPage } from "@/pages/AuthPage";
 import { BusinessLandingPage, BusinessRfqPage } from "@/pages/B2BPage";
@@ -37,5 +36,3 @@ export const router = createBrowserRouter([
   },
   { path: "*", element: <NotFoundPage /> },
 ]);
-
-void ThemeToggle;
