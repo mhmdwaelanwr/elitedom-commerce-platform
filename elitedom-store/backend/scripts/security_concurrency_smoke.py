@@ -10,6 +10,10 @@ from httpx import ASGITransport, AsyncClient
 from app.main import app
 
 
+def _test_mobile(prefix: str, suffix: str) -> str:
+    return f"{prefix}{int(suffix[:8], 16) % 100_000_000:08d}"
+
+
 async def _post_with_cookie(path: str, refresh_token: str):
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://security-ci") as client:
@@ -22,7 +26,7 @@ async def _post_with_cookie(path: str, refresh_token: str):
 async def verify_refresh_rotation() -> None:
     suffix = uuid4().hex[:12]
     email = f"refresh-race-{suffix}@example.com"
-    mobile = f"010{int(suffix[:7], 16) % 10_000_000:07d}"
+    mobile = _test_mobile("010", suffix)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://security-ci") as client:
         registered = await client.post(
@@ -56,7 +60,7 @@ async def verify_refresh_rotation() -> None:
 
 async def verify_otp_single_use() -> None:
     suffix = uuid4().hex[:12]
-    mobile = f"011{int(suffix[:7], 16) % 10_000_000:07d}"
+    mobile = _test_mobile("011", suffix)
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://security-ci") as client:
         challenge = await client.post(
