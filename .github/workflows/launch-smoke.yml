@@ -11,6 +11,10 @@ on:
         description: Public HTTPS API origin, without /api/v1
         required: true
         type: string
+      release_ref:
+        description: Exact deployed Git commit SHA expected from /health/live
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ jobs:
     env:
       SITE_URL: ${{ inputs.site_url }}
       API_URL: ${{ inputs.api_url }}
+      RELEASE_REF: ${{ inputs.release_ref }}
 
     steps:
       - name: Check out source
@@ -55,6 +60,15 @@ jobs:
             --api-url "$API_URL" \
             | tee launch-smoke.json
 
+      - name: Verify deployed release provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python elitedom-store/scripts/verify_release.py \
+            --api-url "$API_URL" \
+            --release-ref "$RELEASE_REF" \
+            | tee release-provenance.json
+
       - name: Run real storefront browser gate
         working-directory: elitedom-store/frontend
         env:
@@ -71,6 +85,7 @@ jobs:
           name: launch-evidence-${{ github.run_id }}
           path: |
             launch-smoke.json
+            release-provenance.json
             elitedom-store/frontend/playwright-report
             elitedom-store/frontend/test-results
           if-no-files-found: warn
