@@ -5,9 +5,9 @@ import { StoreFooter } from "@/components/store/StoreFooter";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreIcon, type StoreIconName } from "@/components/store/StoreIcon";
 import { useStoreLocale } from "@/hooks/useStoreLocale";
-import { submitCheckout } from "@/lib/api";
 import { restoreSession } from "@/lib/auth-session";
 import { cartSubtotal, loadGuestCart, type GuestCartSnapshot } from "@/lib/cart-data";
+import { submitRoutedCheckout } from "@/lib/checkout-api";
 import type { CheckoutDetails, CheckoutResult } from "@/types/store";
 import "@/styles/checkout.css";
 
@@ -15,9 +15,9 @@ type PaymentChoice = "card" | "wallet" | "instapay" | "cod";
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
-  | { status: "redirecting"; orderNumber: string }
-  | { status: "success"; orderNumber: string }
-  | { status: "pending"; orderNumber: string }
+  | { status: "redirecting"; orderId: number; orderNumber: string }
+  | { status: "success"; orderId: number; orderNumber: string }
+  | { status: "pending"; orderId: number; orderNumber: string }
   | { status: "error"; message: string };
 
 const copy = {
@@ -116,14 +116,14 @@ export function CheckoutPage() {
 
     setSubmitState({ status: "submitting" });
     try {
-      const result: CheckoutResult = await submitCheckout(details, snapshot.session, snapshot.sessionId);
+      const result: CheckoutResult & { orderId: number } = await submitRoutedCheckout(details, snapshot.session, snapshot.sessionId);
       if (result.paymentGatewayUrl) {
-        setSubmitState({ status: "redirecting", orderNumber: result.orderNumber });
+        setSubmitState({ status: "redirecting", orderId: result.orderId, orderNumber: result.orderNumber });
         window.location.assign(result.paymentGatewayUrl);
         return;
       }
-      if (payment === "cod") setSubmitState({ status: "success", orderNumber: result.orderNumber });
-      else setSubmitState({ status: "pending", orderNumber: result.orderNumber });
+      if (payment === "cod") setSubmitState({ status: "success", orderId: result.orderId, orderNumber: result.orderNumber });
+      else setSubmitState({ status: "pending", orderId: result.orderId, orderNumber: result.orderNumber });
     } catch (error) {
       setSubmitState({ status: "error", message: error instanceof Error ? error.message : text.failedTitle });
     }
@@ -238,7 +238,7 @@ function CheckoutResultPanel({ locale, state, total, onRetry }: { locale: "en" |
       onRetry();
       return;
     }
-    navigate("/account");
+    navigate(`/account/orders/${state.orderId}`);
   }
 
   return (
