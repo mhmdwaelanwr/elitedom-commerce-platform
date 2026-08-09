@@ -46,6 +46,16 @@ def _service(db: AsyncSession, request: Request) -> AuthService:
     )
 
 
+async def _commit_auth_transition(db: AsyncSession) -> None:
+    """Make security state durable before the client can act on the response.
+
+    FastAPI yield-dependency cleanup can complete after response streaming starts.
+    Auth responses are immediately reusable credentials/state transitions, so a
+    following request must never race the request-scoped transaction commit.
+    """
+    await db.commit()
+
+
 def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
@@ -77,7 +87,9 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 @router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(payload: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    return await AuthService(db).register(payload)
+    result = await AuthService(db).register(payload)
+    await _commit_auth_transition(db)
+    return result
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -88,6 +100,7 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     result = await _service(db, request).login(payload)
+    await _commit_auth_transition(db)
     _set_refresh_cookie(response, result.refresh_token)
     return result
 
@@ -100,6 +113,7 @@ async def request_phone_otp(
     db: AsyncSession = Depends(get_db),
 ):
     result = await _service(db, request).request_phone_otp(payload)
+    await _commit_auth_transition(db)
     _no_store(response)
     return result
 
@@ -123,6 +137,7 @@ async def verify_phone_otp(
         .with_for_update()
     )
     result = await _service(db, request).verify_phone_otp(payload)
+    await _commit_auth_transition(db)
     _set_refresh_cookie(response, result.refresh_token)
     return result
 
@@ -135,6 +150,7 @@ async def oauth_login(
     db: AsyncSession = Depends(get_db),
 ):
     result = await _service(db, request).oauth_login(payload)
+    await _commit_auth_transition(db)
     _set_refresh_cookie(response, result.refresh_token)
     return result
 
@@ -167,6 +183,7 @@ async def refresh_token(
         .with_for_update()
     )
     result = await _service(db, request).refresh(token)
+    await _commit_auth_transition(db)
     _set_refresh_cookie(response, result.refresh_token)
     return result
 
@@ -184,6 +201,7 @@ async def recover_password(
         session_id=current_user.get("session_id"),
         new_password=payload.new_password,
     )
+    await _commit_auth_transition(db)
     _clear_refresh_cookie(response)
     return None
 
@@ -212,6 +230,7 @@ async def begin_mfa_enrollment(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
     )
+    await _commit_auth_transition(db)
     _no_store(response)
     return result
 
@@ -228,6 +247,7 @@ async def confirm_mfa_enrollment(
         session_id=current_user.get("session_id"),
         code=payload.code,
     )
+    await _commit_auth_transition(db)
     _no_store(response)
     return result
 
@@ -244,6 +264,7 @@ async def verify_mfa(
         session_id=current_user.get("session_id"),
         code=payload.code,
     )
+    await _commit_auth_transition(db)
     _no_store(response)
     return result
 
@@ -272,6 +293,7 @@ async def revoke_session(
         partner_id=current_user["user_id"],
         session_id=session_id,
     )
+    await _commit_auth_transition(db)
     if session_id == current_user.get("session_id"):
         _clear_refresh_cookie(response)
     return None
@@ -285,6 +307,7 @@ async def logout_all(
     db: AsyncSession = Depends(get_db),
 ):
     result = await _service(db, request).logout_all(partner_id=current_user["user_id"])
+    await _commit_auth_transition(db)
     _clear_refresh_cookie(response)
     return result
 
@@ -300,5 +323,6 @@ async def logout(
         partner_id=current_user["user_id"],
         session_id=current_user.get("session_id"),
     )
+    await _commit_auth_transition(db)
     _clear_refresh_cookie(response)
     return None
