@@ -59,14 +59,13 @@ class PasswordRecoveryService:
 
         partner.password_hash = hash_password(new_password)
 
-        # Password recovery is an account-takeover boundary: terminate every
-        # other refresh-capable session while leaving the freshly verified OTP
-        # session available to finish the recovery flow.
+        # Password recovery is an account-takeover boundary. Revoke every
+        # refresh-capable session, including the OTP session that authorized
+        # the reset, so the customer must sign in again with the new secret.
         await self.db.execute(
             update(AuthSession)
             .where(
                 AuthSession.partner_id == partner_id,
-                AuthSession.id != session_id,
                 AuthSession.revoked_at.is_(None),
             )
             .values(revoked_at=now, revoke_reason="password_recovery")
