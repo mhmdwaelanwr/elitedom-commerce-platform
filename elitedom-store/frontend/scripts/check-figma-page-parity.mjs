@@ -55,7 +55,7 @@ const routeContracts = [
   ["/catalog", "CatalogPage"],
   ["/products/:productId", "ProductDetailPage"],
   ["/cart", "CartPage"],
-  ["/checkout", "CheckoutPage"],
+  ["/checkout", "CheckoutRoute"],
   ["/auth", "AuthPage"],
   ["/auth/create", "AuthPage"],
   ["/auth/otp", "AuthPage"],
@@ -77,6 +77,7 @@ for (const [route, component] of routeContracts) {
 
 const storeHeader = source("src/components/store/StoreHeader.tsx");
 const authShell = source("src/components/auth/AuthShell.tsx");
+const checkoutThemeRoute = source("src/pages/CheckoutThemeRoute.tsx");
 const adminOperations = source("src/pages/admin/AdminOperationsPage.tsx");
 const adminThemeRoute = source("src/pages/admin/AdminThemeRoute.tsx");
 const theme = source("src/lib/theme.ts");
@@ -85,6 +86,7 @@ const globals = source("src/styles/globals.css");
 for (const [surface, text] of [
   ["store header", storeHeader],
   ["authentication shell", authShell],
+  ["checkout and checkout-result shell", checkoutThemeRoute],
   ["admin operations", adminOperations],
   ["launch control", adminThemeRoute],
 ]) {
