@@ -7,7 +7,7 @@ networks:
   elitedom-net:
     ipam:
       config:
-        - subnet: "${ELITEDOM_DOCKER_SUBNET:-172.30.0.0/24}"
+        - subnet: "${ELITEDOM_NETWORK_SUBNET:-172.28.0.0/24}"
 
 services:
   fastapi:
@@ -17,8 +17,9 @@ services:
       APP_VERSION: "${RELEASE_REF:?Set RELEASE_REF to the deployed Git commit SHA}"
       STAFF_MFA_REQUIRED: "true"
       RATE_LIMIT_BACKEND: redis
-      # Only the pinned Nginx Proxy Manager peer may supply X-Forwarded-For.
-      TRUSTED_PROXY_IPS: "${NGINX_PROXY_INTERNAL_IP:-172.30.0.10}"
+      # The production proxy gets the same stable internal address that the
+      # application trusts for forwarded client identity.
+      TRUSTED_PROXY_IPS: "${NGINX_PROXY_INTERNAL_IP:-172.28.0.10}"
 
   celery-worker:
     environment:
@@ -43,4 +44,4 @@ services:
   nginx-proxy-manager:
     networks:
       elitedom-net:
-        ipv4_address: "${NGINX_PROXY_INTERNAL_IP:-172.30.0.10}"
+        ipv4_address: "${NGINX_PROXY_INTERNAL_IP:-172.28.0.10}"

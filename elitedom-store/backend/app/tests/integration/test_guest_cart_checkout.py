@@ -1,6 +1,8 @@
 """Integration coverage for guest cart ownership and checkout conversion."""
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
 from httpx import AsyncClient
@@ -8,7 +10,8 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Cart, Partner, ProductTemplate, SaleOrder
-from app.tests.auth_helpers import authorization as _authorization
+from app.modules.auth.models import AuthSession
+from app.shared.security import create_access_token
 
 
 async def _create_product(db: AsyncSession) -> ProductTemplate:
@@ -23,6 +26,29 @@ async def _create_product(db: AsyncSession) -> ProductTemplate:
     db.add(product)
     await db.flush()
     return product
+
+
+async def _authorization(db: AsyncSession, customer: Partner) -> dict[str, str]:
+    session_id = str(uuid4())
+    db.add(
+        AuthSession(
+            id=session_id,
+            partner_id=customer.id,
+            refresh_token_hash="0" * 64,
+            auth_method="test",
+            expires_at=datetime.now(UTC) + timedelta(days=1),
+        )
+    )
+    await db.flush()
+    access_token = create_access_token(
+        {
+            "sub": str(customer.id),
+            "email": customer.email,
+            "role": customer.role,
+            "sid": session_id,
+        }
+    )
+    return {"Authorization": f"Bearer {access_token}"}
 
 
 @pytest.mark.asyncio
@@ -151,7 +177,7 @@ async def test_authenticated_cart_and_checkout_remain_partner_owned(
     db_session.add(customer)
     await db_session.flush()
 
-    authorization = _authorization(customer)
+    authorization = await _authorization(db_session, customer)
 
     add_response = await client.post(
         "/api/v1/orders/cart/items?session_id=ignored-for-authenticated-user",
@@ -196,7 +222,7 @@ async def test_authenticated_cart_sync_merges_only_the_requested_guest_session(
     assert guest_cart_response.status_code == 200
     guest_cart_id = guest_cart_response.json()["id"]
 
-    authorization = _authorization(customer)
+    authorization = await _authorization(db_session, customer)
     own_cart_response = await client.post(
         "/api/v1/orders/cart/items",
         json={"product_id": product.id, "quantity": 2},

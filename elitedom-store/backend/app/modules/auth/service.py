@@ -213,7 +213,7 @@ class AuthService:
         )
 
     async def verify_phone_otp(self, request: OtpVerifyRequest) -> LoginResponse:
-        """Atomically consume a phone challenge and sign in or create the phone owner."""
+        """Consume a phone challenge and sign in or create the phone owner."""
         now = _now()
         challenge = await self.db.scalar(
             select(OtpChallenge)
@@ -253,23 +253,20 @@ class AuthService:
         return await self._issue_tokens(partner, auth_method="phone_otp")
 
     async def refresh(self, refresh_token: str) -> LoginResponse:
-        """Atomically rotate a tracked refresh credential and reject replay."""
+        """Rotate a refresh credential and reject replayed or revoked tokens."""
         payload = decode_token(refresh_token)
         if payload.get("type") != "refresh":
             raise TokenExpiredError()
 
         user_id = payload.get("sub")
-        if user_id is None:
-            raise InvalidCredentialsError()
-        partner = await self.db.scalar(select(Partner).where(Partner.id == int(user_id)))
-        if not partner or not partner.is_active:
+        session_id = payload.get("sid")
+        if user_id is None or not session_id:
+            # Stateless compatibility credentials cannot participate in logout,
+            # replay detection, or atomic rotation, so they are no longer accepted.
             raise InvalidCredentialsError()
 
-        session_id = payload.get("sid")
-        if not session_id:
-            # Legacy stateless refresh credentials cannot participate in
-            # session revocation or one-time rotation. Fail closed instead of
-            # recreating a tracked session from a replayable bearer token.
+        partner = await self.db.scalar(select(Partner).where(Partner.id == int(user_id)))
+        if not partner or not partner.is_active:
             raise InvalidCredentialsError()
 
         auth_session = await self.db.scalar(

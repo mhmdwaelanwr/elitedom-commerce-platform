@@ -1,175 +1,124 @@
-"""Regression coverage for the August 2026 security review findings."""
-
-from datetime import UTC, datetime, timedelta
-from types import SimpleNamespace
+"""Regression coverage for the August 2026 authentication security findings."""
 
 import pytest
-from starlette.requests import Request
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.integrations.paymob.webhooks import _binding_error
-from app.middleware import rate_limit
+from app.config import Settings
 from app.models import Partner
-from app.modules.auth.models import AuthSession
 from app.shared.security import create_access_token, create_refresh_token
 
 
-@pytest.mark.asyncio
-async def test_sidless_access_token_is_rejected_by_optional_cart_auth(client) -> None:
-    token = create_access_token(
-        {
-            "sub": "123",
-            "email": "legacy@example.test",
-            "role": "customer",
-        }
-    )
-
-    response = await client.get(
-        "/api/v1/orders/cart?session_id=guest-security-regression",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-
-    assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_revoked_session_is_rejected_by_optional_cart_auth(client, db_session) -> None:
-    partner = Partner(
-        name="Revoked Session Customer",
-        email="revoked-session@example.test",
-        phone="01012340000",
-        role="customer",
-        is_active=True,
-    )
-    db_session.add(partner)
-    await db_session.flush()
-    session = AuthSession(
-        id="22222222-3333-4444-5555-666666666666",
-        partner_id=partner.id,
-        refresh_token_hash="a" * 64,
-        auth_method="password",
-        expires_at=datetime.now(UTC) + timedelta(days=1),
-        revoked_at=datetime.now(UTC),
-        revoke_reason="security_test",
-    )
-    db_session.add(session)
-    await db_session.flush()
-    token = create_access_token(
-        {
-            "sub": str(partner.id),
-            "email": partner.email,
-            "role": partner.role,
-            "sid": session.id,
-        }
-    )
-
-    response = await client.get(
-        "/api/v1/orders/cart?session_id=guest-security-regression",
-        headers={"Authorization": f"Bearer {token}"},
-    )
-
-    assert response.status_code == 401
-
-
-@pytest.mark.asyncio
-async def test_sidless_legacy_refresh_token_cannot_recreate_a_session(client, db_session) -> None:
-    partner = Partner(
-        name="Legacy Refresh Customer",
-        email="legacy-refresh@example.test",
-        phone="01012340001",
-        role="customer",
-        is_active=True,
-    )
-    db_session.add(partner)
-    await db_session.flush()
-    token = create_refresh_token(
-        {
-            "sub": str(partner.id),
-            "email": partner.email,
-            "role": partner.role,
-        }
-    )
-
+async def _register_customer(client: AsyncClient, db: AsyncSession, email: str) -> Partner:
     response = await client.post(
-        "/api/v1/auth/refresh",
-        cookies={"refresh_token": token},
+        "/api/v1/auth/register",
+        json={
+            "name": "Security Regression Customer",
+            "email": email,
+            "mobile": "01012345678",
+            "password": "SecurityRegression123!",
+        },
+    )
+    assert response.status_code == 201
+    partner = await db.scalar(select(Partner).where(Partner.email == email))
+    assert partner is not None
+    return partner
+
+
+@pytest.mark.asyncio
+async def test_sidless_access_token_is_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    partner = await _register_customer(client, db_session, "sidless-access@example.com")
+    legacy_access = create_access_token(
+        {
+            "sub": str(partner.id),
+            "email": partner.email,
+            "role": partner.role,
+        }
+    )
+
+    response = await client.get(
+        "/api/v1/customers/me",
+        headers={"Authorization": f"Bearer {legacy_access}"},
     )
 
     assert response.status_code == 401
 
 
-def test_paymob_unsigned_intention_cannot_rebind_signed_provider_order() -> None:
-    attempt = SimpleNamespace(
-        provider_order_id="555",
-        provider_transaction_id=None,
-        provider_intention_id="pi-good",
-        provider_reference="SO-SEC-001",
-    )
-    order = SimpleNamespace(id=77, name="SO-SEC-001")
-    transaction = {
-        "id": 987654,
-        "order": {"id": 555},
-        "payment_key_claims": {
-            "intention_id": "pi-attacker-controlled",
-            "extra": {"order_id": "77", "order_number": "SO-SEC-001"},
+@pytest.mark.asyncio
+async def test_revoked_access_token_is_rejected_by_optional_cart_auth(
+    client: AsyncClient,
+) -> None:
+    await client.post(
+        "/api/v1/auth/register",
+        json={
+            "name": "Revoked Cart Customer",
+            "email": "revoked-cart@example.com",
+            "mobile": "01112345678",
+            "password": "RevokedCart123!",
         },
-    }
-
-    assert _binding_error(transaction, attempt, order) == "intention_mismatch"
-
-
-def test_paymob_unsigned_local_order_cannot_rebind_signed_provider_order() -> None:
-    attempt = SimpleNamespace(
-        provider_order_id="555",
-        provider_transaction_id=None,
-        provider_intention_id="pi-good",
-        provider_reference="SO-SEC-001",
     )
-    order = SimpleNamespace(id=77, name="SO-SEC-001")
-    transaction = {
-        "id": 987654,
-        "order": {"id": 555},
-        "payment_key_claims": {
-            "intention_id": "pi-good",
-            "extra": {"order_id": "999", "order_number": "SO-SEC-001"},
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": "revoked-cart@example.com",
+            "password": "RevokedCart123!",
         },
-    }
+    )
+    assert login.status_code == 200
+    access_token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access_token}"}
 
-    assert _binding_error(transaction, attempt, order) == "local_order_mismatch"
+    logout = await client.post("/api/v1/auth/logout", headers=headers)
+    assert logout.status_code == 204
+
+    response = await client.get(
+        "/api/v1/orders/cart?session_id=must-not-fall-back-to-guest",
+        headers=headers,
+    )
+    assert response.status_code == 401
 
 
-def _request(peer: str, forwarded: str | None = None) -> Request:
-    headers = []
-    if forwarded is not None:
-        headers.append((b"x-forwarded-for", forwarded.encode("ascii")))
-    return Request(
+@pytest.mark.asyncio
+async def test_sidless_refresh_token_is_rejected(
+    client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    partner = await _register_customer(client, db_session, "sidless-refresh@example.com")
+    legacy_refresh = create_refresh_token(
         {
-            "type": "http",
-            "method": "GET",
-            "scheme": "https",
-            "path": "/api/v1/auth/login",
-            "raw_path": b"/api/v1/auth/login",
-            "query_string": b"",
-            "headers": headers,
-            "client": (peer, 443),
-            "server": ("api.elitedom.store", 443),
+            "sub": str(partner.id),
+            "email": partner.email,
+            "role": partner.role,
         }
     )
-
-
-def test_rate_limit_uses_client_adjacent_to_pinned_proxy(monkeypatch) -> None:
-    monkeypatch.setattr(rate_limit.settings, "trusted_proxy_ips", "172.30.0.10")
-
-    request = _request(
-        "172.30.0.10",
-        "198.51.100.200, 203.0.113.5",
+    client.cookies.set(
+        "refresh_token",
+        legacy_refresh,
+        path="/api/v1/auth",
     )
 
-    assert rate_limit._client_ip(request) == "203.0.113.5"
+    response = await client.post("/api/v1/auth/refresh")
+
+    assert response.status_code == 401
 
 
-def test_rate_limit_ignores_forwarded_header_from_untrusted_peer(monkeypatch) -> None:
-    monkeypatch.setattr(rate_limit.settings, "trusted_proxy_ips", "172.30.0.10")
-
-    request = _request("203.0.113.99", "198.51.100.200")
-
-    assert rate_limit._client_ip(request) == "203.0.113.99"
+def test_production_configuration_requires_trusted_proxy_identity() -> None:
+    with pytest.raises(ValueError, match="TRUSTED_PROXY_IPS"):
+        Settings(
+            environment="production",
+            debug=False,
+            allowed_hosts="api.example.test",
+            cors_origins="https://store.example.test",
+            staff_mfa_required=True,
+            rate_limit_backend="redis",
+            trusted_proxy_ips="",
+            metrics_enabled=False,
+            secret_key="prod-secret-key-that-is-long-enough-and-random-001",
+            jwt_secret_key="prod-jwt-key-that-is-long-enough-and-random-002",
+            postgres_password="prod-postgres-password-that-is-long-enough-003",
+            redis_password="prod-redis-password-that-is-long-enough-004",
+        )

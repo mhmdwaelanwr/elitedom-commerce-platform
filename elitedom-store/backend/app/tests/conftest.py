@@ -18,6 +18,7 @@ os.environ.update(
         "ODOO_SYNC_ENABLED": "false",
         "ODOO_WEBHOOKS_ENABLED": "true",
         "ODOO_WEBHOOK_SECRET": "test-odoo-webhook-secret-that-is-long-enough-for-validation",
+        "TRUSTED_PROXY_IPS": "10.0.0.1",
     }
 )
 

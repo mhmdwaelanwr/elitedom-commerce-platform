@@ -80,27 +80,28 @@ def decode_token(token: str) -> dict:
         raise InvalidCredentialsError() from None
 
 
-async def _validate_access_payload(payload: dict, db: AsyncSession) -> dict:
-    """Validate an access-token payload against its mandatory tracked session."""
+async def validate_access_token(token: str, db: AsyncSession) -> dict:
+    """Validate one access token against its mandatory tracked session."""
+    payload = decode_token(token)
     if payload.get("type") != "access":
         raise InvalidCredentialsError()
 
     user_id = payload.get("sub")
     session_id = payload.get("sid")
     if user_id is None or not session_id:
-        # Stateful sessions are now a token-boundary invariant. Legacy sid-less
-        # access tokens cannot be represented by logout/revocation state.
+        # Stateless compatibility access tokens cannot participate in logout,
+        # logout-all, MFA session state, or device revocation, so fail closed.
         raise InvalidCredentialsError()
 
     try:
-        partner_id = int(user_id)
+        normalized_user_id = int(user_id)
     except (TypeError, ValueError) as error:
         raise InvalidCredentialsError() from error
 
     active_session = await db.scalar(
         select(AuthSession.id).where(
             AuthSession.id == str(session_id),
-            AuthSession.partner_id == partner_id,
+            AuthSession.partner_id == normalized_user_id,
             AuthSession.revoked_at.is_(None),
             AuthSession.expires_at > func.now(),
         )
@@ -109,7 +110,7 @@ async def _validate_access_payload(payload: dict, db: AsyncSession) -> dict:
         raise InvalidCredentialsError()
 
     return {
-        "user_id": partner_id,
+        "user_id": normalized_user_id,
         "email": payload.get("email"),
         "role": payload.get("role"),
         "session_id": str(session_id),
@@ -123,17 +124,7 @@ async def get_current_user(
     """Validate an access token and its tracked device session."""
     if credentials is None:
         raise InvalidCredentialsError()
-    return await _validate_access_payload(decode_token(credentials.credentials), db)
-
-
-async def get_optional_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
-    db: AsyncSession = Depends(get_db),
-) -> Optional[dict]:
-    """Use guest mode only when no bearer token is supplied; otherwise fully validate it."""
-    if credentials is None:
-        return None
-    return await _validate_access_payload(decode_token(credentials.credentials), db)
+    return await validate_access_token(credentials.credentials, db)
 
 
 def require_role(*allowed_roles: UserRole):

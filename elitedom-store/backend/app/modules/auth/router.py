@@ -1,11 +1,13 @@
 """Authentication endpoints for password, phone OTP, OAuth, sessions, and staff MFA."""
 
 from fastapi import APIRouter, Depends, Request, Response
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
 from app.modules.auth.mfa_service import AdminMfaService
+from app.modules.auth.models import AuthSession, OtpChallenge
 from app.modules.auth.password_recovery import PasswordRecoveryService
 from app.modules.auth.schemas import (
     LoginRequest,
@@ -26,7 +28,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.service import AuthService
 from app.shared.exceptions import InvalidCredentialsError
-from app.shared.security import get_current_user
+from app.shared.security import decode_token, get_current_user
 
 router = APIRouter()
 settings = get_settings()
@@ -109,6 +111,17 @@ async def verify_phone_otp(
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    # Serialize all verification attempts for one challenge. AuthService then
+    # performs its existing attempt/expiry/hash checks while this row lock is
+    # held until the request transaction commits.
+    await db.scalar(
+        select(OtpChallenge.id)
+        .where(
+            OtpChallenge.id == payload.challenge_id,
+            OtpChallenge.mobile == payload.mobile,
+        )
+        .with_for_update()
+    )
     result = await _service(db, request).verify_phone_otp(payload)
     _set_refresh_cookie(response, result.refresh_token)
     return result
@@ -135,6 +148,24 @@ async def refresh_token(
     token = request.cookies.get("refresh_token")
     if not token:
         raise InvalidCredentialsError()
+
+    # Stateful sessions are now mandatory. Reject legacy sid-less refresh
+    # credentials rather than allowing replayable compatibility upgrades.
+    payload = decode_token(token)
+    if payload.get("type") != "refresh":
+        raise InvalidCredentialsError()
+    session_id = payload.get("sid")
+    if not session_id:
+        raise InvalidCredentialsError()
+
+    # Serialize refresh rotation for one session. The service checks the old
+    # token hash and replaces it while this lock is held, so two concurrent
+    # requests cannot both consume the same refresh credential.
+    await db.scalar(
+        select(AuthSession.id)
+        .where(AuthSession.id == str(session_id))
+        .with_for_update()
+    )
     result = await _service(db, request).refresh(token)
     _set_refresh_cookie(response, result.refresh_token)
     return result

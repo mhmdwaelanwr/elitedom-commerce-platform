@@ -6,6 +6,7 @@ Shopping cart, checkout, cancellation, and legacy order-state management.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -31,9 +32,10 @@ from app.shared.exceptions import (
 from app.shared.schemas import OrderState, PaymentMethod
 from app.shared.security import (
     get_current_user,
-    get_optional_current_user,
     require_permission,
     require_staff_access,
+    security_scheme,
+    validate_access_token,
 )
 
 router = APIRouter()
@@ -53,6 +55,16 @@ async def _has_order_permission(
     except InsufficientPermissionsError:
         return False
     return True
+
+
+async def _get_optional_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[dict]:
+    """Return a session-aware authenticated subject when supplied, otherwise guest mode."""
+    if credentials is None:
+        return None
+    return await validate_access_token(credentials.credentials, db)
 
 
 def _guest_session_id(session_id: Optional[str]) -> str:
@@ -124,7 +136,7 @@ async def sync_cart(
 async def get_cart(
     session_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[dict] = Depends(get_optional_current_user),
+    current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
     return await OrderService(db).get_cart(partner_id=partner_id, session_id=guest_session_id)
@@ -135,7 +147,7 @@ async def add_to_cart(
     request: AddToCartRequest,
     session_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[dict] = Depends(get_optional_current_user),
+    current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
     return await OrderService(db).add_to_cart(
@@ -151,7 +163,7 @@ async def update_cart_item(
     request: UpdateCartItemRequest,
     session_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[dict] = Depends(get_optional_current_user),
+    current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
     return await OrderService(db).update_cart_item(
@@ -167,7 +179,7 @@ async def remove_from_cart(
     item_id: int,
     session_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[dict] = Depends(get_optional_current_user),
+    current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
     return await OrderService(db).remove_from_cart(
@@ -182,7 +194,7 @@ async def checkout(
     request: CheckoutRequest,
     session_id: Optional[str] = Query(default=None),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[dict] = Depends(get_optional_current_user),
+    current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     """Submit checkout and durably snapshot the local stock reservation."""
     requested_session_id = session_id if session_id is not None else request.session_id
