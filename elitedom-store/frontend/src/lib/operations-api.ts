@@ -355,12 +355,3 @@ export async function downloadSalesExport(kind: "csv" | "pdf", session: Customer
     filename: kind === "pdf" ? "elitedom-sales-report.pdf" : "elitedom-sales-report.csv",
   };
 }
-
-export function redeemLoyaltyPoints(input: { order_id: number; points: number }, session: CustomerSession) {
-  return request<{
-    order_id: number;
-    points_redeemed: number;
-    discount_egp: string | number;
-    remaining_points: number;
-  }>("/loyalty/redeem", session, { method: "POST", body: JSON.stringify(input) });
-}
