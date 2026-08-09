@@ -42,9 +42,9 @@
   align-items: center;
   gap: 8px;
   padding: 9px 14px;
-  border: 1px solid var(--color-glass-border, rgba(59, 74, 92, .42));
+  border: 1px solid var(--el-glass-border, rgba(59, 74, 92, .42));
   border-radius: 999px;
-  background: var(--color-glass-panel, rgba(11, 14, 18, .7));
+  background: var(--el-glass-panel, rgba(11, 14, 18, .7));
   backdrop-filter: blur(8px);
   color: var(--el-text-secondary, #aab4c0);
   font-size: 10px;
@@ -78,8 +78,8 @@
 .el-auth-control-panel {
   min-height: 720px;
   padding: 48px 50px;
-  border: 1px solid var(--color-glass-border, rgba(59, 74, 92, .42));
-  background: var(--color-glass-panel, rgba(11, 14, 18, .7));
+  border: 1px solid var(--el-glass-border, rgba(59, 74, 92, .42));
+  background: var(--el-glass-panel, rgba(11, 14, 18, .7));
   backdrop-filter: blur(14px);
   box-shadow: 0 14px 18px rgba(0, 0, 0, .18);
 }
