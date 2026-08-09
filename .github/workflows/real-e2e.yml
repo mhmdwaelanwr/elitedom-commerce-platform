@@ -22,13 +22,21 @@ concurrency:
 
 jobs:
   browser-integration:
-    name: Real browser integration
+    name: Real browser integration and RC UAT
     runs-on: ubuntu-latest
     timeout-minutes: 35
+    env:
+      RC_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      RC_REF: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
     steps:
       - name: Check out source
         uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
 
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -39,14 +47,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat > elitedom-store/.env <<'EOF'
+          [[ "$RC_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          test -n "$RC_REF"
+          cat > elitedom-store/.env <<EOF
           ENVIRONMENT=development
           DEBUG=false
           SECRET_KEY=e2e-app-secret-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           JWT_SECRET_KEY=e2e-jwt-secret-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           APP_NAME=Elitedom Store E2E
-          APP_VERSION=e2e
-          RELEASE_REF=e2e
+          APP_VERSION=$RC_SHA
+          RELEASE_REF=$RC_SHA
           ALLOWED_HOSTS=localhost,127.0.0.1,fastapi
           CORS_ORIGINS=http://127.0.0.1:3000,http://localhost:3000
           LOG_LEVEL=INFO
@@ -84,7 +94,6 @@ jobs:
           FASTAPI_PORT=8000
           FRONTEND_PORT=3000
           ODOO_PORT=18069
-          REDIS_PORT=6379
           E2E_CUSTOMER_EMAIL=e2e-customer@example.com
           E2E_B2B_EMAIL=e2e-b2b@example.com
           E2E_ADMIN_EMAIL=e2e-admin@example.com
@@ -148,14 +157,25 @@ jobs:
           compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
           "${compose[@]}" up -d --wait odoo fastapi frontend celery-worker celery-beat
 
-      - name: Verify stack and Odoo module state
+      - name: Verify stack, release provenance and Odoo module state
         working-directory: elitedom-store/infrastructure
         run: |
           set -euo pipefail
           compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
           curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:8000/health/ready > ../e2e-readiness.json
+          curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:8000/health/live > ../e2e-liveness.json
           curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:3000/ > /dev/null
           curl --fail --silent --show-error --retry 20 --retry-delay 2 http://127.0.0.1:18069/web/login > /dev/null
+          python - "$RC_SHA" ../e2e-liveness.json <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          expected = sys.argv[1].lower()
+          payload = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          if payload.get("status") != "healthy" or str(payload.get("version") or "").lower() != expected:
+              raise SystemExit(f"release provenance mismatch: expected {expected}, got {payload}")
+          PY
           module_state="$("${compose[@]}" exec -T postgres psql -U elitedom -d elitedom_odoo_e2e -tAc "SELECT state FROM ir_module_module WHERE name = 'elitedom_connector'")"
           test "$(echo "$module_state" | xargs)" = "installed"
 
@@ -167,7 +187,7 @@ jobs:
           npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.55.0
           npx playwright install --with-deps chromium
 
-      - name: Run real browser journeys
+      - name: Run P22 real browser journeys
         working-directory: elitedom-store/frontend
         env:
           E2E_SITE_URL: http://127.0.0.1:3000
@@ -179,6 +199,42 @@ jobs:
         run: |
           set -euo pipefail
           npx playwright test --config=playwright.integration.config.mjs
+
+      - name: Reset isolated UAT identities
+        working-directory: elitedom-store/infrastructure
+        run: |
+          set -euo pipefail
+          compose=(docker compose --env-file ../.env -f docker-compose.yml -f docker-compose.e2e.yml)
+          "${compose[@]}" run --rm --no-deps -w /app fastapi sh -lc \
+            'PYTHONPATH=/app python -m app.scripts.seed_e2e' \
+            | tee ../uat-seed.json
+
+      - name: Run P23 responsive RTL theme and role UAT
+        working-directory: elitedom-store/frontend
+        env:
+          E2E_SITE_URL: http://127.0.0.1:3000
+          E2E_API_URL: http://127.0.0.1:8000
+          E2E_CUSTOMER_EMAIL: e2e-customer@example.com
+          E2E_B2B_EMAIL: e2e-b2b@example.com
+          E2E_ADMIN_EMAIL: e2e-admin@example.com
+          E2E_PASSWORD: E2eTest!2026
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.uat.config.mjs
+
+      - name: Build immutable P23 release-candidate manifest
+        working-directory: elitedom-store
+        run: |
+          set -euo pipefail
+          python scripts/build_rc_manifest.py \
+            --candidate-sha "$RC_SHA" \
+            --candidate-ref "$RC_REF" \
+            --event "$GITHUB_EVENT_NAME" \
+            --liveness e2e-liveness.json \
+            --readiness e2e-readiness.json \
+            --integration-report frontend/playwright-integration-report/results.json \
+            --uat-report frontend/playwright-uat-report/results.json \
+            --output rc-manifest.json
 
       - name: Capture Compose logs
         if: always()
@@ -198,9 +254,25 @@ jobs:
           path: |
             elitedom-store/e2e-seed.json
             elitedom-store/e2e-readiness.json
+            elitedom-store/e2e-liveness.json
             elitedom-store/e2e-compose.log
             elitedom-store/frontend/playwright-integration-report
             elitedom-store/frontend/test-results-integration
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Preserve P23 release-candidate evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: p23-release-candidate-${{ github.run_id }}
+          path: |
+            elitedom-store/rc-manifest.json
+            elitedom-store/uat-seed.json
+            elitedom-store/e2e-readiness.json
+            elitedom-store/e2e-liveness.json
+            elitedom-store/frontend/playwright-uat-report
+            elitedom-store/frontend/test-results-uat
           if-no-files-found: warn
           retention-days: 30
 
