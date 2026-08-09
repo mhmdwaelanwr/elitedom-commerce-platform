@@ -85,6 +85,19 @@ def _event_key(transaction: Mapping[str, Any]) -> str:
     return f"transaction:{transaction_id}:{digest}"
 
 
+def _rejected_event_key(transaction: Mapping[str, Any], reason: str) -> str:
+    """Audit rejected callbacks without consuming the accepted event key."""
+    payload_digest = hashlib.sha256(
+        json.dumps(
+            transaction,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode()
+    ).hexdigest()[:24]
+    return f"rejected:{_event_key(transaction)}:{reason}:{payload_digest}"
+
+
 def _callback_type(transaction: Mapping[str, Any]) -> str:
     if _boolean(transaction.get("is_refunded")):
         return "transaction.refunded"
@@ -292,8 +305,20 @@ async def process_paymob_transaction(
 
     validation_error = _validation_error(transaction, attempt, order)
     if validation_error:
+        receipt = await _register_event(
+            db=db,
+            event_key=_rejected_event_key(transaction, validation_error),
+            event_type=callback_type,
+            provider_transaction_id=transaction_id,
+        )
+        if receipt is not None:
+            receipt.attempt_id = attempt.id
+            receipt.order_id = order.id
+            receipt.processing_status = f"rejected_{validation_error}"
+            receipt.processed_at = datetime.now(UTC)
+            await db.flush()
         logger.warning(
-            "Rejected Paymob transaction %s for order %s before consuming idempotency: %s",
+            "Rejected Paymob transaction %s for order %s without consuming accepted idempotency: %s",
             transaction_id,
             order.name,
             validation_error,
