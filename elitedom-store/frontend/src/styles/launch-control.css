@@ -15,12 +15,15 @@
 }
 
 .el-launch-control-page > header > div { display: flex; align-items: center; gap: 13px; }
+.el-launch-control-page > header > div > span { display: grid; gap: 4px; }
+.el-launch-control-page > header > div > span > b { font-size: 11px; }
 .el-launch-control-page > header .el-brand__wordmark { display: none; }
 .el-launch-control-page > header a { color: var(--el-accent-primary); font-size: 10px; }
 
-.el-launch-control-page > section {
-  width: min(100%, 780px);
-  margin: 90px auto 0;
+.el-launch-control-intro,
+.el-launch-readiness {
+  width: min(100%, 980px);
+  margin: 58px auto 0;
   padding: 30px;
   border: 1px solid var(--el-border-subtle);
   border-radius: 22px;
@@ -28,14 +31,118 @@
 }
 
 .el-launch-control-page h1 { margin: 18px 0 10px; font-size: 34px; font-weight: 600; }
-.el-launch-control-page section > p { max-width: 680px; margin: 0; color: var(--el-text-secondary); font-size: 12px; line-height: 1.7; }
-.el-launch-control-page dl { display: grid; margin: 26px 0 0; border-top: 1px solid var(--el-border-subtle); }
-.el-launch-control-page dl > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; padding: 15px 0; border-bottom: 1px solid var(--el-border-subtle); }
+.el-launch-control-intro > p { max-width: 760px; margin: 0; color: var(--el-text-secondary); font-size: 12px; line-height: 1.7; }
+.el-launch-control-intro dl { display: grid; margin: 26px 0 0; border-top: 1px solid var(--el-border-subtle); }
+.el-launch-control-intro dl > div { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 18px; padding: 15px 0; border-bottom: 1px solid var(--el-border-subtle); }
 .el-launch-control-page dt { color: var(--el-text-muted); font-size: 9px; }
 .el-launch-control-page dd { margin: 0; color: var(--el-text-primary); font-family: "Roboto Mono", ui-monospace, monospace; font-size: 9px; }
 
+.el-launch-release-form {
+  width: min(100%, 980px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: 18px auto 0;
+  padding: 18px;
+  border: 1px solid var(--el-border-subtle);
+  border-radius: 16px;
+  background: var(--el-surface-1);
+}
+
+.el-launch-release-form label { display: grid; gap: 7px; }
+.el-launch-release-form label span { color: var(--el-text-muted); font-size: 9px; }
+.el-launch-release-form input {
+  min-height: 43px;
+  padding: 10px 12px;
+  border: 1px solid var(--el-border-subtle);
+  border-radius: 10px;
+  outline: 0;
+  color: var(--el-text-primary);
+  background: var(--el-surface-2);
+  font: inherit;
+  font-size: 10px;
+}
+.el-launch-release-form input:focus { border-color: var(--el-accent-primary); }
+.el-launch-release-form button,
+.el-launch-gates article > button {
+  min-height: 43px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  color: var(--el-action-on-primary);
+  background: var(--el-action-primary);
+  font-size: 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.el-launch-release-form button:disabled { opacity: .5; cursor: default; }
+.el-launch-control-page > .el-admin-error { width: min(100%, 980px); box-sizing: border-box; margin: 14px auto 0; }
+
+.el-launch-readiness > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.el-launch-readiness h2 { margin: 7px 0 0; font-size: 24px; font-weight: 600; }
+.el-launch-overall,
+.el-launch-result {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--el-border-subtle);
+  border-radius: 999px;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.el-launch-overall { min-height: 31px; padding: 6px 11px; }
+.el-launch-result { min-width: 48px; min-height: 25px; padding: 4px 8px; }
+.el-launch-overall.is-ready,
+.el-launch-result.is-pass { color: var(--el-success); border-color: color-mix(in srgb, var(--el-success) 30%, var(--el-border-subtle)); }
+.el-launch-overall.is-conditional,
+.el-launch-result.is-warn { color: var(--el-warning); border-color: color-mix(in srgb, var(--el-warning) 30%, var(--el-border-subtle)); }
+.el-launch-overall.is-blocked,
+.el-launch-result.is-block { color: var(--el-error); border-color: color-mix(in srgb, var(--el-error) 30%, var(--el-border-subtle)); }
+
+.el-launch-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.el-launch-summary article { display: grid; gap: 8px; padding: 14px; border: 1px solid var(--el-border-subtle); border-radius: 12px; background: var(--el-surface-2); }
+.el-launch-summary span { color: var(--el-text-muted); font-size: 8px; text-transform: uppercase; }
+.el-launch-summary strong { font-size: 16px; font-weight: 600; }
+
+.el-launch-gates { display: grid; gap: 10px; }
+.el-launch-gates > article { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(240px, .75fr) auto; gap: 16px; align-items: center; padding: 16px; border: 1px solid var(--el-border-subtle); border-radius: 14px; background: var(--el-surface-2); }
+.el-launch-gate-main { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
+.el-launch-gate-main > div { display: grid; gap: 5px; min-width: 0; }
+.el-launch-gate-main b { font-size: 10px; }
+.el-launch-gate-main small { color: var(--el-text-muted); font-size: 7px; }
+.el-launch-gate-main p { margin: 0; color: var(--el-text-secondary); font-size: 8px; line-height: 1.5; }
+.el-launch-gates article > dl { display: grid; gap: 5px; margin: 0; }
+.el-launch-gates article > dl > div { display: grid; grid-template-columns: 60px minmax(0, 1fr); gap: 8px; }
+.el-launch-gates article > dl dt,
+.el-launch-gates article > dl dd { font-size: 7px; }
+.el-launch-gates article > button { min-height: 34px; padding: 8px 10px; }
+
+@media (max-width: 900px) {
+  .el-launch-gates > article { grid-template-columns: 1fr; }
+  .el-launch-gates article > button { justify-self: start; }
+}
+
 @media (max-width: 600px) {
   .el-launch-control-page > header { align-items: flex-start; flex-direction: column; }
-  .el-launch-control-page > section { margin-top: 48px; padding: 20px; }
-  .el-launch-control-page dl > div { grid-template-columns: 1fr; gap: 6px; }
+  .el-launch-control-intro,
+  .el-launch-readiness { margin-top: 38px; padding: 20px; }
+  .el-launch-control-intro dl > div { grid-template-columns: 1fr; gap: 6px; }
+  .el-launch-release-form { grid-template-columns: 1fr; }
+  .el-launch-summary { grid-template-columns: 1fr; }
+  .el-launch-readiness > header { flex-direction: column; }
 }
