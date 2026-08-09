@@ -22,7 +22,7 @@ const footerCopy: Record<StoreLocale, {
     country: "Egypt",
     groups: [
       { title: "Shop", items: [{ label: "GPUs", href: "/catalog" }, { label: "CPUs", href: "/catalog?q=CPU" }, { label: "PC builds", href: "/catalog?q=PC%20build" }, { label: "Displays", href: "/catalog?q=Monitor" }, { label: "Peripherals", href: "/catalog?q=peripheral" }] },
-      { title: "Orders", items: [{ label: "My orders", href: "/account?section=orders" }, { label: "Delivery", href: "/account?section=orders" }, { label: "Returns", href: "/account/warranty" }, { label: "Warranty", href: "/account/warranty" }] },
+      { title: "Orders", items: [{ label: "My orders", href: "/account/orders" }, { label: "Delivery", href: "/account/orders" }, { label: "Returns", href: "/account/warranty" }, { label: "Warranty", href: "/account/warranty" }] },
       { title: "Support", items: [{ label: "Account security", href: "/account?section=security" }, { label: "Saved hardware", href: "/account?section=saved" }, { label: "Warranty & RMA", href: "/account/warranty" }, { label: "Business support", href: "/business" }] },
       { title: "Business", items: [{ label: "B2B & RFQ", href: "/business" }, { label: "Request a quote", href: "/business/rfq" }, { label: "Enterprise sourcing", href: "/business" }, { label: "Business account", href: "/business" }] },
     ],
@@ -34,7 +34,7 @@ const footerCopy: Record<StoreLocale, {
     country: "مصر",
     groups: [
       { title: "تسوّق", items: [{ label: "كروت الشاشة", href: "/catalog" }, { label: "المعالجات", href: "/catalog?q=CPU" }, { label: "تجميعات PC", href: "/catalog?q=PC%20build" }, { label: "الشاشات", href: "/catalog?q=Monitor" }, { label: "الإكسسوارات", href: "/catalog?q=peripheral" }] },
-      { title: "طلباتك", items: [{ label: "طلباتي", href: "/account?section=orders" }, { label: "التوصيل", href: "/account?section=orders" }, { label: "المرتجعات", href: "/account/warranty" }, { label: "الضمان", href: "/account/warranty" }] },
+      { title: "طلباتك", items: [{ label: "طلباتي", href: "/account/orders" }, { label: "التوصيل", href: "/account/orders" }, { label: "المرتجعات", href: "/account/warranty" }, { label: "الضمان", href: "/account/warranty" }] },
       { title: "الدعم", items: [{ label: "أمان الحساب", href: "/account?section=security" }, { label: "الهاردوير المحفوظ", href: "/account?section=saved" }, { label: "الضمان وRMA", href: "/account/warranty" }, { label: "دعم الشركات", href: "/business" }] },
       { title: "للشركات", items: [{ label: "B2B و RFQ", href: "/business" }, { label: "طلب عرض سعر", href: "/business/rfq" }, { label: "توريد الشركات", href: "/business" }, { label: "حساب أعمال", href: "/business" }] },
     ],
