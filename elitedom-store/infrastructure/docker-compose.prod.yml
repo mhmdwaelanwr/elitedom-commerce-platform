@@ -3,6 +3,12 @@
 # Use together with docker-compose.yml.
 # =============================================================================
 
+networks:
+  elitedom-net:
+    ipam:
+      config:
+        - subnet: "${ELITEDOM_NETWORK_SUBNET:-172.28.0.0/24}"
+
 services:
   fastapi:
     environment:
@@ -10,11 +16,9 @@ services:
       DEBUG: "false"
       STAFF_MFA_REQUIRED: "true"
       RATE_LIMIT_BACKEND: redis
-      # Production traffic reaches FastAPI through Nginx Proxy Manager. Force
-      # operators to identify that trusted peer explicitly so forwarded client
-      # addresses create independent rate-limit buckets instead of one shared
-      # proxy bucket. Application startup also rejects an empty value.
-      TRUSTED_PROXY_IPS: "${TRUSTED_PROXY_IPS?Set TRUSTED_PROXY_IPS to the Nginx Proxy Manager internal IP}"
+      # The production proxy gets the same stable internal address that the
+      # application trusts for forwarded client identity.
+      TRUSTED_PROXY_IPS: "${NGINX_PROXY_INTERNAL_IP:-172.28.0.10}"
 
   celery-worker:
     environment:
@@ -35,3 +39,8 @@ services:
         VITE_DEMO_CATALOG_FALLBACK: "${VITE_DEMO_CATALOG_FALLBACK:-false}"
         VITE_GOOGLE_CLIENT_ID: "${VITE_GOOGLE_CLIENT_ID:-}"
         VITE_APPLE_CLIENT_ID: "${VITE_APPLE_CLIENT_ID:-}"
+
+  nginx-proxy-manager:
+    networks:
+      elitedom-net:
+        ipv4_address: "${NGINX_PROXY_INTERNAL_IP:-172.28.0.10}"
