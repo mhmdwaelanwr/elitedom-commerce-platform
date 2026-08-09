@@ -31,10 +31,10 @@ const copy = {
     reviewMeta: "Delivery address · payment method · products · final total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
     qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Total",
     encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
-    retry: "Retry", redirecting: "Order created. Redirecting to secure payment…", successTitle: "Order confirmed.",
-    successText: "Your order is confirmed and can be tracked from your account once you sign in.", pendingTitle: "Order created — payment pending.",
-    pendingText: "The order exists, but the payment redirect was not returned. Do not place a duplicate order; retry payment from the order when available.",
-    failedTitle: "Checkout was not completed.", continueShopping: "Continue shopping", orderLabel: "Order",
+    retry: "Retry", redirecting: "Redirecting to secure payment", successTitle: "Order confirmed", successText: "Confirmation sent. Your order is ready to track.",
+    pendingTitle: "Payment confirmation pending", pendingText: "We are waiting for confirmation. Your order is reserved; do not place a duplicate order.",
+    failedTitle: "Payment was not completed", failedText: "Your cart is safe. No duplicate charge was created.",
+    trackOrder: "Track order", viewStatus: "View order status", tryAgain: "Try payment again", orderLabel: "Order", cartTotal: "Cart total",
   },
   ar: {
     secure: "إتمام طلب آمن · مشفر", title: "إتمام الطلب", intro: "تقدر تكمل كزائر. سجّل الدخول فقط لو عايز العناوين المحفوظة والنقاط وسجل الطلبات.",
@@ -46,9 +46,10 @@ const copy = {
     reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي النهائي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
     qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي",
     encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
-    redirecting: "تم إنشاء الطلب. جاري التحويل لصفحة الدفع الآمنة…", successTitle: "تم تأكيد الطلب.", successText: "طلبك اتأكد وتقدر تتابعه من حسابك بعد تسجيل الدخول.",
-    pendingTitle: "تم إنشاء الطلب — الدفع قيد الانتظار.", pendingText: "الطلب اتسجل، لكن رابط الدفع ما رجعش. ما تعملش طلب مكرر؛ أعد محاولة الدفع من الطلب لما يبقى متاح.",
-    failedTitle: "إتمام الطلب ما اكتملش.", continueShopping: "كمّل تسوق", orderLabel: "طلب",
+    redirecting: "جاري التحويل للدفع الآمن", successTitle: "تم تأكيد الطلب", successText: "تم إرسال التأكيد وطلبك جاهز للمتابعة.",
+    pendingTitle: "تأكيد الدفع قيد الانتظار", pendingText: "مستنيين تأكيد الدفع وطلبك محجوز. ما تعملش طلب مكرر.",
+    failedTitle: "عملية الدفع ما اكتملتش", failedText: "سلتك محفوظة وما اتعملش خصم مكرر.",
+    trackOrder: "تتبع الطلب", viewStatus: "عرض حالة الطلب", tryAgain: "حاول الدفع تاني", orderLabel: "طلب", cartTotal: "إجمالي السلة",
   },
 } as const;
 
@@ -130,7 +131,17 @@ export function CheckoutPage() {
 
   if (["success", "pending", "redirecting", "error"].includes(submitState.status)) {
     return (
-      <div className="el-checkout-page"><div className="el-checkout-result-shell"><ElitedomBrand /><CheckoutResultPanel locale={locale} state={submitState as Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>} /></div></div>
+      <div className="el-checkout-page">
+        <div className="el-checkout-result-shell">
+          <ElitedomBrand />
+          <CheckoutResultPanel
+            locale={locale}
+            onRetry={() => setSubmitState({ status: "idle" })}
+            state={submitState as Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>}
+            total={subtotal}
+          />
+        </div>
+      </div>
     );
   }
 
@@ -211,11 +222,32 @@ function SummaryRow({ label, value, emphasis = false }: { label: string; value: 
   return <div className={emphasis ? "el-summary-row is-emphasis" : "el-summary-row"}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function CheckoutResultPanel({ locale, state }: { locale: "en" | "ar"; state: Exclude<SubmitState, { status: "idle" } | { status: "submitting" }> }) {
+function CheckoutResultPanel({ locale, state, total, onRetry }: { locale: "en" | "ar"; state: Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>; total: number; onRetry: () => void }) {
   const text = copy[locale];
   const navigate = useNavigate();
-  const title = state.status === "success" ? text.successTitle : state.status === "pending" ? text.pendingTitle : state.status === "redirecting" ? text.redirecting : text.failedTitle;
-  const body = state.status === "success" ? text.successText : state.status === "pending" ? text.pendingText : state.status === "redirecting" ? text.encrypted : state.message;
+  const success = state.status === "success";
+  const pending = state.status === "pending" || state.status === "redirecting";
+  const title = success ? text.successTitle : pending ? (state.status === "redirecting" ? text.redirecting : text.pendingTitle) : text.failedTitle;
+  const body = success ? text.successText : pending ? (state.status === "redirecting" ? text.encrypted : text.pendingText) : text.failedText;
   const orderNumber = "orderNumber" in state ? state.orderNumber : undefined;
-  return <main className={`el-checkout-result el-checkout-result--${state.status}`}><span className="el-checkout-result__icon"><StoreIcon name={state.status === "error" ? "returns" : "check"} size={30} /></span><p className="el-commerce-crumb">{orderNumber ? `${text.orderLabel} ${orderNumber}` : text.secure}</p><h1>{title}</h1><p>{body}</p>{state.status !== "redirecting" ? <button onClick={() => navigate("/catalog")} type="button">{text.continueShopping} <StoreIcon name="arrow" size={15} /></button> : null}</main>;
+  const icon: StoreIconName = success ? "check" : pending ? "clock" : "returns";
+  const action = success ? text.trackOrder : pending ? text.viewStatus : text.tryAgain;
+
+  function act() {
+    if (state.status === "error") {
+      onRetry();
+      return;
+    }
+    navigate("/account");
+  }
+
+  return (
+    <main className={`el-checkout-result el-checkout-result--${state.status}`}>
+      <span className="el-checkout-result__icon"><StoreIcon name={icon} size={28} /></span>
+      <h1>{title}</h1>
+      <p>{body}</p>
+      <p className="el-commerce-crumb"><StoreIcon name="package" size={18} />{orderNumber ? `${text.orderLabel} #${orderNumber}` : `${text.cartTotal} ${formatEgp(total, locale)} EGP`}</p>
+      <button onClick={act} type="button">{action}</button>
+    </main>
+  );
 }
