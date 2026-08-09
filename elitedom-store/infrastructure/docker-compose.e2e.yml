@@ -1,0 +1,42 @@
+# =============================================================================
+# Elitedom Store — Real Browser Integration Overrides
+# Used only by P22 CI/local E2E.  The base topology remains authoritative.
+# =============================================================================
+
+services:
+  fastapi:
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level info
+    ports:
+      - "127.0.0.1:${FASTAPI_PORT:-8000}:8000"
+    environment:
+      ENVIRONMENT: development
+      DEBUG: "false"
+      STAFF_MFA_REQUIRED: "true"
+      PAYMOB_ENABLED: "false"
+      ODOO_SYNC_ENABLED: "false"
+      ODOO_WEBHOOKS_ENABLED: "false"
+
+  frontend:
+    build:
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://127.0.0.1:8000/api/v1}
+        VITE_SITE_URL: ${VITE_SITE_URL:-http://127.0.0.1:3000}
+        VITE_DEMO_CATALOG_FALLBACK: "false"
+
+  odoo:
+    ports:
+      - "127.0.0.1:${ODOO_PORT:-18069}:8069"
+
+  celery-worker:
+    command: celery -A app.celery_app worker --loglevel=warning --concurrency=1
+
+  celery-beat:
+    command: celery -A app.celery_app beat --loglevel=warning
+
+  nginx-proxy-manager:
+    profiles:
+      - never-e2e
+
+  portainer:
+    profiles:
+      - never-e2e
