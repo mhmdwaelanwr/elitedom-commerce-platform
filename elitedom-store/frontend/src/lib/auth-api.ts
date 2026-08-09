@@ -185,6 +185,17 @@ export async function refreshSession(): Promise<CustomerSession> {
   return toCustomerSession(result);
 }
 
+export async function recoverPassword(
+  newPassword: string,
+  session: CustomerSession,
+): Promise<void> {
+  await authRequest<void>(
+    "/auth/password/recovery",
+    { method: "POST", body: JSON.stringify({ new_password: newPassword }) },
+    session.accessToken,
+  );
+}
+
 export async function fetchMfaStatus(session: CustomerSession): Promise<MfaStatus> {
   const result = await authRequest<{
     required: boolean;
