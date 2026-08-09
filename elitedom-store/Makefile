@@ -11,9 +11,13 @@ COMPOSE_PROD = $(DOCKER_COMPOSE) --env-file ../.env -f docker-compose.yml -f doc
 help: ## Show available commands
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-26s\033[0m %s\n", $$1, $$2}'
 
-dev: ## Start all services in development mode
-	cd infrastructure && $(COMPOSE_DEV) up -d --build
-	@echo "🚀 Services started:"
+dev: ## Build, migrate, then start all services in development mode
+	cd infrastructure && $(COMPOSE_DEV) build fastapi frontend celery-worker celery-beat
+	cd infrastructure && $(COMPOSE_DEV) up -d --wait postgres redis
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps app-db-init
+	cd infrastructure && $(COMPOSE_DEV) run --rm --no-deps -w /app fastapi sh -lc 'PYTHONPATH=/app alembic upgrade head'
+	cd infrastructure && $(COMPOSE_DEV) up -d
+	@echo "🚀 Services started after database migrations:"
 	@echo "   Storefront: http://localhost:3000"
 	@echo "   FastAPI:    http://localhost:8000"
 	@echo "   Swagger:    http://localhost:8000/docs"
