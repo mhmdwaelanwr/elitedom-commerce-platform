@@ -29,7 +29,15 @@ export function ProductCard({ product, locale }: ProductCardProps) {
   return (
     <article className="el-product-card">
       <div className="el-product-card__media">
-        <img alt={product.name} loading="lazy" src={product.image} />
+        <img
+          alt={product.name}
+          loading="lazy"
+          onError={(event) => {
+            event.currentTarget.hidden = true;
+            event.currentTarget.parentElement?.classList.add("is-media-unavailable");
+          }}
+          src={product.image}
+        />
         <span className="el-product-card__badge">{labels.badge}</span>
       </div>
       <p className="el-product-card__brand">{product.brand} / {product.categoryName}</p>
