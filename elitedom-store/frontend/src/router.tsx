@@ -4,7 +4,7 @@ import { AuthPage } from "@/pages/AuthPage";
 import { BusinessLandingPage, BusinessRfqPage } from "@/pages/B2BPage";
 import { CartPage } from "@/pages/CartPage";
 import { CatalogPage } from "@/pages/CatalogPage";
-import { CheckoutPage } from "@/pages/CheckoutPage";
+import { CheckoutRoute } from "@/pages/CheckoutThemeRoute";
 import { HomePage } from "@/pages/HomePage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { ProductDetailPage } from "@/pages/ProductDetailPage";
@@ -17,7 +17,7 @@ export const router = createBrowserRouter([
   { path: "/catalog", element: <CatalogPage /> },
   { path: "/products/:productId", element: <ProductDetailPage /> },
   { path: "/cart", element: <CartPage /> },
-  { path: "/checkout", element: <CheckoutPage /> },
+  { path: "/checkout", element: <CheckoutRoute /> },
   { path: "/auth", element: <AuthPage mode="sign-in" /> },
   { path: "/auth/create", element: <AuthPage mode="create" /> },
   { path: "/auth/otp", element: <AuthPage mode="otp" /> },
