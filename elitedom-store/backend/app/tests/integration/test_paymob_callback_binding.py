@@ -18,7 +18,7 @@ from app.tests.integration.test_paymob_payments import (
 )
 
 
-def _set_intention(transaction: dict[str, Any], order: dict[str, Any]) -> None:
+def _set_intention(transaction: dict[str, Any], _order: dict[str, Any]) -> None:
     transaction["payment_key_claims"]["intention_id"] = "pi_attacker_selected"
 
 
@@ -26,28 +26,31 @@ def _set_local_order_id(transaction: dict[str, Any], order: dict[str, Any]) -> N
     transaction["payment_key_claims"]["extra"]["order_id"] = str(order["id"] + 999)
 
 
-def _set_order_number(transaction: dict[str, Any], order: dict[str, Any]) -> None:
+def _set_order_number(transaction: dict[str, Any], _order: dict[str, Any]) -> None:
     transaction["payment_key_claims"]["extra"]["order_number"] = "SO-ATTACKER"
 
 
-def _set_merchant_reference(transaction: dict[str, Any], order: dict[str, Any]) -> None:
+def _set_merchant_reference(transaction: dict[str, Any], _order: dict[str, Any]) -> None:
     transaction["order"]["merchant_order_id"] = "SO-ATTACKER"
 
 
-def _set_special_reference(transaction: dict[str, Any], order: dict[str, Any]) -> None:
+def _set_special_reference(transaction: dict[str, Any], _order: dict[str, Any]) -> None:
     transaction["special_reference"] = "SO-ATTACKER"
+
+
+_MUTATIONS = [
+    _set_intention,
+    _set_local_order_id,
+    _set_order_number,
+    _set_merchant_reference,
+    _set_special_reference,
+]
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "mutate",
-    [
-        _set_intention,
-        _set_local_order_id,
-        _set_order_number,
-        _set_merchant_reference,
-        _set_special_reference,
-    ],
+    _MUTATIONS,
     ids=[
         "intention-id",
         "local-order-id",
@@ -55,15 +58,15 @@ def _set_special_reference(transaction: dict[str, Any], order: dict[str, Any]) -
         "merchant-reference",
         "special-reference",
     ],
-)\nasync def test_hmac_valid_callback_rejects_conflicting_unsigned_reference(
+)
+async def test_hmac_valid_callback_rejects_conflicting_unsigned_reference(
     client: AsyncClient,
     db_session: AsyncSession,
     monkeypatch: pytest.MonkeyPatch,
     mutate: Callable[[dict[str, Any], dict[str, Any]], None],
-    request: pytest.FixtureRequest,
 ) -> None:
     product = await _create_product(db_session)
-    session_id = f"paymob-binding-{request.node.callspec.id}"
+    session_id = f"paymob-binding-{mutate.__name__}"
     await _add_guest_item(client, product.id, session_id)
     settings = _patch_paymob_checkout(monkeypatch)
     checkout = await client.post(
@@ -73,13 +76,7 @@ def _set_special_reference(transaction: dict[str, Any], order: dict[str, Any]) -
     assert checkout.status_code == 201
     order = checkout.json()["order"]
 
-    transaction_id = 7800 + [
-        "intention-id",
-        "local-order-id",
-        "order-number",
-        "merchant-reference",
-        "special-reference",
-    ].index(request.node.callspec.id)
+    transaction_id = 7800 + _MUTATIONS.index(mutate)
     clean_transaction = _transaction(
         order=order,
         transaction_id=transaction_id,
