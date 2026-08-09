@@ -1,0 +1,34 @@
+.el-platform-limited {
+  margin: 0 0 16px;
+  padding: 11px 14px;
+  border: 1px solid color-mix(in srgb, var(--el-warning) 30%, var(--el-border-subtle));
+  border-radius: 13px;
+  color: var(--el-warning);
+  background: color-mix(in srgb, var(--el-warning) 6%, var(--el-surface-1));
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.el-store-footer__group > span,
+.el-store-footer__legal-links > span,
+.el-store-footer__social-text > span {
+  color: var(--el-text-secondary);
+  font-size: 12px;
+}
+
+.el-store-footer__legal-links > span,
+.el-store-footer__social-text > span {
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.el-store-footer__group a:hover {
+  color: var(--el-text-primary);
+}
+
+:root[data-theme="light"] .el-social-dock,
+:root[data-theme="light"] .el-store-header,
+:root[data-theme="light"] .el-b2b-editorial,
+:root[data-theme="light"] .el-hero__stage {
+  box-shadow: var(--el-shadow-soft);
+}
