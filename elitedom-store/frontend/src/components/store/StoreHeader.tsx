@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
@@ -97,11 +97,27 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const labels = copy[locale];
   const nextLocale: StoreLocale = locale === "en" ? "ar" : "en";
 
+  const openCart = useCallback(async () => {
+    setCartOpen(true);
+    setSearchOpen(false);
+    setMegaOpen(false);
+    setCartLoading(true);
+    try {
+      const session = await restoreSession();
+      setCartSnapshot(await loadGuestCart(locale, session));
+    } catch {
+      setCartSnapshot({ items: [] });
+      setToast({ tone: "error", title: labels.cartErrorTitle, message: labels.cartErrorMessage });
+    } finally {
+      setCartLoading(false);
+    }
+  }, [labels.cartErrorMessage, labels.cartErrorTitle, locale]);
+
   useEffect(() => {
     if (!searchOpen) return;
     let active = true;
-    setSearchLoading(true);
     const timer = window.setTimeout(() => {
+      if (active) setSearchLoading(true);
       fetchRichCatalog({ locale, query: query.trim() || undefined, limit: 3 })
         .then((products) => { if (active) setSearchResults(products.slice(0, 3)); })
         .catch(() => { if (active) setSearchResults([]); })
@@ -137,7 +153,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
     }
     window.addEventListener("elitedom:cart-updated", cartUpdated);
     return () => window.removeEventListener("elitedom:cart-updated", cartUpdated);
-  }, [cartOpen, labels.addedMessage, labels.addedTitle]);
+  }, [cartOpen, labels.addedMessage, labels.addedTitle, openCart]);
 
   useEffect(() => {
     if (!toast) return;
@@ -157,26 +173,10 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
     setMobileOpen(false);
   }
 
-  function changeLocale(value = nextLocale) {
+  function changeLocale(value: StoreLocale = nextLocale) {
     onLocaleChange(value);
     setMobileOpen(false);
     setMegaOpen(false);
-  }
-
-  async function openCart() {
-    setCartOpen(true);
-    setSearchOpen(false);
-    setMegaOpen(false);
-    setCartLoading(true);
-    try {
-      const session = await restoreSession();
-      setCartSnapshot(await loadGuestCart(locale, session));
-    } catch {
-      setCartSnapshot({ items: [] });
-      setToast({ tone: "error", title: labels.cartErrorTitle, message: labels.cartErrorMessage });
-    } finally {
-      setCartLoading(false);
-    }
   }
 
   function activeHref(href: string) {
@@ -216,7 +216,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
             <input
               aria-label={labels.search}
               onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => { setSearchOpen(true); setMegaOpen(false); setCartOpen(false); }}
+              onFocus={() => { setSearchOpen(true); setSearchLoading(true); setMegaOpen(false); setCartOpen(false); }}
               placeholder={labels.search}
               type="search"
               value={query}
@@ -237,7 +237,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
             <button aria-expanded={mobileOpen} aria-label={mobileOpen ? labels.closeMenu : labels.menu} className="el-icon-button el-menu-button" onClick={() => { setMobileOpen(true); setSearchOpen(false); setCartOpen(false); }} ref={menuButtonRef} type="button"><StoreIcon name="menu" size={20} /></button>
           </div>
           <div className="el-store-header__mobile-actions">
-            <button aria-label={labels.search} className="el-icon-button" onClick={() => { setSearchOpen(true); setCartOpen(false); }} type="button"><StoreIcon name="search" size={20} /></button>
+            <button aria-label={labels.search} className="el-icon-button" onClick={() => { setSearchOpen(true); setSearchLoading(true); setCartOpen(false); }} type="button"><StoreIcon name="search" size={20} /></button>
             <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
             <button aria-label={labels.cart} className="el-icon-button" onClick={() => void openCart()} type="button"><StoreIcon name="cart" size={20} /></button>
           </div>
