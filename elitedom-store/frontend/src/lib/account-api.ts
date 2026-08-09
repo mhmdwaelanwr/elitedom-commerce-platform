@@ -31,10 +31,9 @@ export type LoyaltyBalance = {
 
 export type LoyaltyHistoryItem = {
   id: number;
+  points_delta: number;
   transaction_type: string;
-  points: number;
-  balance_after: number;
-  reference?: string | null;
+  reference_order_id?: number | null;
   description?: string | null;
   created_at: string;
 };
