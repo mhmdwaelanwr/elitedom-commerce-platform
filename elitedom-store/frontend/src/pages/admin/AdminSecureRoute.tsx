@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
@@ -28,6 +28,16 @@ export function AdminSecureRoute({ permission, children }: { permission: AdminPe
   const [mfa, setMfa] = useState<MfaStatus | null>(null);
   const [error, setError] = useState("");
 
+  const resolvePermission = useCallback(async (current: CustomerSession) => {
+    try {
+      const access = await fetchAdminAccess(current);
+      setState(access.permissions.includes(permission) ? "ready" : "denied");
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Staff access could not be verified.");
+      setState("error");
+    }
+  }, [permission]);
+
   useEffect(() => {
     let active = true;
     void restoreSession().then(async (current) => {
@@ -36,16 +46,21 @@ export function AdminSecureRoute({ permission, children }: { permission: AdminPe
         navigate(`/auth?next=${encodeURIComponent(location.pathname + location.search)}`, { replace: true });
         return;
       }
+      setSession(current);
       try {
-        const [access, status] = await Promise.all([fetchAdminAccess(current), fetchMfaStatus(current)]);
+        // The MFA status endpoint is deliberately available before the privileged
+        // permission endpoint. Production permission checks require a verified
+        // staff session, so resolve MFA first and only then query RBAC.
+        const status = await fetchMfaStatus(current);
         if (!active) return;
-        if (!access.permissions.includes(permission)) {
-          setState("denied");
+        setMfa(status);
+        if (status.required && !status.verified) {
+          setState("mfa");
           return;
         }
-        setSession(current);
-        setMfa(status);
-        setState(status.required && !status.verified ? "mfa" : "ready");
+        const access = await fetchAdminAccess(current);
+        if (!active) return;
+        setState(access.permissions.includes(permission) ? "ready" : "denied");
       } catch (reason) {
         if (!active) return;
         setError(reason instanceof Error ? reason.message : "Staff access could not be verified.");
@@ -57,7 +72,7 @@ export function AdminSecureRoute({ permission, children }: { permission: AdminPe
 
   if (state === "ready") return <>{children}</>;
   if (state === "mfa" && session && mfa) {
-    return <AdminMfaBoundary locale={locale} mfa={mfa} onVerified={() => setState("ready")} session={session} />;
+    return <AdminMfaBoundary locale={locale} mfa={mfa} onVerified={() => void resolvePermission(session)} session={session} />;
   }
 
   const ar = locale === "ar";
