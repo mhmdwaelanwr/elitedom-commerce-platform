@@ -18,6 +18,7 @@ import lockIcon from "@/assets/icons/lock.svg";
 import mailIcon from "@/assets/icons/mail.svg";
 import menuIcon from "@/assets/icons/menu.svg";
 import minusIcon from "@/assets/icons/minus.svg";
+import moonIcon from "@/assets/icons/moon.svg";
 import packageIcon from "@/assets/icons/package.svg";
 import paymentIcon from "@/assets/icons/payment.svg";
 import phoneIcon from "@/assets/icons/phone.svg";
@@ -27,6 +28,7 @@ import searchIcon from "@/assets/icons/search.svg";
 import shieldIcon from "@/assets/icons/shield.svg";
 import sortIcon from "@/assets/icons/sort.svg";
 import starIcon from "@/assets/icons/star.svg";
+import sunIcon from "@/assets/icons/sun.svg";
 import walletIcon from "@/assets/icons/wallet.svg";
 import warrantyIcon from "@/assets/icons/warranty.svg";
 
@@ -51,6 +53,7 @@ export type StoreIconName =
   | "mail"
   | "menu"
   | "minus"
+  | "moon"
   | "package"
   | "payment"
   | "phone"
@@ -60,6 +63,7 @@ export type StoreIconName =
   | "shield"
   | "sort"
   | "star"
+  | "sun"
   | "wallet"
   | "warranty";
 
@@ -84,6 +88,7 @@ const iconByName: Record<StoreIconName, string> = {
   mail: mailIcon,
   menu: menuIcon,
   minus: minusIcon,
+  moon: moonIcon,
   package: packageIcon,
   payment: paymentIcon,
   phone: phoneIcon,
@@ -93,6 +98,7 @@ const iconByName: Record<StoreIconName, string> = {
   shield: shieldIcon,
   sort: sortIcon,
   star: starIcon,
+  sun: sunIcon,
   wallet: walletIcon,
   warranty: warrantyIcon,
 };
