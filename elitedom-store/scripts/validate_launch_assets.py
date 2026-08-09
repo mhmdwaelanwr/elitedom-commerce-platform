@@ -173,6 +173,14 @@ def main() -> int:
         ("/catalog/products?locale=en&limit=100", "Browser gate must discover a real product from the catalogue API."),
         ("stock_qty", "Browser gate must require backend stock or dropship availability."),
         ("/api/v1/orders/cart/items", "Browser gate must exercise the real guest-cart mutation path."),
+        ('openRoute(page, "/cart")', "Browser gate must render the real server-backed cart."),
+        ('toHaveURL(`${siteOrigin}/checkout`)', "Browser gate must reach the deployed checkout route from the cart."),
+        ("إتمام الطلب", "Browser gate must verify the Arabic checkout experience."),
+        ("ملخص الطلب", "Browser gate must verify the real checkout order summary."),
+        ("تأكيد الطلب", "Browser gate must prove the order-submit control is rendered without submitting it."),
+        ("financialMutations", "Browser gate must track and reject order/payment mutations during checkout render."),
+        ('url.pathname === "/api/v1/orders/checkout"', "Browser gate must guard the checkout submission endpoint."),
+        ('url.pathname.startsWith("/api/v1/payments/")', "Browser gate must guard payment mutation endpoints."),
         ("elitedom-locale", "Browser gate must exercise locale and direction behavior."),
         ("scrollWidth", "Browser gate must check horizontal overflow."),
         ("390", "Browser gate must cover the 390px mobile reference width."),
@@ -206,6 +214,11 @@ def main() -> int:
         "Go-live runbook must document immutable deployed release provenance.",
         errors,
     )
+    require(
+        "checkout review" in runbook,
+        "Go-live runbook must document side-effect-free checkout review coverage.",
+        errors,
+    )
 
     stage_doc = STAGE_10_DOC.read_text(encoding="utf-8")
     for marker in (
@@ -236,7 +249,7 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    print("Launch assets validated successfully, including P15 browser E2E and release provenance wiring.")
+    print("Launch assets validated successfully, including P15 browser E2E, checkout review, and release provenance wiring.")
     return 0
 
 
