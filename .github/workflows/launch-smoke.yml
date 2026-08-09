@@ -1,6 +1,20 @@
 name: Launch Smoke
 
 on:
+  workflow_call:
+    inputs:
+      site_url:
+        description: Public HTTPS storefront origin
+        required: true
+        type: string
+      api_url:
+        description: Public HTTPS API origin, without /api/v1
+        required: true
+        type: string
+      release_ref:
+        description: Exact deployed Git commit SHA expected from /health/live
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       site_url:
