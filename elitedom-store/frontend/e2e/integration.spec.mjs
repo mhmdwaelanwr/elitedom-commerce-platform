@@ -59,7 +59,7 @@ async function login(page, email, next) {
   });
   await page.goto(`/auth?next=${encodeURIComponent(next)}`, { waitUntil: "domcontentloaded" });
   await page.getByLabel("Email or phone").fill(email);
-  await page.getByLabel("Password").fill(password);
+  await page.locator('input[type="password"]').fill(password);
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const loginResponse = await loginResponsePromise;
   expect(loginResponse.ok(), `Login failed for ${email}: HTTP ${loginResponse.status()}`).toBeTruthy();
