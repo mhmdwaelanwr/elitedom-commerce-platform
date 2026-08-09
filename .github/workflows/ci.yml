@@ -311,10 +311,17 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Validate release-control assets
         run: |
           set -euxo pipefail
           python -m py_compile \
             elitedom-store/scripts/live_smoke.py \
             elitedom-store/scripts/validate_launch_assets.py
+          node --check elitedom-store/frontend/playwright.launch.config.mjs
+          node --check elitedom-store/frontend/e2e/launch.spec.mjs
           python elitedom-store/scripts/validate_launch_assets.py
