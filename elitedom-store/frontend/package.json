@@ -10,13 +10,14 @@
     "check:figma-parity": "node scripts/check-figma-page-parity.mjs",
     "check:p19": "node scripts/check-p19-platform-parity.mjs",
     "check:ui-completeness": "node scripts/check-ui-completeness.mjs",
+    "check:route-api-wiring": "node scripts/check-route-api-wiring.mjs",
     "check:types": "tsc -b --pretty false",
     "verify": "npm run check:design-system && npm run lint && npm run check:types && npm run build",
     "prebuild": "node scripts/generate-seo.mjs",
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0 --port 3000",
     "start": "vite preview --host 0.0.0.0 --port 3000",
-    "lint": "npm run check:figma-parity && npm run check:p19 && npm run check:ui-completeness && eslint ."
+    "lint": "npm run check:figma-parity && npm run check:p19 && npm run check:ui-completeness && npm run check:route-api-wiring && eslint ."
   },
   "dependencies": {
     "react": "19.2.8",
