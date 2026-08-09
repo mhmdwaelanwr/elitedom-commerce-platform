@@ -67,6 +67,11 @@ def _integer(value: Any) -> int | None:
     return None
 
 
+def _claim_fingerprint(container: Mapping[str, Any], key: str) -> list[Any]:
+    """Distinguish absent claims from present malformed or conflicting values."""
+    return [key in container, container.get(key)]
+
+
 def _event_key(transaction: Mapping[str, Any]) -> str:
     """Keep retries idempotent without letting unsigned claims poison a valid event."""
     order_payload = _mapping(transaction.get("order"))
@@ -83,20 +88,23 @@ def _event_key(transaction: Mapping[str, Any]) -> str:
         "amount": transaction.get("amount_cents"),
         "currency": transaction.get("currency"),
         # Binding-relevant claims are included even when Paymob does not cover
-        # them with the transaction HMAC. A tampered rejected callback therefore
-        # cannot consume the idempotency key of the legitimate callback that
-        # carries the same signed transaction fields.
-        "provider_order_id": _identifier(order_payload.get("id")),
-        "intention_payload_id": _identifier(intention_payload.get("id")),
-        "claims_intention_id": _identifier(claims.get("intention_id")),
-        "transaction_intention_id": _identifier(transaction.get("intention_id")),
-        "claim_order_id": _integer(claim_extras.get("order_id")),
-        "claim_order_number": _identifier(claim_extras.get("order_number")),
-        "transaction_order_id": _integer(transaction_extras.get("order_id")),
-        "transaction_order_number": _identifier(transaction_extras.get("order_number")),
-        "merchant_order_id": _identifier(order_payload.get("merchant_order_id")),
-        "order_special_reference": _identifier(order_payload.get("special_reference")),
-        "transaction_special_reference": _identifier(transaction.get("special_reference")),
+        # them with the transaction HMAC. Presence is fingerprinted separately
+        # so a malformed tampered claim cannot collide with a legitimate absent
+        # claim and consume its idempotency key.
+        "provider_order_id": _claim_fingerprint(order_payload, "id"),
+        "intention_payload_id": _claim_fingerprint(intention_payload, "id"),
+        "claims_intention_id": _claim_fingerprint(claims, "intention_id"),
+        "transaction_intention_id": _claim_fingerprint(transaction, "intention_id"),
+        "claim_order_id": _claim_fingerprint(claim_extras, "order_id"),
+        "claim_order_number": _claim_fingerprint(claim_extras, "order_number"),
+        "transaction_order_id": _claim_fingerprint(transaction_extras, "order_id"),
+        "transaction_order_number": _claim_fingerprint(transaction_extras, "order_number"),
+        "merchant_order_id": _claim_fingerprint(order_payload, "merchant_order_id"),
+        "order_special_reference": _claim_fingerprint(order_payload, "special_reference"),
+        "transaction_special_reference": _claim_fingerprint(
+            transaction,
+            "special_reference",
+        ),
     }
     digest = hashlib.sha256(
         json.dumps(state, sort_keys=True, separators=(",", ":")).encode()
@@ -128,12 +136,7 @@ def _binding_error(
     attempt: PaymentAttempt,
     order: SaleOrder,
 ) -> str | None:
-    """Require every callback reference to agree with the signed provider object.
-
-    Only HMAC-covered provider identifiers are allowed to select an attempt.
-    Unsigned intention/extras/merchant references are treated as redundant
-    claims and may only confirm the already-selected local object.
-    """
+    """Require every supplied callback reference to agree with the stored object."""
     provider_order_id = _provider_order_id(transaction)
     if provider_order_id is None:
         return "missing_provider_order_id"
@@ -150,33 +153,32 @@ def _binding_error(
     claim_extras = _mapping(claims.get("extra"))
     transaction_extras = _mapping(transaction.get("extras"))
 
-    intention_values = (
-        _identifier(intention_payload.get("id")),
-        _identifier(claims.get("intention_id")),
-        _identifier(transaction.get("intention_id")),
-    )
-    for intention_id in intention_values:
-        if intention_id is not None and intention_id != attempt.provider_intention_id:
+    for container, key in (
+        (intention_payload, "id"),
+        (claims, "intention_id"),
+        (transaction, "intention_id"),
+    ):
+        if key in container and _identifier(container.get(key)) != attempt.provider_intention_id:
             return "intention_mismatch"
 
     for extras in (claim_extras, transaction_extras):
-        local_order_id = _integer(extras.get("order_id"))
-        if local_order_id is not None and local_order_id != order.id:
+        if "order_id" in extras and _integer(extras.get("order_id")) != order.id:
             return "local_order_id_mismatch"
-        order_number = _identifier(extras.get("order_number"))
-        if order_number is not None and order_number != order.name:
+        if "order_number" in extras and _identifier(extras.get("order_number")) != order.name:
             return "order_number_mismatch"
 
-    merchant_order_id = _identifier(order_payload.get("merchant_order_id"))
-    if merchant_order_id is not None and merchant_order_id != order.name:
+    if (
+        "merchant_order_id" in order_payload
+        and _identifier(order_payload.get("merchant_order_id")) != order.name
+    ):
         return "merchant_order_id_mismatch"
 
     expected_reference = attempt.provider_reference or order.name
-    for special_reference in (
-        _identifier(order_payload.get("special_reference")),
-        _identifier(transaction.get("special_reference")),
-    ):
-        if special_reference is not None and special_reference != expected_reference:
+    for container in (order_payload, transaction):
+        if (
+            "special_reference" in container
+            and _identifier(container.get("special_reference")) != expected_reference
+        ):
             return "special_reference_mismatch"
 
     return None
