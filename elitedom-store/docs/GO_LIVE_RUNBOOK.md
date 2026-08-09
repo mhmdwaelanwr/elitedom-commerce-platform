@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "44b9cd851c319f24ea82a95f03538e3753c6e6b6"
+verified_against: "981e7bd732672428a9d8d2a3447c3bc3a373472f"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -39,12 +39,13 @@ The current manual gate set covers:
 ## Pre-deployment
 
 1. Record the exact commit/tag used as `release_ref` and the target environment.
-2. Confirm required branch/PR checks are green on that exact code.
-3. Review the migration graph and identify the current Alembic head.
-4. Confirm production `DEBUG=false`, scoped hosts/CORS, staff MFA, Redis-backed rate limiting, protected metrics, and strong distinct application/database/Redis/provider secrets.
-5. Confirm public site/API URLs, DNS and TLS termination plan.
-6. Confirm production image references/build inputs are immutable or otherwise reproducible.
-7. Confirm rollback owner, communication owner, and provider contacts/merchant access.
+2. Set production `RELEASE_REF` to the exact hexadecimal Git commit SHA being deployed; production Compose maps it into FastAPI `APP_VERSION` for public release provenance.
+3. Confirm required branch/PR checks are green on that exact code.
+4. Review the migration graph and identify the current Alembic head.
+5. Confirm production `DEBUG=false`, scoped hosts/CORS, staff MFA, Redis-backed rate limiting, protected metrics, and strong distinct application/database/Redis/provider secrets.
+6. Confirm public site/API URLs, DNS and TLS termination plan.
+7. Confirm production image references/build inputs are immutable or otherwise reproducible.
+8. Confirm rollback owner, communication owner, and provider contacts/merchant access.
 
 ## Database backup and restore
 
@@ -69,7 +70,7 @@ Before a migration or cutover that can change durable state:
 Verify at minimum:
 
 - storefront returns expected content over public HTTPS;
-- API `/health/live` reports process liveness;
+- API `/health/live` reports process liveness and exposes the deployed release SHA as `version` in production;
 - API `/health/ready` reports dependency readiness and does not return 503;
 - Celery workers are consuming the configured broker;
 - Odoo is reachable through the configured integration boundary;
@@ -98,7 +99,9 @@ Critical commerce UAT includes catalogue/search/product details, account/session
 
 ## External smoke test
 
-Run `.github/workflows/launch-smoke.yml` against the public HTTPS storefront and API. The workflow first invokes `elitedom-store/scripts/live_smoke.py`; the smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
+Run `.github/workflows/launch-smoke.yml` against the public HTTPS storefront and API. Supply `site_url`, `api_url`, and the exact hexadecimal Git `release_ref` expected to be deployed. The workflow first invokes `elitedom-store/scripts/live_smoke.py`; the smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
+
+Before browser UAT, `elitedom-store/scripts/verify_release.py` verifies release provenance by reusing the hardened public-target checks and comparing `/health/live.version` with the requested `release_ref`. Production Compose maps `RELEASE_REF` into FastAPI `APP_VERSION`, so a healthy but stale or wrong deployment fails before it can be signed off.
 
 The same manually dispatched workflow then runs the deployed browser E2E gate in Chromium. It discovers a purchasable Product ID from the real `/api/v1/catalog/products` response and does not mock or fulfill application API routes. The browser gate proves:
 
@@ -111,7 +114,7 @@ The same manually dispatched workflow then runs the deployed browser E2E gate in
 
 The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. Those flows remain explicit provider/UAT gates with controlled test data.
 
-Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
+Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, expected/deployed release-ref evidence, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
 
 ## Monitoring and alerting
 
@@ -153,9 +156,11 @@ Launch evidence references should identify the external proof without copying se
 - `.github/workflows/ci.yml`
 - `.github/workflows/launch-smoke.yml`
 - `elitedom-store/scripts/live_smoke.py`
+- `elitedom-store/scripts/verify_release.py`
 - `elitedom-store/scripts/validate_launch_assets.py`
 - `elitedom-store/frontend/playwright.launch.config.mjs`
 - `elitedom-store/frontend/e2e/launch.spec.mjs`
+- `elitedom-store/infrastructure/docker-compose.prod.yml`
 - `elitedom-store/backend/app/modules/admin/control_service.py`
 - `elitedom-store/backend/app/modules/admin/control_schemas.py`
 - `elitedom-store/backend/app/modules/admin/models.py`
