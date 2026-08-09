@@ -7,6 +7,7 @@ import "@/styles/globals.css";
 import "@/styles/p14-responsive.css";
 import "@/styles/figma-surfaces.css";
 import "@/styles/theme-hardening.css";
+import "@/styles/p19-fixes.css";
 
 const root = document.getElementById("root");
 
