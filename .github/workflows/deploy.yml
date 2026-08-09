@@ -92,16 +92,18 @@ jobs:
           set -euo pipefail
           remote_script="/tmp/elitedom-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           cleanup() {
+            printf -v cleanup_cmd 'rm -f %q' "$remote_script"
             ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-              "$DEPLOY_USER@$DEPLOY_HOST" "rm -f '$remote_script'" >/dev/null 2>&1 || true
+              "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
           scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             elitedom-store/infrastructure/scripts/deploy_release.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$remote_script"
+          printf -v remote_cmd 'bash %q %q %q %q %q' \
+            "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL"
           ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            "bash '$remote_script' '$RELEASE_REF' '$DEPLOY_PATH' '$SITE_URL' '$API_URL'" \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$remote_cmd" \
             | tee deployment.log
 
       - name: Preserve deployment evidence
