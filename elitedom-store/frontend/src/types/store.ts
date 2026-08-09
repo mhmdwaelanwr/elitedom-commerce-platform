@@ -69,7 +69,7 @@ export type CheckoutDetails = {
 };
 
 export type CheckoutResult = {
-  orderId: number;
+  orderId?: number;
   orderNumber: string;
   paymentGatewayUrl?: string;
   isOfflineFallback: boolean;
