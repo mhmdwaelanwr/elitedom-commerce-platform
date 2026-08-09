@@ -66,12 +66,6 @@ const content = {
   },
 } as const;
 
-function formatEgp(value: number, locale: StoreLocale) {
-  return new Intl.NumberFormat(locale === "ar" ? "ar-EG" : "en-EG", {
-    maximumFractionDigits: 0,
-  }).format(value);
-}
-
 export function HomePage() {
   const [locale, setLocale] = useState<StoreLocale>(() => {
     const saved = window.localStorage.getItem("elitedom-locale");
@@ -149,7 +143,15 @@ export function HomePage() {
             <div className="el-hero__stage">
               <div className="el-hero__ambient" />
               {heroProduct ? (
-                <img alt={heroProduct.name} className="el-hero__product" src={heroProduct.image} />
+                <img
+                  alt={heroProduct.name}
+                  className="el-hero__product"
+                  onError={(event) => {
+                    event.currentTarget.hidden = true;
+                    event.currentTarget.parentElement?.classList.add("is-media-unavailable");
+                  }}
+                  src={heroProduct.image}
+                />
               ) : (
                 <div className="el-hero__media-placeholder" aria-hidden="true" />
               )}
@@ -216,9 +218,9 @@ export function HomePage() {
           </section>
         </main>
 
+        <SocialDock />
         <StoreFooter locale={locale} />
       </div>
-      <SocialDock />
     </div>
   );
 }
