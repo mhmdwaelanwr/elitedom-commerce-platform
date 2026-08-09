@@ -47,15 +47,15 @@ def test_paymob_unsigned_local_order_cannot_rebind_signed_provider_order() -> No
         },
     }
 
-    assert _binding_error(transaction, attempt, order) == "local_order_mismatch"
+    assert _binding_error(transaction, attempt, order) == "local_order_id_mismatch"
 
 
 @pytest.mark.asyncio
 async def test_paymob_conflicting_signed_identifiers_cannot_choose_an_attempt() -> None:
-    transaction_attempt = SimpleNamespace(id=101)
-    provider_order_attempt = SimpleNamespace(id=202)
+    provider_order_attempt = SimpleNamespace(id="attempt-provider-order")
+    transaction_attempt = SimpleNamespace(id="attempt-transaction")
     db = SimpleNamespace(
-        scalar=AsyncMock(side_effect=[transaction_attempt, provider_order_attempt])
+        scalar=AsyncMock(side_effect=[provider_order_attempt, transaction_attempt])
     )
 
     attempt, order = await _find_attempt_and_order(
