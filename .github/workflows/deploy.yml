@@ -29,6 +29,9 @@ jobs:
     timeout-minutes: 35
     environment:
       name: ${{ inputs.environment }}
+    outputs:
+      site_url: ${{ steps.target.outputs.site_url }}
+      api_url: ${{ steps.target.outputs.api_url }}
     env:
       RELEASE_REF: ${{ inputs.release_ref }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
@@ -46,6 +49,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate release and environment contract
+        id: target
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +62,8 @@ jobs:
           [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
           [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
           bash -n elitedom-store/infrastructure/scripts/deploy_release.sh
+          printf 'site_url=%s\n' "${SITE_URL%/}" >> "$GITHUB_OUTPUT"
+          printf 'api_url=%s\n' "${API_URL%/}" >> "$GITHUB_OUTPUT"
 
       - name: Configure pinned SSH host identity
         shell: bash
@@ -112,6 +118,6 @@ jobs:
     needs: deploy
     uses: ./.github/workflows/launch-smoke.yml
     with:
-      site_url: ${{ vars.SITE_URL }}
-      api_url: ${{ vars.API_URL }}
+      site_url: ${{ needs.deploy.outputs.site_url }}
+      api_url: ${{ needs.deploy.outputs.api_url }}
       release_ref: ${{ inputs.release_ref }}
