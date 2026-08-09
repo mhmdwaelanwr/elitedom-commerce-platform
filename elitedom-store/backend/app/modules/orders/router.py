@@ -27,16 +27,15 @@ from app.modules.orders.schemas import (
 from app.modules.orders.service import OrderService
 from app.shared.exceptions import (
     InsufficientPermissionsError,
-    InvalidCredentialsError,
     ResourceNotFoundError,
 )
 from app.shared.schemas import OrderState, PaymentMethod
 from app.shared.security import (
-    decode_token,
     get_current_user,
     require_permission,
     require_staff_access,
     security_scheme,
+    validate_access_token,
 )
 
 router = APIRouter()
@@ -60,25 +59,12 @@ async def _has_order_permission(
 
 async def _get_optional_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
+    db: AsyncSession = Depends(get_db),
 ) -> Optional[dict]:
-    """Return a verified access-token subject when supplied, otherwise guest mode."""
+    """Return a session-aware authenticated subject when supplied, otherwise guest mode."""
     if credentials is None:
         return None
-
-    payload = decode_token(credentials.credentials)
-    if payload.get("type") != "access":
-        raise InvalidCredentialsError()
-
-    try:
-        user_id = int(payload["sub"])
-    except (KeyError, TypeError, ValueError) as error:
-        raise InvalidCredentialsError() from error
-
-    return {
-        "user_id": user_id,
-        "email": payload.get("email"),
-        "role": payload.get("role"),
-    }
+    return await validate_access_token(credentials.credentials, db)
 
 
 def _guest_session_id(session_id: Optional[str]) -> str:
@@ -196,7 +182,7 @@ async def remove_from_cart(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).remove_from_cart(
+    return await OrderService(db).remove_cart_item(
         item_id,
         partner_id=partner_id,
         session_id=guest_session_id,
