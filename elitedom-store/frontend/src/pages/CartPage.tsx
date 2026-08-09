@@ -10,48 +10,18 @@ import "@/styles/checkout.css";
 
 const copy = {
   en: {
-    title: "Your cart",
-    item: "item",
-    items: "items",
-    local: "Local stock",
-    warranty: "Warranty included",
-    remove: "Remove",
-    summary: "Order summary",
-    products: "Products",
-    shipping: "Shipping",
-    calculated: "Calculated at checkout",
-    vat: "VAT",
-    included: "Included",
-    total: "Total",
-    continue: "Continue to checkout",
-    secure: "Secure checkout · Encrypted connection",
-    emptyTitle: "Your cart is ready for hardware.",
-    emptyText: "Add a product from the catalogue and it will stay linked to this guest session.",
-    shop: "Shop hardware",
-    error: "We could not load your cart.",
-    retry: "Retry",
+    title: "Your cart", item: "item", items: "items", local: "Local stock", warranty: "Warranty included", remove: "Remove",
+    summary: "Order summary", products: "Products", shipping: "Shipping", calculated: "Calculated at checkout", vat: "VAT",
+    included: "Included", total: "Total", continue: "Continue to checkout", secure: "Secure checkout · Encrypted connection",
+    emptyTitle: "Your cart is ready for hardware.", emptyText: "Add a product from the catalogue and it will stay linked to this guest session.",
+    shop: "Shop hardware", error: "We could not load your cart.", retry: "Retry",
   },
   ar: {
-    title: "سلة التسوق",
-    item: "منتج",
-    items: "منتجات",
-    local: "مخزون محلي",
-    warranty: "الضمان مشمول",
-    remove: "إزالة",
-    summary: "ملخص الطلب",
-    products: "المنتجات",
-    shipping: "الشحن",
-    calculated: "يُحسب عند إتمام الطلب",
-    vat: "الضريبة",
-    included: "مشمولة",
-    total: "الإجمالي",
-    continue: "متابعة لإتمام الطلب",
-    secure: "إتمام طلب آمن · اتصال مشفر",
-    emptyTitle: "السلة جاهزة للهاردوير.",
-    emptyText: "أضف منتج من الكتالوج وهيفضل مرتبط بنفس جلسة الزائر.",
-    shop: "تسوّق الهاردوير",
-    error: "تعذر تحميل السلة.",
-    retry: "حاول تاني",
+    title: "سلة التسوق", item: "منتج", items: "منتجات", local: "مخزون محلي", warranty: "الضمان مشمول", remove: "إزالة",
+    summary: "ملخص الطلب", products: "المنتجات", shipping: "الشحن", calculated: "يُحسب عند إتمام الطلب", vat: "الضريبة",
+    included: "مشمولة", total: "الإجمالي", continue: "متابعة لإتمام الطلب", secure: "إتمام طلب آمن · اتصال مشفر",
+    emptyTitle: "السلة جاهزة للهاردوير.", emptyText: "أضف منتج من الكتالوج وهيفضل مرتبط بنفس جلسة الزائر.",
+    shop: "تسوّق الهاردوير", error: "تعذر تحميل السلة.", retry: "حاول تاني",
   },
 } as const;
 
@@ -71,8 +41,7 @@ export function CartPage() {
   const reload = useCallback(async () => {
     setLoading(true);
     try {
-      const next = await loadGuestCart(locale);
-      setSnapshot(next);
+      setSnapshot(await loadGuestCart(locale));
       setError(false);
     } catch {
       setError(true);
@@ -81,7 +50,22 @@ export function CartPage() {
     }
   }, [locale]);
 
-  useEffect(() => { void reload(); }, [reload]);
+  useEffect(() => {
+    let active = true;
+    void loadGuestCart(locale)
+      .then((next) => {
+        if (!active) return;
+        setSnapshot(next);
+        setError(false);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, [locale]);
 
   async function updateQuantity(itemId: number | undefined, quantity: number) {
     if (!snapshot || !itemId || quantity < 1) return;
@@ -115,30 +99,11 @@ export function CartPage() {
     <div className="el-checkout-page">
       <div className="el-storefront__shell">
         <StoreHeader locale={locale} onLocaleChange={setLocale} />
-
         <main>
-          <section className="el-cart-intro">
-            <h1>{text.title}</h1>
-            {!loading && !error ? <p>{count} {count === 1 ? text.item : text.items} · {text.local} · {text.warranty}</p> : null}
-          </section>
-
+          <section className="el-cart-intro"><h1>{text.title}</h1>{!loading && !error ? <p>{count} {count === 1 ? text.item : text.items} · {text.local} · {text.warranty}</p> : null}</section>
           {loading ? <div className="el-cart-loading"><div /><div /><div /></div> : null}
-          {!loading && error ? (
-            <div className="el-cart-empty">
-              <StoreIcon name="returns" size={30} />
-              <h2>{text.error}</h2>
-              <button onClick={() => void reload()} type="button">{text.retry}</button>
-            </div>
-          ) : null}
-          {!loading && !error && items.length === 0 ? (
-            <div className="el-cart-empty">
-              <StoreIcon name="cart" size={34} />
-              <h2>{text.emptyTitle}</h2>
-              <p>{text.emptyText}</p>
-              <Link to="/catalog">{text.shop} <StoreIcon name="arrow" size={15} /></Link>
-            </div>
-          ) : null}
-
+          {!loading && error ? <div className="el-cart-empty"><StoreIcon name="returns" size={30} /><h2>{text.error}</h2><button onClick={() => void reload()} type="button">{text.retry}</button></div> : null}
+          {!loading && !error && items.length === 0 ? <div className="el-cart-empty"><StoreIcon name="cart" size={34} /><h2>{text.emptyTitle}</h2><p>{text.emptyText}</p><Link to="/catalog">{text.shop} <StoreIcon name="arrow" size={15} /></Link></div> : null}
           {!loading && !error && items.length > 0 ? (
             <div className="el-cart-layout">
               <section className="el-cart-items" aria-label={text.title}>
@@ -146,9 +111,7 @@ export function CartPage() {
                   const itemPending = pendingItemId === item.serverItemId;
                   return (
                     <article className="el-cart-item" key={item.serverItemId ?? item.product.id}>
-                      <div className="el-cart-item__media">
-                        <img alt={item.product.name} onError={(event) => { event.currentTarget.hidden = true; }} src={item.product.image} />
-                      </div>
+                      <div className="el-cart-item__media"><img alt={item.product.name} onError={(event) => { event.currentTarget.hidden = true; }} src={item.product.image} /></div>
                       <div className="el-cart-item__info">
                         <Link to={`/products/${encodeURIComponent(item.product.id)}`}>{item.product.name}</Link>
                         <p>{item.product.specs.slice(0, 2).map((spec) => spec.value).join(" · ") || item.product.categoryName} · {text.local} · {text.warranty}</p>
@@ -164,7 +127,6 @@ export function CartPage() {
                   );
                 })}
               </section>
-
               <aside className="el-order-summary el-order-summary--cart">
                 <h2>{text.summary}</h2>
                 <SummaryRow label={text.products} value={`${formatEgp(subtotal, locale)} EGP`} />
@@ -178,7 +140,6 @@ export function CartPage() {
             </div>
           ) : null}
         </main>
-
         <StoreFooter locale={locale} />
       </div>
     </div>
