@@ -7,7 +7,6 @@ function origin(name, fallback) {
 
 const siteOrigin = origin("E2E_SITE_URL", "http://127.0.0.1:3000");
 const apiOrigin = origin("E2E_API_URL", "http://127.0.0.1:8000");
-const apiV1 = `${apiOrigin}/api/v1`;
 const password = process.env.E2E_PASSWORD || "E2eTest!2026";
 const accounts = {
   customer: process.env.E2E_CUSTOMER_EMAIL || "e2e-customer@example.com",
@@ -77,14 +76,14 @@ async function expectHealthyDocument(page) {
 test.describe.serial("P22 real full-stack browser integration", () => {
   test.beforeAll(async () => {
     const api = await playwrightRequest.newContext({
-      baseURL: apiV1,
+      baseURL: apiOrigin,
       extraHTTPHeaders: { Accept: "application/json" },
     });
     try {
-      const ready = await api.get("/../health/ready");
+      const ready = await api.get("/health/ready");
       expect(ready.ok(), `FastAPI readiness failed: HTTP ${ready.status()}`).toBeTruthy();
 
-      const response = await api.get("/catalog/products?locale=en&page=1&limit=100");
+      const response = await api.get("/api/v1/catalog/products?locale=en&page=1&limit=100");
       expect(response.ok(), `Catalogue discovery failed: HTTP ${response.status()}`).toBeTruthy();
       const payload = await response.json();
       product = payload.products.find(
