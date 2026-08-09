@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
@@ -23,6 +23,9 @@ const copy = {
     ],
     menu: "Open navigation",
     closeMenu: "Close navigation",
+    home: "Elitedom home",
+    primary: "Primary navigation",
+    mobilePrimary: "Mobile navigation",
     account: "Account",
     cart: "Cart",
     language: "العربية",
@@ -39,6 +42,9 @@ const copy = {
     ],
     menu: "افتح القائمة",
     closeMenu: "اقفل القائمة",
+    home: "الرئيسية في Elitedom",
+    primary: "التنقل الرئيسي",
+    mobilePrimary: "التنقل على الموبايل",
     account: "الحساب",
     cart: "السلة",
     language: "English",
@@ -60,8 +66,20 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const labels = copy[locale];
   const nextLocale: StoreLocale = locale === "en" ? "ar" : "en";
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      setMobileOpen(false);
+      menuButtonRef.current?.focus();
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [mobileOpen]);
 
   function submitSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -89,11 +107,11 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   return (
     <header className="el-store-header" data-testid="store-header">
       <div className="el-store-header__left">
-        <Link aria-label="Elitedom home" className="el-store-header__brand" to="/">
+        <Link aria-label={labels.home} className="el-store-header__brand" to="/">
           <span className="el-store-header__desktop-brand"><ElitedomBrand /></span>
         </Link>
 
-        <nav aria-label="Primary" className="el-store-header__nav">
+        <nav aria-label={labels.primary} className="el-store-header__nav">
           {labels.navigation.map(([label, href]) => (
             <Link className={activeHref(href) ? "is-active" : undefined} to={href} key={label}>
               {label}
@@ -135,14 +153,16 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
 
       <div className="el-store-header__mobile-row">
         <div className="el-store-header__mobile-brand-group">
-          <Link aria-label="Elitedom home" className="el-store-header__mobile-brand" to="/">
+          <Link aria-label={labels.home} className="el-store-header__mobile-brand" to="/">
             <ElitedomBrand compact />
           </Link>
           <button
             aria-expanded={mobileOpen}
+            aria-controls="el-mobile-navigation"
             aria-label={mobileOpen ? labels.closeMenu : labels.menu}
             className="el-icon-button el-menu-button"
             onClick={() => setMobileOpen((open) => !open)}
+            ref={menuButtonRef}
             type="button"
           >
             <StoreIcon name="menu" size={20} />
@@ -163,7 +183,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
       </div>
 
       {mobileOpen ? (
-        <nav aria-label="Mobile primary" className="el-mobile-nav">
+        <nav aria-label={labels.mobilePrimary} className="el-mobile-nav" id="el-mobile-navigation">
           {labels.navigation.map(([label, href]) => (
             <Link key={label} onClick={() => setMobileOpen(false)} to={href}>
               {label}

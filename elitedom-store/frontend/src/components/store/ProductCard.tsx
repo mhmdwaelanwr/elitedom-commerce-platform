@@ -41,7 +41,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
         <span className="el-product-card__badge">{labels.badge}</span>
       </div>
       <p className="el-product-card__brand" dir="auto">{product.brand} / {product.categoryName}</p>
-      <h3 dir="auto">{product.name}</h3>
+      <h3 dir="auto"><Link to={`/products/${encodeURIComponent(product.id)}`}>{product.name}</Link></h3>
       <p className="el-product-card__spec" dir="auto">{decisionSpec(product)}</p>
       <div className="el-product-card__price-row">
         <strong>{formatEgp(product.priceEgp, locale)} EGP</strong>
