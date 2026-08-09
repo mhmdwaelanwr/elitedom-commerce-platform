@@ -44,7 +44,7 @@ requireIncludes(cartPage, [
   "loadGuestCart(locale, currentSession)",
   "updateRemoteCartItem(",
   "removeRemoteCartItem(",
-  'to="/checkout"',
+  'navigate("/checkout")',
 ], "cart page");
 requireIncludes(cartData, [
   "fetchRemoteCart(sessionId, session)",
