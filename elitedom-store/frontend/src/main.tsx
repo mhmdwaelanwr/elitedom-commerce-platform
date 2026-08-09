@@ -4,6 +4,7 @@ import { RouterProvider } from "react-router-dom";
 import { applyTheme, readTheme } from "@/lib/theme";
 import { router } from "@/router";
 import "@/styles/globals.css";
+import "@/styles/p14-responsive.css";
 
 const root = document.getElementById("root");
 

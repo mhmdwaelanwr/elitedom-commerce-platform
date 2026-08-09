@@ -22,8 +22,10 @@ const copy = {
       ["Business", "/business"],
     ],
     menu: "Open navigation",
+    closeMenu: "Close navigation",
     account: "Account",
     cart: "Cart",
+    language: "العربية",
   },
   ar: {
     search: "ابحث في الهاردوير",
@@ -36,8 +38,10 @@ const copy = {
       ["الشركات", "/business"],
     ],
     menu: "افتح القائمة",
+    closeMenu: "اقفل القائمة",
     account: "الحساب",
     cart: "السلة",
+    language: "English",
   },
 } as const;
 
@@ -66,6 +70,16 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
     setMobileOpen(false);
   }
 
+  function openMobileSearch() {
+    navigate("/catalog");
+    setMobileOpen(false);
+  }
+
+  function changeLocale() {
+    onLocaleChange(nextLocale);
+    setMobileOpen(false);
+  }
+
   function activeHref(href: string) {
     if (href === "/business") return location.pathname.startsWith("/business");
     if (href === "/catalog") return location.pathname.startsWith("/catalog") || location.pathname.startsWith("/products/");
@@ -77,7 +91,6 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
       <div className="el-store-header__left">
         <Link aria-label="Elitedom home" className="el-store-header__brand" to="/">
           <span className="el-store-header__desktop-brand"><ElitedomBrand /></span>
-          <span className="el-store-header__mobile-brand"><ElitedomBrand compact /></span>
         </Link>
 
         <nav aria-label="Primary" className="el-store-header__nav">
@@ -106,7 +119,7 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
         <button
           aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"}
           className="el-icon-button el-locale-button"
-          onClick={() => onLocaleChange(nextLocale)}
+          onClick={changeLocale}
           type="button"
         >
           {nextLocale === "ar" ? "AR" : "EN"}
@@ -118,16 +131,35 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
         <Link aria-label={labels.cart} className="el-icon-button" to="/cart">
           <StoreIcon name="cart" size={20} />
         </Link>
+      </div>
 
-        <button
-          aria-expanded={mobileOpen}
-          aria-label={labels.menu}
-          className="el-icon-button el-menu-button"
-          onClick={() => setMobileOpen((open) => !open)}
-          type="button"
-        >
-          <StoreIcon name="menu" size={20} />
-        </button>
+      <div className="el-store-header__mobile-row">
+        <div className="el-store-header__mobile-brand-group">
+          <Link aria-label="Elitedom home" className="el-store-header__mobile-brand" to="/">
+            <ElitedomBrand compact />
+          </Link>
+          <button
+            aria-expanded={mobileOpen}
+            aria-label={mobileOpen ? labels.closeMenu : labels.menu}
+            className="el-icon-button el-menu-button"
+            onClick={() => setMobileOpen((open) => !open)}
+            type="button"
+          >
+            <StoreIcon name="menu" size={20} />
+          </button>
+        </div>
+
+        <div className="el-store-header__mobile-actions">
+          <button aria-label={labels.search} className="el-icon-button" onClick={openMobileSearch} type="button">
+            <StoreIcon name="search" size={20} />
+          </button>
+          <Link aria-label={labels.account} className="el-icon-button" to="/account">
+            <StoreIcon name="account" size={20} />
+          </Link>
+          <Link aria-label={labels.cart} className="el-icon-button" to="/cart">
+            <StoreIcon name="cart" size={20} />
+          </Link>
+        </div>
       </div>
 
       {mobileOpen ? (
@@ -137,6 +169,9 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
               {label}
             </Link>
           ))}
+          <button className="el-mobile-nav__locale" onClick={changeLocale} type="button">
+            {labels.language}
+          </button>
         </nav>
       ) : null}
     </header>
