@@ -15,7 +15,8 @@ from app.modules.shipping.service import (
     ShippingTrackingResponse,
     SupplierShipmentRequest,
 )
-from app.shared.security import get_current_user, require_permission
+from app.shared.exceptions import InsufficientPermissionsError
+from app.shared.security import get_current_user, require_permission, require_staff_access
 
 router = APIRouter()
 DatabaseSession = Annotated[AsyncSession, Depends(get_db)]
@@ -58,7 +59,14 @@ async def get_tracking(
     current_user: CurrentUser,
 ) -> ShippingTrackingResponse:
     """Get customer-owned tracking or all tracking for authorised operations staff."""
-    _, permissions = await AdminAccessService(db).resolve_permissions(current_user["user_id"])
+    try:
+        _, permissions = await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=(AdminPermission.SHIPMENTS_VIEW.value,),
+        )
+    except InsufficientPermissionsError:
+        permissions = frozenset()
     return await ShippingService(db).get_tracking(
         order_id,
         current_user["user_id"],

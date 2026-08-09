@@ -131,6 +131,30 @@ def require_role(*allowed_roles: UserRole):
     return role_checker
 
 
+async def require_staff_access(
+    *,
+    db: AsyncSession,
+    current_user: dict,
+    permissions: tuple[str, ...],
+) -> tuple[str, frozenset[str]]:
+    """Require persisted staff permission and the configured MFA session gate."""
+    if not permissions:
+        raise ValueError("At least one staff permission is required.")
+
+    from app.modules.admin.access_service import AdminAccessService
+    from app.modules.auth.mfa_service import AdminMfaService
+
+    role, granted = await AdminAccessService(db).resolve_permissions(int(current_user["user_id"]))
+    if role is None or not any(permission in granted for permission in permissions):
+        raise InsufficientPermissionsError()
+    if settings.staff_mfa_required:
+        await AdminMfaService(db).require_verified_staff_session(
+            partner_id=int(current_user["user_id"]),
+            session_id=current_user.get("session_id"),
+        )
+    return role, granted
+
+
 def require_permission(permission: str):
     """Resolve a privileged permission from persisted staff state plus MFA.
 
@@ -144,17 +168,11 @@ def require_permission(permission: str):
         current_user: dict = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
     ) -> dict:
-        from app.modules.admin.access_service import AdminAccessService
-        from app.modules.auth.mfa_service import AdminMfaService
-
-        role, permissions = await AdminAccessService(db).require(
-            int(current_user["user_id"]), permission
+        role, permissions = await require_staff_access(
+            db=db,
+            current_user=current_user,
+            permissions=(permission,),
         )
-        if settings.staff_mfa_required:
-            await AdminMfaService(db).require_verified_staff_session(
-                partner_id=int(current_user["user_id"]),
-                session_id=current_user.get("session_id"),
-            )
         resolved = dict(current_user)
         resolved["role"] = role
         resolved["permissions"] = sorted(permissions)
