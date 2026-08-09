@@ -51,20 +51,19 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$INFRA/docker-compose.yml" -f
 "${COMPOSE[@]}" config --quiet
 
 echo "Ensuring PostgreSQL is healthy before backup..."
-"${COMPOSE[@]}" up -d postgres app-db-init
+"${COMPOSE[@]}" up -d --wait --wait-timeout 120 postgres app-db-init
 
 BACKUP_DIR="${DEPLOY_BACKUP_DIR:-$(dirname "$REPO_PATH")/elitedom-backups}"
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 
-container_env() {
+postgres_env() {
   "${COMPOSE[@]}" exec -T postgres printenv "$1" | tr -d '\r\n'
 }
-DB_USER="$(container_env POSTGRES_USER)"
-APP_DB="$(container_env APP_POSTGRES_DB)"
-ODOO_DB="$(container_env ODOO_DB || true)"
-if [[ -z "$ODOO_DB" ]]; then ODOO_DB="$(container_env POSTGRES_DB)"; fi
+DB_USER="$(postgres_env POSTGRES_USER)"
+APP_DB="$(postgres_env APP_POSTGRES_DB)"
+ODOO_DB="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint /bin/sh odoo -ec 'printf %s "$ODOO_DB"' | tr -d '\r\n')"
 [[ -n "$DB_USER" && -n "$APP_DB" && -n "$ODOO_DB" ]] || fail "database identity could not be resolved"
 [[ "$APP_DB" != "$ODOO_DB" ]] || fail "application and Odoo databases must be distinct"
 
