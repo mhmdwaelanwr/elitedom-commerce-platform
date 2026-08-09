@@ -19,6 +19,12 @@ Defines how automated fixtures, development seed data, provider sandbox referenc
 
 Tests may create deterministic users, products, orders, payments, roles, sessions, webhook payloads, launch evidence, and other domain data in isolated test databases. Fixtures must be self-contained and must not depend on a developer's existing database or execution order.
 
+### P22 real-browser integration fixtures
+
+`app.scripts.seed_e2e` is restricted to `ENVIRONMENT=development` and exists only to provision identities that the public product cannot self-promote into: one ordinary customer, one verified B2B client and one system administrator. The browser still signs in through the normal `/api/v1/auth/login` path, the staff browser still completes the real MFA enrollment flow, and all RBAC checks remain backend-enforced.
+
+The P22 workflow creates fresh PostgreSQL/Odoo/Redis volumes for each job, seeds the normal development catalogue, disables external payment providers, and exercises checkout only through cash on delivery. The fixture credentials are artificial CI values for an ephemeral database; they are not deployment credentials or reusable production defaults. P22 must never add request interception, API response mocking, auth bypasses, or real merchant credentials to make a browser journey pass.
+
 ### Development seed data
 
 `make seed` uses the repository's demo seeding path to create/refresh a local catalogue and related development-only mappings. Seed behavior must be idempotent, clearly non-production, and must not create a known production administrator password or enable external providers implicitly.
@@ -43,11 +49,15 @@ Repository tests can use artificial evidence references. Real launch-control evi
 - Seed data is development convenience, not migration/reference data for production.
 - Authentication/authorization tests must exercise real backend permission/session boundaries rather than bypassing them with fixture-only shortcuts.
 - Webhook tests must retain signature/idempotency behavior instead of disabling security checks globally.
+- Real-browser integration may use an offline payment method to create persisted orders, but must not contact a live/sandbox payment provider merely to prove page wiring.
 
 ## Source of truth
 
 - `elitedom-store/backend/app/tests/`
 - `elitedom-store/backend/app/scripts/seed_demo.py`
+- `elitedom-store/backend/app/scripts/seed_e2e.py`
+- `elitedom-store/frontend/e2e/integration.spec.mjs`
+- `.github/workflows/real-e2e.yml`
 - `elitedom-store/.env.example`
 - `elitedom-store/scripts/check_repository_hygiene.py`
 
