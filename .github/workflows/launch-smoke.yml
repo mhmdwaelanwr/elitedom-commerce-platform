@@ -11,18 +11,23 @@ on:
         description: Public HTTPS API origin, without /api/v1
         required: true
         type: string
+      release_ref:
+        description: Exact deployed Git commit SHA expected from /health/live
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   external-smoke:
-    name: External launch smoke
+    name: External launch smoke and browser E2E
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       SITE_URL: ${{ inputs.site_url }}
       API_URL: ${{ inputs.api_url }}
+      RELEASE_REF: ${{ inputs.release_ref }}
 
     steps:
       - name: Check out source
@@ -33,6 +38,19 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
+      - name: Install pinned browser test runner
+        working-directory: elitedom-store/frontend
+        run: |
+          set -euo pipefail
+          npm install --no-audit --no-fund
+          npm install --no-save --no-package-lock --no-audit --no-fund @playwright/test@1.55.0
+          npx playwright install --with-deps chromium
+
       - name: Run public launch smoke
         shell: bash
         run: |
@@ -42,11 +60,33 @@ jobs:
             --api-url "$API_URL" \
             | tee launch-smoke.json
 
-      - name: Preserve smoke evidence
+      - name: Verify deployed release provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python elitedom-store/scripts/verify_release.py \
+            --api-url "$API_URL" \
+            --release-ref "$RELEASE_REF" \
+            | tee release-provenance.json
+
+      - name: Run real storefront browser gate
+        working-directory: elitedom-store/frontend
+        env:
+          ELITEDOM_SITE_URL: ${{ env.SITE_URL }}
+          ELITEDOM_API_URL: ${{ env.API_URL }}
+        run: |
+          set -euo pipefail
+          npx playwright test --config=playwright.launch.config.mjs
+
+      - name: Preserve launch evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: launch-smoke-${{ github.run_id }}
-          path: launch-smoke.json
+          name: launch-evidence-${{ github.run_id }}
+          path: |
+            launch-smoke.json
+            release-provenance.json
+            elitedom-store/frontend/playwright-report
+            elitedom-store/frontend/test-results
           if-no-files-found: warn
           retention-days: 30
