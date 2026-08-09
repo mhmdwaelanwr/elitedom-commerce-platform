@@ -1544,6 +1544,337 @@
     border-radius: 18px;
   }
 
+  /* P14.f — B2B landing, RFQ workspace and quote detail on mobile. */
+  .el-b2b-page main {
+    width: calc(100% - 40px);
+    max-width: 350px;
+    margin-inline: auto;
+    padding-block: 12px 48px;
+  }
+
+  .el-b2b-hero {
+    display: grid;
+    width: 100%;
+    min-height: 0;
+    grid-template-columns: 1fr;
+    gap: 28px;
+    padding: 34px 0;
+  }
+
+  .el-b2b-hero__copy,
+  [dir="rtl"] .el-b2b-hero__copy {
+    min-width: 0;
+    align-items: stretch;
+    gap: 18px;
+    text-align: start;
+  }
+
+  .el-b2b-hero h1,
+  .el-rfq-intro h1 {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-family: Alexandria, Inter, Tahoma, Arial, sans-serif;
+    font-size: clamp(34px, 10vw, 40px);
+    line-height: 1.25;
+    text-align: start;
+    unicode-bidi: plaintext;
+  }
+
+  .el-b2b-hero__copy > p:not(.el-eyebrow),
+  .el-rfq-intro > p:not(.el-eyebrow) {
+    width: 100%;
+    overflow-wrap: anywhere;
+    font-size: 14px;
+    line-height: 1.7;
+    text-align: start;
+  }
+
+  .el-b2b-actions {
+    width: 100%;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 10px;
+  }
+
+  .el-b2b-actions .el-primary-button,
+  .el-b2b-actions .el-outline-button {
+    width: 100%;
+    min-height: 52px;
+    justify-content: center;
+    touch-action: manipulation;
+  }
+
+  .el-b2b-example {
+    width: 100%;
+    min-width: 0;
+    padding: 20px;
+    border-radius: 20px;
+  }
+
+  .el-b2b-example h2 {
+    overflow-wrap: anywhere;
+    font-size: 22px;
+    line-height: 1.45;
+  }
+
+  .el-b2b-example__line {
+    grid-template-columns: 38px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .el-b2b-example__line span,
+  .el-b2b-example__line b,
+  .el-b2b-example__line small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+  }
+
+  .el-b2b-example__total {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .el-b2b-example__total strong {
+    overflow-wrap: anywhere;
+    white-space: normal;
+    direction: ltr;
+  }
+
+  .el-b2b-feature-section {
+    width: 100%;
+    padding: 34px 0;
+  }
+
+  .el-b2b-feature-section h2 {
+    overflow-wrap: anywhere;
+    font-size: 28px;
+    line-height: 1.4;
+  }
+
+  .el-b2b-feature-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .el-b2b-feature-grid article {
+    min-height: 170px;
+    padding: 20px;
+  }
+
+  .el-b2b-feature-grid article > span {
+    margin-bottom: 24px;
+  }
+
+  .el-b2b-state {
+    width: 100%;
+    min-height: 520px;
+    padding-block: 40px;
+  }
+
+  .el-b2b-state h1,
+  .el-b2b-state > p {
+    width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .el-b2b-state > div {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .el-b2b-state .el-primary-button,
+  .el-b2b-state .el-outline-button {
+    width: 100%;
+    min-height: 48px;
+    justify-content: center;
+  }
+
+  .el-rfq-intro {
+    width: 100%;
+    padding: 38px 0 22px;
+  }
+
+  .el-rfq-status-lane {
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: none;
+  }
+
+  .el-rfq-status-lane::-webkit-scrollbar {
+    display: none;
+  }
+
+  .el-rfq-status {
+    min-height: 32px;
+    flex: 0 0 auto;
+  }
+
+  .el-rfq-layout {
+    width: 100%;
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .el-rfq-panel,
+  .el-rfq-recent,
+  .el-rfq-accept {
+    min-width: 0;
+    padding: 16px;
+    border-radius: 17px;
+  }
+
+  .el-rfq-panel h2,
+  .el-rfq-recent h2,
+  .el-rfq-accept h2 {
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+  }
+
+  .el-rfq-line {
+    min-width: 0;
+    min-height: 96px;
+    grid-template-columns: 34px minmax(0, 1fr) 68px;
+    gap: 10px;
+  }
+
+  .el-rfq-line > span b,
+  .el-rfq-line > span small {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+    unicode-bidi: plaintext;
+  }
+
+  .el-rfq-line > label input {
+    width: 68px;
+    min-height: 44px;
+  }
+
+  .el-rfq-line > button {
+    min-height: 44px;
+    grid-column: 2 / -1;
+    justify-self: start;
+    touch-action: manipulation;
+  }
+
+  .el-rfq-line--detail {
+    grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .el-rfq-line--detail em {
+    grid-column: 2;
+    overflow-wrap: anywhere;
+  }
+
+  .el-rfq-product-picker > label {
+    min-height: 52px;
+    height: auto;
+  }
+
+  .el-rfq-product-picker > div > button {
+    min-height: 58px;
+    align-items: flex-start;
+    touch-action: manipulation;
+  }
+
+  .el-rfq-product-picker button span,
+  .el-rfq-product-picker button b,
+  .el-rfq-product-picker button small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: start;
+    unicode-bidi: plaintext;
+  }
+
+  .el-rfq-details {
+    position: static;
+  }
+
+  .el-rfq-field input,
+  .el-rfq-field textarea,
+  .el-rfq-field select {
+    width: 100%;
+    min-height: 52px;
+    text-align: start;
+  }
+
+  [dir="rtl"] .el-rfq-field input[dir="ltr"] {
+    text-align: right;
+  }
+
+  .el-rfq-submit {
+    width: 100%;
+    min-height: 52px;
+    touch-action: manipulation;
+  }
+
+  .el-rfq-error {
+    overflow-wrap: anywhere;
+  }
+
+  .el-rfq-recent {
+    margin-top: 16px;
+  }
+
+  .el-rfq-recent-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .el-rfq-recent-grid > a {
+    min-width: 0;
+    min-height: 64px;
+    touch-action: manipulation;
+  }
+
+  .el-rfq-recent-grid b,
+  .el-rfq-recent-grid small {
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .el-rfq-value-card {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .el-rfq-value-card strong,
+  .el-rfq-detail strong {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    unicode-bidi: plaintext;
+  }
+
+  .el-rfq-accept {
+    grid-template-columns: 1fr;
+  }
+
+  .el-rfq-accept > div:first-child,
+  .el-rfq-accept .el-rfq-error {
+    grid-column: auto;
+  }
+
+  .el-rfq-accept .el-rfq-submit {
+    min-width: 0;
+  }
+
+  .el-rfq-conversion-success {
+    min-width: 0;
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .el-rfq-conversion-success > span,
+  .el-rfq-conversion-success b,
+  .el-rfq-conversion-success small {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .el-mobile-nav {
     inset-inline: 12px;
   }
