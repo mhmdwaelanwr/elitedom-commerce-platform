@@ -370,14 +370,17 @@ async def _find_attempt_and_order(
     db: AsyncSession,
     transaction: Mapping[str, Any],
 ) -> tuple[PaymentAttempt | None, SaleOrder | None]:
-    # Resolve only from HMAC-covered Paymob identifiers. Do not allow unsigned
-    # intention/extras/merchant references to choose a local payment object.
+    # Resolve the two HMAC-covered Paymob identifiers independently. If both
+    # are already known locally, they must identify the same payment attempt.
+    # Unsigned intention/extras/merchant references are never allowed to choose
+    # a local payment object.
     provider_order_id = _provider_order_id(transaction)
     transaction_id = _identifier(transaction.get("id"))
 
-    attempt: PaymentAttempt | None = None
+    by_provider_order: PaymentAttempt | None = None
+    by_transaction: PaymentAttempt | None = None
     if provider_order_id is not None:
-        attempt = await db.scalar(
+        by_provider_order = await db.scalar(
             select(PaymentAttempt)
             .where(
                 PaymentAttempt.provider == "paymob",
@@ -386,8 +389,8 @@ async def _find_attempt_and_order(
             .order_by(PaymentAttempt.created_at.desc())
             .limit(1)
         )
-    if attempt is None and transaction_id is not None:
-        attempt = await db.scalar(
+    if transaction_id is not None:
+        by_transaction = await db.scalar(
             select(PaymentAttempt)
             .where(
                 PaymentAttempt.provider == "paymob",
@@ -396,6 +399,18 @@ async def _find_attempt_and_order(
             .order_by(PaymentAttempt.created_at.desc())
             .limit(1)
         )
+
+    if (
+        by_provider_order is not None
+        and by_transaction is not None
+        and by_provider_order.id != by_transaction.id
+    ):
+        logger.warning(
+            "Rejected Paymob callback whose signed order/transaction identifiers map to different attempts"
+        )
+        return None, None
+
+    attempt = by_provider_order or by_transaction
     if attempt is None:
         return None, None
 
