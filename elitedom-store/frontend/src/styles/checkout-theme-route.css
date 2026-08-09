@@ -1,0 +1,17 @@
+.el-checkout-route-frame {
+  min-height: 100vh;
+  background: var(--el-bg-canvas);
+}
+
+.el-checkout-route-theme {
+  position: fixed;
+  z-index: 92;
+  top: 30px;
+  inset-inline-end: 80px;
+}
+
+@media (max-width: 900px) {
+  .el-checkout-route-theme {
+    display: none;
+  }
+}
