@@ -329,6 +329,10 @@
   background: radial-gradient(circle at 50% 50%, #142129, #0d1419 50%, #06080a 100%);
 }
 
+:root[data-theme="light"] .el-hero__media-placeholder {
+  background: radial-gradient(circle at 50% 50%, #ffffff, #f3f5f7 58%, #eef1f4 100%);
+}
+
 .el-hero__spec {
   position: absolute;
   top: 33px;

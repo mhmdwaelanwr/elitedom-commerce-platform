@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon } from "@/components/store/StoreIcon";
@@ -34,6 +34,7 @@ export function LaunchControlPage() {
   const [loadingReadiness, setLoadingReadiness] = useState(false);
   const [error, setError] = useState("");
   const [editingGate, setEditingGate] = useState<AdminLaunchGate | null>(null);
+  const dialogRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     let active = true;
@@ -69,6 +70,20 @@ export function LaunchControlPage() {
       });
     return () => { active = false; };
   }, [navigate]);
+
+  useEffect(() => {
+    if (!editingGate) return;
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialogRef.current?.focus();
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setEditingGate(null);
+    }
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      previousFocus?.focus();
+    };
+  }, [editingGate]);
 
   async function loadRelease(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -114,6 +129,23 @@ export function LaunchControlPage() {
       setError(reason instanceof Error ? reason.message : "Launch evidence could not be saved.");
     } finally {
       setLoadingReadiness(false);
+    }
+  }
+
+  function keepDialogFocus(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex='-1'])",
+    ) ?? []).filter((element) => !element.hidden);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
     }
   }
 
@@ -180,7 +212,7 @@ export function LaunchControlPage() {
         </button>
       </form>
 
-      {error ? <p className="el-admin-error">{error}</p> : null}
+      {error ? <p className="el-admin-error" role="alert">{error}</p> : null}
 
       {readiness ? (
         <section className="el-launch-readiness">
@@ -229,9 +261,9 @@ export function LaunchControlPage() {
         <div className="el-admin-dialog-backdrop" role="presentation" onMouseDown={(event) => {
           if (event.currentTarget === event.target) setEditingGate(null);
         }}>
-          <section aria-modal="true" className="el-admin-dialog" role="dialog">
+          <section aria-labelledby="el-launch-gate-dialog-title" aria-modal="true" className="el-admin-dialog" onKeyDown={keepDialogFocus} ref={dialogRef} role="dialog" tabIndex={-1}>
             <header>
-              <h2>{editingGate.label}</h2>
+              <h2 id="el-launch-gate-dialog-title">{editingGate.label}</h2>
               <button aria-label="Close" onClick={() => setEditingGate(null)} type="button">×</button>
             </header>
             <form className="el-admin-action-form" onSubmit={saveGate}>

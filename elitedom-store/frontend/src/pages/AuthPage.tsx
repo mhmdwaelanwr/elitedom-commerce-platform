@@ -134,6 +134,9 @@ const copy = {
     emailRecoveryGap: "Email recovery links are not configured yet. Use the verified phone number linked to your account.",
     providerError: "Provider sign-in could not be completed.",
     invalidIdentifier: "Enter a valid email address or Egyptian mobile number.",
+    togglePassword: "Toggle password visibility",
+    passwordRule: "At least 8 characters",
+    otpDigit: "OTP digit",
   },
   ar: {
     signInTitle: "أهلاً برجوعك",
@@ -180,16 +183,19 @@ const copy = {
     emailRecoveryGap: "استرجاع كلمة المرور بالإيميل لسه غير مفعّل. استخدم رقم الموبايل الموثق بالحساب.",
     providerError: "تعذر إكمال تسجيل الدخول بمزود الحساب.",
     invalidIdentifier: "اكتب بريد إلكتروني صحيح أو رقم موبايل مصري صحيح.",
+    togglePassword: "إظهار أو إخفاء كلمة المرور",
+    passwordRule: "8 أحرف على الأقل",
+    otpDigit: "رقم كود التحقق",
   },
 } as const;
 
 export function AuthPage({ mode }: { mode: AuthMode }) {
-  const [locale] = useStoreLocale();
+  const [locale, setLocale] = useStoreLocale();
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get("next"));
 
   return (
-    <AuthShell locale={locale}>
+    <AuthShell locale={locale} onLocaleChange={setLocale}>
       <ElitedomBrand compact />
       {mode === "sign-in" ? <SignIn locale={locale} next={next} /> : null}
       {mode === "create" ? <CreateAccount locale={locale} next={next} /> : null}
@@ -278,7 +284,7 @@ function SignIn({ locale, next }: { locale: "en" | "ar"; next: string }) {
             required
             type={showPassword ? "text" : "password"}
             value={password}
-            trailing={<button aria-label="Toggle password visibility" className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
+            trailing={<button aria-label={text.togglePassword} className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
           />
         )}
         <Link className="el-auth-link" to={authHref("/auth/forgot", next)}>{text.forgot}</Link>
@@ -387,11 +393,11 @@ function CreateAccount({ locale, next }: { locale: "en" | "ar"; next: string }) 
           icon="lock"
           label={text.password}
           onChange={setPassword}
-          placeholder="At least 8 characters"
+          placeholder={text.passwordRule}
           required
           type={showPassword ? "text" : "password"}
           value={password}
-          trailing={<button aria-label="Toggle password visibility" className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
+          trailing={<button aria-label={text.togglePassword} className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
         /> : <p className="el-auth-inline-note"><StoreIcon name="phone" size={14} />{text.phoneHint}</p>}
         {error ? <p className="el-auth-error" role="alert">{error}</p> : null}
         <button className="el-auth-primary" disabled={pending} type="submit">{pending ? text.creating : phone ? text.sendCode : text.create}</button>
@@ -494,7 +500,7 @@ function OtpVerification({ locale, next }: { locale: "en" | "ar"; next: string }
       <form className="el-auth-form" onSubmit={verify}>
         <div className="el-otp-cells" dir="ltr">
           {digits.map((digit, index) => <input
-            aria-label={`OTP digit ${index + 1}`}
+            aria-label={`${text.otpDigit} ${index + 1}`}
             autoComplete={index === 0 ? "one-time-code" : "off"}
             inputMode="numeric"
             key={index}
@@ -614,11 +620,11 @@ function ResetPassword({ locale, next }: { locale: "en" | "ar"; next: string }) 
           icon="lock"
           label={text.newPassword}
           onChange={setPassword}
-          placeholder="At least 8 characters"
+          placeholder={text.passwordRule}
           required
           type={showPassword ? "text" : "password"}
           value={password}
-          trailing={<button aria-label="Toggle password visibility" className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
+          trailing={<button aria-label={text.togglePassword} className="el-auth-eye" onClick={() => setShowPassword((shown) => !shown)} type="button"><StoreIcon name="eye" size={18} /></button>}
         />
         {error ? <p className="el-auth-error" role="alert">{error}</p> : null}
         <button className="el-auth-primary el-auth-primary--fit" disabled={pending} type="submit">{pending ? text.resetPending : text.resetAction}</button>
@@ -658,7 +664,7 @@ function AuthField({
       <span>{label}</span>
       <div>
         <StoreIcon name={icon} size={18} />
-        <input autoComplete={autoComplete} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} type={type} value={value} />
+        <input autoComplete={autoComplete} dir={autoComplete?.includes("password") ? "ltr" : "auto"} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} required={required} type={type} value={value} />
         {trailing}
       </div>
     </label>

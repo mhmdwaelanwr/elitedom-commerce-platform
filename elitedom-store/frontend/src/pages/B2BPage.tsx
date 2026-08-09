@@ -224,7 +224,7 @@ export function BusinessLandingPage() {
 }
 
 function ExampleLine({ quantity, label, meta }: { quantity: string; label: string; meta: string }) {
-  return <div className="el-b2b-example__line"><strong>{quantity}</strong><span><b>{label}</b><small>{meta}</small></span></div>;
+  return <div className="el-b2b-example__line"><strong>{quantity}</strong><span><b dir="auto">{label}</b><small dir="auto">{meta}</small></span></div>;
 }
 
 export function BusinessRfqPage() {
@@ -391,7 +391,7 @@ function RfqBuilder({ catalog, recent, session, locale, text }: {
               {selectedProducts.map((product) => (
                 <div className="el-rfq-line" key={product.id}>
                   <strong>{selected[product.id]}×</strong>
-                  <span><b>{product.name}</b><small>{product.sku} · {product.brand}</small></span>
+                  <span><b dir="auto">{product.name}</b><small dir="auto">{product.sku} · {product.brand}</small></span>
                   <label>{text.qty}<input min="1" onChange={(event) => setQuantity(product.id, Number(event.target.value))} type="number" value={selected[product.id]} /></label>
                   <button onClick={() => setQuantity(product.id, 0)} type="button">{text.remove}</button>
                 </div>
@@ -405,7 +405,7 @@ function RfqBuilder({ catalog, recent, session, locale, text }: {
                 <p className="el-eyebrow">{text.results}</p>
                 {matches.map((product) => (
                   <button key={product.id} onClick={() => add(product)} type="button">
-                    <span><b>{product.name}</b><small>{product.sku} · {formatMoney(product.priceEgp, locale)} EGP</small></span>
+                    <span><b dir="auto">{product.name}</b><small dir="auto">{product.sku} · {formatMoney(product.priceEgp, locale)} EGP</small></span>
                     <strong>{selected[product.id] ? `${selected[product.id]}×` : text.add}</strong>
                   </button>
                 ))}
@@ -421,7 +421,7 @@ function RfqBuilder({ catalog, recent, session, locale, text }: {
           <RfqField label={text.budget} min="0" name="budget" type="number" />
           <RfqField label={text.terms} name="terms" placeholder={text.termsPlaceholder} />
           <label className="el-rfq-field"><span>{text.notes}</span><textarea maxLength={4000} name="notes" placeholder={text.notesPlaceholder} rows={4} /></label>
-          {error ? <p className="el-rfq-error">{error}</p> : null}
+          {error ? <p className="el-rfq-error" role="alert">{error}</p> : null}
           <button className="el-rfq-submit" disabled={pending || !selectedProducts.length} type="submit">{pending ? text.submitting : text.submit}</button>
         </aside>
       </form>
@@ -494,8 +494,8 @@ function RfqDetail({ rfq, session, locale, text }: {
             {rfq.items.map((item) => (
               <div className="el-rfq-line el-rfq-line--detail" key={item.product_id}>
                 <strong>{item.quantity}×</strong>
-                <span><b>{item.product_name || item.sku || `Product ${item.product_id}`}</b><small>{item.sku || ""}{item.quoted_unit_price != null ? ` · ${formatMoney(Number(item.quoted_unit_price), locale)} EGP / unit` : ""}</small></span>
-                {item.line_total != null ? <em>{formatMoney(Number(item.line_total), locale)} EGP</em> : null}
+                <span><b dir="auto">{item.product_name || item.sku || `Product ${item.product_id}`}</b><small dir="auto">{item.sku || ""}{item.quoted_unit_price != null ? ` · ${formatMoney(Number(item.quoted_unit_price), locale)} EGP / unit` : ""}</small></span>
+                {item.line_total != null ? <em dir="ltr">{formatMoney(Number(item.line_total), locale)} EGP</em> : null}
               </div>
             ))}
           </div>
@@ -519,7 +519,7 @@ function RfqDetail({ rfq, session, locale, text }: {
           <RfqField label={text.shippingAddress} name="shippingAddress" placeholder={procurement?.delivery_location || ""} />
           <RfqField label={text.governorate} name="governorate" />
           <label className="el-rfq-field"><span>{text.paymentMethod}</span><select defaultValue="cod" name="paymentMethod"><option value="cod">{text.cod}</option><option value="credit_card">{text.card}</option><option value="mobile_wallet">{text.wallet}</option></select></label>
-          {error ? <p className="el-rfq-error">{error}</p> : null}
+          {error ? <p className="el-rfq-error" role="alert">{error}</p> : null}
           <button className="el-rfq-submit" disabled={pending} type="submit">{pending ? text.accepting : text.accept}</button>
         </form>
       ) : null}
@@ -530,11 +530,11 @@ function RfqDetail({ rfq, session, locale, text }: {
 }
 
 function RfqField({ label, ...props }: { label: string } & InputHTMLAttributes<HTMLInputElement>) {
-  return <label className="el-rfq-field"><span>{label}</span><input {...props} /></label>;
+  return <label className="el-rfq-field"><span>{label}</span><input dir={props.type === "date" || props.type === "number" ? "ltr" : "auto"} {...props} /></label>;
 }
 
 function Detail({ label, value }: { label: string; value?: string | null }) {
-  return <div className="el-rfq-detail"><span>{label}</span><strong>{value || "—"}</strong></div>;
+  return <div className="el-rfq-detail"><span>{label}</span><strong dir="auto">{value || "—"}</strong></div>;
 }
 
 function StatusChip({ label, active = false, danger = false }: { label: string; active?: boolean; danger?: boolean }) {

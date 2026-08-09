@@ -120,6 +120,7 @@ const labels = {
     noHistory: "No loyalty activity yet.",
     loading: "Loading your account…",
     loadError: "Some account data could not be loaded. You can refresh this page to retry.",
+    accountSections: "Account sections",
   },
   ar: {
     subtitle: "تابع طلباتك والهاردوير المحفوظ والعناوين وأمان الحساب.",
@@ -164,6 +165,7 @@ const labels = {
     noHistory: "مفيش حركة نقاط لسه.",
     loading: "بنحمّل حسابك…",
     loadError: "جزء من بيانات الحساب متحملش. حدّث الصفحة للمحاولة تاني.",
+    accountSections: "أقسام الحساب",
   },
 } as const;
 
@@ -254,7 +256,7 @@ export function AccountPage() {
         <StoreHeader locale={locale} onLocaleChange={setLocale} />
         <main>
           <header className="el-account-intro">
-            <h1>{greeting}</h1>
+            <h1 dir="auto">{greeting}</h1>
             <p>{text.subtitle}</p>
           </header>
 
@@ -263,9 +265,9 @@ export function AccountPage() {
               <aside className="el-account-nav">
                 <div className="el-account-nav__identity">
                   <div>{initials(displayName)}</div>
-                  <span><strong>{displayName}</strong><small>{publicEmail(data.profile?.email || session?.email)}</small></span>
+                  <span><strong dir="auto">{displayName}</strong><small dir="ltr">{publicEmail(data.profile?.email || session?.email)}</small></span>
                 </div>
-                <nav aria-label="Account sections">
+                <nav aria-label={text.accountSections}>
                   {navItems.map(([item, icon]) => (
                     <Link className={section === item ? "is-active" : ""} key={item} to={item === "overview" ? "/account" : `/account?section=${item}`}>
                       <StoreIcon name={icon} size={19} />{text[item]}
@@ -276,7 +278,7 @@ export function AccountPage() {
               </aside>
 
               <section className="el-account-content">
-                {partialError ? <p className="el-account-warning">{text.loadError}</p> : null}
+                {partialError ? <p className="el-account-warning" role="alert">{text.loadError}</p> : null}
                 {section === "overview" ? <Overview data={data} locale={locale} text={text} /> : null}
                 {section === "orders" ? <OrdersSection orders={data.orders} locale={locale} text={text} /> : null}
                 {section === "addresses" && session ? <AddressesSection addresses={data.addresses} locale={locale} onChange={(addresses) => setData((current) => ({ ...current, addresses }))} session={session} text={text} /> : null}
@@ -376,7 +378,7 @@ function AddressesSection({ addresses, session, onChange, locale, text }: { addr
     {open ? <form className="el-account-form el-address-form" onSubmit={create}>
       <AccountInput label={locale === "ar" ? "اسم العنوان" : "Label"} name="label" placeholder="Home" />
       <AccountInput label={locale === "ar" ? "اسم المستلم" : "Recipient name"} name="name" required />
-      <AccountInput label={locale === "ar" ? "الموبايل" : "Phone"} name="phone" required />
+      <AccountInput label={locale === "ar" ? "الموبايل" : "Phone"} name="phone" required type="tel" />
       <AccountInput label={locale === "ar" ? "الشارع والعنوان" : "Street address"} name="street" required />
       <AccountInput label={locale === "ar" ? "المدينة" : "City"} name="city" required />
       <AccountInput label={locale === "ar" ? "المحافظة" : "Governorate"} name="governorate" required />
@@ -384,9 +386,9 @@ function AddressesSection({ addresses, session, onChange, locale, text }: { addr
       <button className="el-account-primary" disabled={pending} type="submit">{text.saveAddress}</button>
     </form> : null}
     {addresses.length ? <div className="el-address-list">{addresses.map((address) => <article className="el-address-card" key={address.id}>
-      <div><span><StoreIcon name="location" size={20} />{address.label}</span>{address.is_default ? <b>{text.default}</b> : null}</div>
-      <h3>{address.recipient_name}</h3>
-      <p>{address.street_address}<br />{address.city}, {address.governorate} · {address.country}<br />{address.recipient_phone}</p>
+      <div><span dir="auto"><StoreIcon name="location" size={20} />{address.label}</span>{address.is_default ? <b>{text.default}</b> : null}</div>
+      <h3 dir="auto">{address.recipient_name}</h3>
+      <p dir="auto">{address.street_address}<br />{address.city}, {address.governorate} · {address.country}<br /><bdi>{address.recipient_phone}</bdi></p>
       <footer>{!address.is_default ? <button onClick={() => void makeDefault(address.id)} type="button">{text.makeDefault}</button> : null}<button onClick={() => void remove(address.id)} type="button">{text.delete}</button></footer>
     </article>)}</div> : <EmptyState icon="location" message={text.noAddresses} />}
   </div>;
@@ -402,7 +404,7 @@ function SavedSection({ products, session, onRemove, text, locale }: { products:
     <div className="el-account-heading"><h2>{text.saved}</h2></div>
     {products.length ? <div className="el-saved-grid">{products.map((product) => <article className="el-saved-card" key={product.id}>
       <Link className="el-saved-card__media" to={`/products/${product.id}`}><img alt={product.name} src={product.image} /></Link>
-      <div><span>{product.brand}</span><Link to={`/products/${product.id}`}>{product.name}</Link><strong>{formatMoney(product.priceEgp, locale)} EGP</strong><button onClick={() => void remove(product.id)} type="button"><StoreIcon name="heart" size={15} />{text.remove}</button></div>
+      <div><span dir="auto">{product.brand}</span><Link dir="auto" to={`/products/${product.id}`}>{product.name}</Link><strong dir="ltr">{formatMoney(product.priceEgp, locale)} EGP</strong><button onClick={() => void remove(product.id)} type="button"><StoreIcon name="heart" size={15} />{text.remove}</button></div>
     </article>)}</div> : <EmptyState action={text.shop} href="/catalog" icon="heart" message={text.noSaved} />}
   </div>;
 }
@@ -439,7 +441,7 @@ function ProfileSection({ profile, session, onChange, text, locale }: { profile:
     <form className="el-account-form" onSubmit={submit}>
       <AccountInput defaultValue={profile?.name} label={locale === "ar" ? "الاسم" : "Name"} name="name" required />
       <AccountInput defaultValue={publicEmail(profile?.email)} label={locale === "ar" ? "الإيميل" : "Email"} name="email" type="email" />
-      <AccountInput defaultValue={profile?.phone} label={locale === "ar" ? "الموبايل" : "Phone"} name="phone" required />
+      <AccountInput defaultValue={profile?.phone} label={locale === "ar" ? "الموبايل" : "Phone"} name="phone" required type="tel" />
       <AccountInput defaultValue={profile?.governorate ?? ""} label={locale === "ar" ? "المحافظة" : "Governorate"} name="governorate" />
       <AccountInput defaultValue={profile?.street_address ?? ""} label={locale === "ar" ? "العنوان" : "Street address"} name="street" />
       {notice ? <p className="el-account-note">{notice}</p> : null}
@@ -505,7 +507,7 @@ function LoyaltySection({ balance, history, locale, text }: { balance: LoyaltyBa
 }
 
 function AccountInput({ label, name, defaultValue = "", placeholder, required = false, type = "text" }: { label: string; name: string; defaultValue?: string; placeholder?: string; required?: boolean; type?: string }) {
-  return <label className="el-account-input"><span>{label}</span><input defaultValue={defaultValue} name={name} placeholder={placeholder} required={required} type={type} /></label>;
+  return <label className="el-account-input"><span>{label}</span><input defaultValue={defaultValue} dir={type === "email" || type === "tel" ? "ltr" : "auto"} inputMode={type === "tel" ? "tel" : undefined} name={name} placeholder={placeholder} required={required} type={type} /></label>;
 }
 
 function EmptyState({ icon, message, action, href }: { icon: StoreIconName; message: string; action?: string; href?: string }) {
@@ -513,7 +515,7 @@ function EmptyState({ icon, message, action, href }: { icon: StoreIconName; mess
 }
 
 function AccountLoading({ label }: { label: string }) {
-  return <div className="el-account-loading"><span /><span /><span /><p>{label}</p></div>;
+  return <div aria-busy="true" aria-label={label} className="el-account-loading"><span /><span /><span /><p>{label}</p></div>;
 }
 
 function initials(value: string) {

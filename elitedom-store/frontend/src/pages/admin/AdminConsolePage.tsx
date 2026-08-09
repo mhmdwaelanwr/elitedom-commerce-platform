@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type FormEvent, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ElitedomBrand } from "@/components/store/ElitedomBrand";
 import { StoreIcon, type StoreIconName } from "@/components/store/StoreIcon";
@@ -72,6 +72,8 @@ const copy = {
   en: {
     ops: "ELITEDOM OPS",
     system: "ADMIN / RBAC / MFA",
+    adminSections: "Admin sections",
+    close: "Close",
     sections: {
       dashboard: "Dashboard",
       orders: "Orders",
@@ -141,6 +143,8 @@ const copy = {
   ar: {
     ops: "ELITEDOM OPS",
     system: "الإدارة / الصلاحيات / MFA",
+    adminSections: "أقسام لوحة الإدارة",
+    close: "إغلاق",
     sections: {
       dashboard: "لوحة المتابعة",
       orders: "الطلبات",
@@ -296,7 +300,7 @@ export function AdminConsolePage() {
           <ElitedomBrand compact />
           <span><b>{text.ops}</b><small>{text.system}</small></span>
         </div>
-        <nav aria-label="Admin sections">
+        <nav aria-label={text.adminSections}>
           {visibleSections.map((item) => (
             <Link
               className={section === item ? "is-active" : ""}
@@ -347,7 +351,7 @@ function AdminGate({ locale, label, denied = false, retry = false }: {
   retry?: boolean;
 }) {
   return (
-    <div className="el-admin-gate" dir={locale === "ar" ? "rtl" : "ltr"}>
+    <div className="el-admin-gate" dir={locale === "ar" ? "rtl" : "ltr"} lang={locale}>
       <ElitedomBrand />
       <StoreIcon name={denied ? "lock" : "shield"} size={34} />
       <h1>{label}</h1>
@@ -439,7 +443,7 @@ function MfaGate({ locale, mfa, session, onVerified }: {
               <span>{ar ? "كود التحقق" : "Verification code"}</span>
               <input autoComplete="one-time-code" inputMode="numeric" maxLength={10} name="code" required />
             </label>
-            {error ? <p className="el-admin-error">{error}</p> : null}
+            {error ? <p className="el-admin-error" role="alert">{error}</p> : null}
             <button disabled={pending} type="submit">{pending ? "…" : ar ? "تحقق" : "Verify"}</button>
           </form>
         ) : null}
@@ -569,7 +573,7 @@ function OrdersSection({ session, access, locale, text }: SectionProps) {
       <AdminOrderTable locale={locale} orders={data?.orders ?? []} text={text} onSelect={access.permissions.includes("orders.manage") ? setSelected : undefined} />
       {!data?.orders.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.state} · ${selected.order_number}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.state} · ${selected.order_number}`} onClose={() => setSelected(null)}>
           <div className="el-admin-action-options">
             {["draft", "sent", "sale", "done", "cancel"].map((state) => (
               <button key={state} disabled={selected.state === state} onClick={() => void changeState(selected, state)} type="button">{humanize(state)}</button>
@@ -620,14 +624,14 @@ function ProductsSection({ session, access, locale, text }: SectionProps) {
       <div className="el-admin-toolbar">
         <form onSubmit={(event) => { event.preventDefault(); void search(); }}>
           <StoreIcon name="search" size={16} />
-          <input onChange={(event) => setQuery(event.target.value)} placeholder={text.search} value={query} />
+          <input aria-label={text.search} onChange={(event) => setQuery(event.target.value)} placeholder={text.search} type="search" value={query} />
           <button type="submit">{text.search}</button>
         </form>
         <label className="el-admin-toggle"><input checked={lowStock} onChange={(event) => setLowStock(event.target.checked)} type="checkbox" />{text.lowStock}</label>
         <span>{text.total}: {number(data?.total_count ?? 0, locale)}</span>
       </div>
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.products} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.product}</span><span>{text.sku}</span><span>{text.stock}</span><span>{text.amount}</span><span>{text.status}</span></div>
         {(data?.products ?? []).map((product) => (
           <button className="el-admin-row" key={product.id} onClick={() => { if (access.permissions.includes("inventory.adjust")) setSelected(product); }} type="button">
@@ -637,7 +641,7 @@ function ProductsSection({ session, access, locale, text }: SectionProps) {
       </div>
       {!data?.products.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.adjust} · ${selected.sku}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.adjust} · ${selected.sku}`} onClose={() => setSelected(null)}>
           <form className="el-admin-action-form" onSubmit={adjust}>
             <label><span>{text.delta}</span><input name="delta" required type="number" /></label>
             <label><span>{text.reason}</span><textarea minLength={3} name="reason" required rows={3} /></label>
@@ -664,7 +668,7 @@ function CustomersSection({ session, locale, text }: Omit<SectionProps, "access"
     <section className="el-admin-card">
       <Toolbar total={data?.total_count ?? 0} query={query} onQuery={setQuery} onSearch={() => void search()} text={text} />
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.customers} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.customer}</span><span>{text.email}</span><span>{text.role}</span><span>{text.ordersToday}</span><span>{text.total}</span></div>
         {(data?.customers ?? []).map((customer: AdminCustomer) => (
           <div className="el-admin-row" key={customer.id}><span><b>{customer.name}</b><small>{customer.phone}</small></span><span>{customer.email}</span><span>{humanize(customer.role)}</span><span>{number(customer.order_count, locale)}</span><span>{money(customer.lifetime_value, locale)} EGP</span></div>
@@ -705,7 +709,7 @@ function RmaSection({ session, access, locale, text }: SectionProps) {
     <section className="el-admin-card">
       <Toolbar total={data?.total_count ?? 0} query={query} onQuery={setQuery} onSearch={() => void search()} text={text} />
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.rma} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.reference}</span><span>{text.customer}</span><span>{text.product}</span><span>{text.status}</span><span>{text.created}</span></div>
         {(data?.claims ?? []).map((item) => (
           <button className="el-admin-row" key={item.ticket_number} onClick={() => { if (access.permissions.includes("support.manage")) setSelected(item); }} type="button">
@@ -715,7 +719,7 @@ function RmaSection({ session, access, locale, text }: SectionProps) {
       </div>
       {!data?.claims.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.review} · ${selected.ticket_number}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.review} · ${selected.ticket_number}`} onClose={() => setSelected(null)}>
           <form className="el-admin-action-form" onSubmit={review}>
             <label><span>{text.status}</span><select defaultValue="approved" name="status"><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option></select></label>
             <label><span>{text.reason}</span><textarea name="notes" rows={3} /></label>
@@ -765,7 +769,7 @@ function RfqsSection({ session, access, locale, text }: SectionProps) {
     <section className="el-admin-card">
       <Toolbar total={data?.total_count ?? 0} query={query} onQuery={setQuery} onSearch={() => void search()} text={text} />
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.rfqs} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.reference}</span><span>{text.customer}</span><span>{text.status}</span><span>{text.product}</span><span>{text.amount}</span></div>
         {(data?.rfqs ?? []).map((item) => (
           <button className="el-admin-row" key={item.rfq_code} onClick={() => { if (access.permissions.includes("rfq.quote")) setSelected(item); }} type="button">
@@ -775,7 +779,7 @@ function RfqsSection({ session, access, locale, text }: SectionProps) {
       </div>
       {!data?.rfqs.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.quote} · ${selected.rfq_code}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.quote} · ${selected.rfq_code}`} onClose={() => setSelected(null)}>
           <form className="el-admin-action-form" onSubmit={quote}>
             <label><span>{text.validity}</span><input name="validity" required type="date" /></label>
             <label><span>{text.terms}</span><textarea name="terms" rows={4} /></label>
@@ -826,7 +830,7 @@ function ShipmentsSection({ session, access, locale, text }: SectionProps) {
     <section className="el-admin-card">
       <Toolbar total={data?.total_count ?? 0} query={query} onQuery={setQuery} onSearch={() => void search()} text={text} />
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.shipments} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.reference}</span><span>{text.customer}</span><span>{text.status}</span><span>{text.tracking}</span><span>{text.created}</span></div>
         {(data?.shipments ?? []).map((item) => (
           <button className="el-admin-row" key={item.id} onClick={() => { if (access.permissions.includes("shipments.dispatch") && item.order_id) setSelected(item); }} type="button">
@@ -836,7 +840,7 @@ function ShipmentsSection({ session, access, locale, text }: SectionProps) {
       </div>
       {!data?.shipments.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.dispatch} · ${selected.picking_reference}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.dispatch} · ${selected.picking_reference}`} onClose={() => setSelected(null)}>
           <form className="el-admin-action-form" onSubmit={dispatch}>
             <label><span>{text.tracking}</span><input name="tracking" required /></label>
             <label><span>{text.scheduled}</span><input name="scheduled" type="datetime-local" /></label>
@@ -868,7 +872,7 @@ function StaffSection({ session, access, text }: Omit<SectionProps, "locale">) {
   return (
     <section className="el-admin-card">
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.staff} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.customer}</span><span>{text.email}</span><span>{text.role}</span><span>{text.permissions}</span><span>{text.status}</span></div>
         {(data?.staff ?? []).map((item) => (
           <button className="el-admin-row" key={item.id} onClick={() => { if (access.permissions.includes("staff.manage")) setSelected(item); }} type="button">
@@ -878,7 +882,7 @@ function StaffSection({ session, access, text }: Omit<SectionProps, "locale">) {
       </div>
       {!data?.staff.length ? <Empty text={text.noData} /> : null}
       {selected ? (
-        <AdminActionDialog title={`${text.updateRole} · ${selected.name}`} onClose={() => setSelected(null)}>
+        <AdminActionDialog closeLabel={text.close} title={`${text.updateRole} · ${selected.name}`} onClose={() => setSelected(null)}>
           <form className="el-admin-action-form" onSubmit={save}>
             <label><span>{text.role}</span><select defaultValue={selected.role} name="role">{staffRoles.map((role) => <option key={role} value={role}>{humanize(role)}</option>)}</select></label>
             <p>{selected.permissions.length} {text.permissions}</p>
@@ -905,7 +909,7 @@ function AuditSection({ session, locale, text }: Omit<SectionProps, "access">) {
     <section className="el-admin-card">
       <Toolbar total={data?.total_count ?? 0} query={query} onQuery={setQuery} onSearch={() => void search()} text={text} />
       {error ? <AdminError message={error} /> : null}
-      <div className="el-admin-table">
+      <div aria-label={text.sections.audit} className="el-admin-table" role="region" tabIndex={0}>
         <div className="el-admin-row is-head"><span>{text.action}</span><span>{text.entity}</span><span>{text.actor}</span><span>{text.reference}</span><span>{text.created}</span></div>
         {(data?.logs ?? []).map((item: AdminAuditLog) => (
           <div className="el-admin-row" key={item.id}><span><b>{item.action}</b></span><span>{item.entity_type}</span><span>{item.actor_role || item.actor_partner_id || "system"}</span><span>{item.entity_id || "—"}</span><span>{dateTime(item.created_at, locale)}</span></div>
@@ -927,7 +931,7 @@ function Toolbar({ total, query, onQuery, onSearch, text }: {
     <div className="el-admin-toolbar">
       <form onSubmit={(event) => { event.preventDefault(); onSearch(); }}>
         <StoreIcon name="search" size={16} />
-        <input onChange={(event) => onQuery(event.target.value)} placeholder={text.search} value={query} />
+        <input aria-label={text.search} onChange={(event) => onQuery(event.target.value)} placeholder={text.search} type="search" value={query} />
         <button type="submit">{text.search}</button>
       </form>
       <span>{text.total}: {total}</span>
@@ -942,7 +946,7 @@ function AdminOrderTable({ orders, locale, text, onSelect }: {
   onSelect?: (order: AdminOrder) => void;
 }) {
   return (
-    <div className="el-admin-table">
+    <div aria-label={text.sections.orders} className="el-admin-table" role="region" tabIndex={0}>
       <div className="el-admin-row is-head"><span>{text.reference}</span><span>{text.customer}</span><span>{text.state}</span><span>{text.payment}</span><span>{text.amount}</span></div>
       {orders.map((order) => (
         <button className="el-admin-row" key={order.id} onClick={() => onSelect?.(order)} type="button">
@@ -953,11 +957,43 @@ function AdminOrderTable({ orders, locale, text, onSelect }: {
   );
 }
 
-function AdminActionDialog({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
+function AdminActionDialog({ title, closeLabel, onClose, children }: { title: string; closeLabel: string; onClose: () => void; children: ReactNode }) {
+  const titleId = useId();
+  const dialogRef = useRef<HTMLElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    closeButtonRef.current?.focus();
+    return () => previousFocus?.focus();
+  }, []);
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      onClose();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(
+      "button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex='-1'])",
+    ) ?? []).filter((element) => !element.hidden);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   return (
     <div className="el-admin-dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.currentTarget === event.target) onClose(); }}>
-      <section aria-modal="true" className="el-admin-dialog" role="dialog">
-        <header><h2>{title}</h2><button aria-label="Close" onClick={onClose} type="button">×</button></header>
+      <section aria-labelledby={titleId} aria-modal="true" className="el-admin-dialog" onKeyDown={handleKeyDown} ref={dialogRef} role="dialog">
+        <header><h2 id={titleId}>{title}</h2><button aria-label={closeLabel} onClick={onClose} ref={closeButtonRef} type="button">×</button></header>
         {children}
       </section>
     </div>
@@ -969,8 +1005,8 @@ function Kpi({ label, value, meta }: { label: string; value: string; meta: strin
 function Queue({ label, value }: { label: string; value: number }) { return <div className="el-admin-queue"><span>{label}</span><strong>{value}</strong></div>; }
 function Status({ value }: { value: string }) { return <span className={`el-admin-status is-${value.replaceAll("_", "-")}`}>{humanize(value)}</span>; }
 function Empty({ text }: { text: string }) { return <p className="el-admin-empty">{text}</p>; }
-function AdminLoading({ label }: { label: string }) { return <div className="el-admin-loading"><span /><p>{label}</p></div>; }
-function AdminError({ message: value }: { message: string }) { return <p className="el-admin-error">{value}</p>; }
+function AdminLoading({ label }: { label: string }) { return <div aria-busy="true" aria-live="polite" className="el-admin-loading"><span aria-hidden="true" /><p>{label}</p></div>; }
+function AdminError({ message: value }: { message: string }) { return <p className="el-admin-error" role="alert">{value}</p>; }
 
 async function freshSession(fallback: CustomerSession) {
   return await restoreSession() ?? fallback;
