@@ -67,9 +67,20 @@ test.describe.serial("Elitedom deployed launch gate", () => {
     }
   });
 
-  test("390px Arabic RTL PDP can add and remove a real guest-cart item", async ({ page }) => {
+  test("390px Arabic RTL reaches real checkout without creating an order or payment", async ({ page }) => {
     const pageErrors = [];
+    const financialMutations = [];
     page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("request", (request) => {
+      if (request.method() === "GET") return;
+      const url = new URL(request.url());
+      if (
+        url.pathname === "/api/v1/orders/checkout" ||
+        url.pathname.startsWith("/api/v1/payments/")
+      ) {
+        financialMutations.push(`${request.method()} ${url.pathname}`);
+      }
+    });
     await page.setViewportSize({ width: 390, height: 844 });
     await setLocale(page, "ar");
 
@@ -103,6 +114,23 @@ test.describe.serial("Elitedom deployed launch gate", () => {
     await expect(page.getByRole("heading", { level: 1, name: "سلة التسوق" })).toBeVisible();
     await expect(page.locator(`a[href="/products/${purchasableProduct.id}"]`).first()).toBeVisible();
 
+    await page.getByRole("button", { name: "متابعة لإتمام الطلب" }).click();
+    await expect(page).toHaveURL(`${siteOrigin}/checkout`);
+    await expect(page.getByRole("heading", { level: 1, name: "إتمام الطلب" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 2, name: "ملخص الطلب" })).toBeVisible();
+    await expect(page.getByText(purchasableProduct.name, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("بطاقة ائتمان أو خصم", { exact: true })).toBeVisible();
+    await expect(page.getByText("محفظة موبايل", { exact: true })).toBeVisible();
+    await expect(page.getByText("InstaPay", { exact: true })).toBeVisible();
+    await expect(page.getByText("الدفع عند الاستلام", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /تأكيد الطلب/ })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    expect(
+      financialMutations,
+      `Checkout render must not create orders or payments: ${financialMutations.join(" | ")}`,
+    ).toEqual([]);
+
+    await openRoute(page, "/cart");
     const removeResponsePromise = page.waitForResponse((response) => {
       const url = new URL(response.url());
       return response.request().method() === "DELETE" && url.pathname.startsWith("/api/v1/orders/cart/items/");
