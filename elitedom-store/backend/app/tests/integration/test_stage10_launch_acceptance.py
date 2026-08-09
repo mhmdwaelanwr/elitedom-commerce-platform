@@ -5,23 +5,12 @@ from sqlalchemy import select
 
 from app.models import Partner
 from app.modules.admin.models import AdminAuditLog, LaunchAcceptance
-from app.shared.security import create_access_token
+from app.tests.auth_helpers import authorization as _authorization
 
 pytestmark = pytest.mark.asyncio
 
 _RELEASE_A = "stage10-release-a"
 _RELEASE_B = "stage10-release-b"
-
-
-def _authorization(partner: Partner, *, token_role: str | None = None) -> dict[str, str]:
-    token = create_access_token(
-        {
-            "sub": str(partner.id),
-            "email": partner.email,
-            "role": token_role or partner.role,
-        }
-    )
-    return {"Authorization": f"Bearer {token}"}
 
 
 def _launch_url(path: str = "", *, release_ref: str = _RELEASE_A) -> str:
