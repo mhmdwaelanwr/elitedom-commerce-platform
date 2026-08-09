@@ -170,7 +170,15 @@ def main() -> int:
 
     e2e_spec = LAUNCH_E2E_SPEC.read_text(encoding="utf-8")
     for marker, message in (
-        ("/catalog/products?locale=en&limit=100", "Browser gate must discover a real product from the catalogue API."),
+        ("/catalog/products?locale=en&page=${pageNumber}&limit=100", "Browser gate must paginate the complete public catalogue."),
+        ("expectedTotal", "Browser gate must prove public catalogue pagination reaches total_count."),
+        ("hasRealProductMedia", "Browser gate must validate real backend product media."),
+        ("merchandisingFailures", "Browser gate must reject incomplete public product merchandising data."),
+        ("list_price", "Browser gate must require a positive backend-authoritative public price."),
+        ("/images/gpu_card.png", "Browser gate must detect the product placeholder fallback."),
+        ("/template/images/", "Browser gate must detect template media fallbacks."),
+        ("naturalWidth", "Browser gate must prove the PDP primary image actually loads."),
+        ("localizedProduct", "Browser gate must verify the locale-specific PDP response."),
         ("stock_qty", "Browser gate must require backend stock or dropship availability."),
         ("/api/v1/orders/cart/items", "Browser gate must exercise the real guest-cart mutation path."),
         ('openRoute(page, "/cart")', "Browser gate must render the real server-backed cart."),
@@ -219,6 +227,11 @@ def main() -> int:
         "Go-live runbook must document side-effect-free checkout review coverage.",
         errors,
     )
+    require(
+        "real product media" in runbook,
+        "Go-live runbook must document public real product media readiness.",
+        errors,
+    )
 
     stage_doc = STAGE_10_DOC.read_text(encoding="utf-8")
     for marker in (
@@ -249,7 +262,7 @@ def main() -> int:
             print(f"ERROR: {error}")
         return 1
 
-    print("Launch assets validated successfully, including P15 browser E2E, checkout review, and release provenance wiring.")
+    print("Launch assets validated successfully, including P15 browser E2E, real media quality, checkout review, and release provenance wiring.")
     return 0
 
 
