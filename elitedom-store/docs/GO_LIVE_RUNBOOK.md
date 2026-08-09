@@ -3,7 +3,7 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "3206626bc721deda261c6c6682f5d63c79308f52"
+verified_against: "91a075088eeb3d7ede20c6ad7e0e8450b70c2966"
 review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
 ---
 
@@ -39,12 +39,13 @@ The current manual gate set covers:
 ## Pre-deployment
 
 1. Record the exact commit/tag used as `release_ref` and the target environment.
-2. Confirm required branch/PR checks are green on that exact code.
-3. Review the migration graph and identify the current Alembic head.
-4. Confirm production `DEBUG=false`, scoped hosts/CORS, staff MFA, Redis-backed rate limiting, protected metrics, and strong distinct application/database/Redis/provider secrets.
-5. Confirm public site/API URLs, DNS and TLS termination plan.
-6. Confirm production image references/build inputs are immutable or otherwise reproducible.
-7. Confirm rollback owner, communication owner, and provider contacts/merchant access.
+2. Set production `RELEASE_REF` to the exact hexadecimal Git commit SHA being deployed; production Compose maps it into FastAPI `APP_VERSION` for public release provenance.
+3. Confirm required branch/PR checks are green on that exact code.
+4. Review the migration graph and identify the current Alembic head.
+5. Confirm production `DEBUG=false`, scoped hosts/CORS, staff MFA, Redis-backed rate limiting, protected metrics, and strong distinct application/database/Redis/provider secrets.
+6. Confirm public site/API URLs, DNS and TLS termination plan.
+7. Confirm production image references/build inputs are immutable or otherwise reproducible.
+8. Confirm rollback owner, communication owner, and provider contacts/merchant access.
 
 ## Database backup and restore
 
@@ -69,7 +70,7 @@ Before a migration or cutover that can change durable state:
 Verify at minimum:
 
 - storefront returns expected content over public HTTPS;
-- API `/health/live` reports process liveness;
+- API `/health/live` reports process liveness and exposes the deployed release SHA as `version` in production;
 - API `/health/ready` reports dependency readiness and does not return 503;
 - Celery workers are consuming the configured broker;
 - Odoo is reachable through the configured integration boundary;
@@ -98,9 +99,30 @@ Critical commerce UAT includes catalogue/search/product details, account/session
 
 ## External smoke test
 
-Run `.github/workflows/launch-smoke.yml` or invoke the equivalent `elitedom-store/scripts/live_smoke.py` procedure against the public HTTPS storefront and API. The smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
+Run `.github/workflows/launch-smoke.yml` against the public HTTPS storefront and API. Supply `site_url`, `api_url`, and the exact hexadecimal Git `release_ref` expected to be deployed. The workflow first invokes `elitedom-store/scripts/live_smoke.py`; the smoke runner intentionally rejects unsafe/private targets and redirects to reduce SSRF-style misuse of CI runners.
 
-Expected smoke coverage includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, and defensive security headers.
+Before browser UAT, `elitedom-store/scripts/verify_release.py` verifies release provenance by reusing the hardened public-target checks and comparing `/health/live.version` with the requested `release_ref`. Production Compose maps `RELEASE_REF` into FastAPI `APP_VERSION`, so a healthy but stale or wrong deployment fails before it can be signed off.
+
+The same manually dispatched workflow then runs the deployed browser E2E gate in Chromium. It paginates the complete public `/api/v1/catalog/products` response and does not mock or fulfill application API routes. Before choosing the product used for the commerce journey, the gate requires every public product to have a non-empty identity, positive backend-authoritative price, category, and real product media. Public placeholder/template product media is a launch blocker, and the selected PDP primary image must complete loading with real pixel dimensions.
+
+The browser gate proves:
+
+- the deployed frontend is wired to the API origin supplied for the release;
+- the public catalogue pagination reaches the backend `total_count` rather than validating only the first page;
+- every public product has launch-ready identity, price, category, and real product media;
+- 390px Arabic/RTL PDP rendering reaches the localized backend-authoritative product, price and media state;
+- the PDP primary image loads successfully rather than silently falling back to placeholder/template media;
+- a guest can add that real product to the server-backed cart;
+- the same guest cart reaches the Arabic checkout review with the real product summary and all supported customer-facing payment choices rendered;
+- the order-submit control is visible, while the gate explicitly fails if checkout or payment mutation endpoints are called before operator-controlled provider UAT;
+- the test returns to the cart and removes its guest-cart item afterward;
+- Home, Catalog and PDP stay free of horizontal overflow at 430px and 1024px reference widths;
+- the document `lang` and semantic `dir` values follow EN/LTR and AR/RTL state;
+- unhandled browser exceptions fail the gate.
+
+The deployed browser E2E deliberately stops before checkout submission, payment, order creation, provider callbacks or any other financially meaningful side effect. It tracks the checkout and payment mutation boundaries during the checkout review and requires zero such mutations. Those flows remain explicit provider/UAT gates with controlled test data.
+
+Expected smoke evidence includes storefront reachability, `robots.txt`, `sitemap.xml`, API liveness/readiness, defensive security headers, expected/deployed release-ref evidence, complete-public-catalog browser assertions, the Playwright HTML/JSON report, and trace/screenshot/video artifacts retained on browser failure.
 
 ## Monitoring and alerting
 
@@ -142,7 +164,11 @@ Launch evidence references should identify the external proof without copying se
 - `.github/workflows/ci.yml`
 - `.github/workflows/launch-smoke.yml`
 - `elitedom-store/scripts/live_smoke.py`
+- `elitedom-store/scripts/verify_release.py`
 - `elitedom-store/scripts/validate_launch_assets.py`
+- `elitedom-store/frontend/playwright.launch.config.mjs`
+- `elitedom-store/frontend/e2e/launch.spec.mjs`
+- `elitedom-store/infrastructure/docker-compose.prod.yml`
 - `elitedom-store/backend/app/modules/admin/control_service.py`
 - `elitedom-store/backend/app/modules/admin/control_schemas.py`
 - `elitedom-store/backend/app/modules/admin/models.py`
