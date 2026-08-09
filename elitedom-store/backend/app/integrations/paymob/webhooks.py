@@ -87,11 +87,9 @@ def _event_key(transaction: Mapping[str, Any]) -> str:
         # cannot consume the idempotency key of the legitimate callback that
         # carries the same signed transaction fields.
         "provider_order_id": _identifier(order_payload.get("id")),
-        "intention_id": (
-            _identifier(intention_payload.get("id"))
-            or _identifier(claims.get("intention_id"))
-            or _identifier(transaction.get("intention_id"))
-        ),
+        "intention_payload_id": _identifier(intention_payload.get("id")),
+        "claims_intention_id": _identifier(claims.get("intention_id")),
+        "transaction_intention_id": _identifier(transaction.get("intention_id")),
         "claim_order_id": _integer(claim_extras.get("order_id")),
         "claim_order_number": _identifier(claim_extras.get("order_number")),
         "transaction_order_id": _integer(transaction_extras.get("order_id")),
