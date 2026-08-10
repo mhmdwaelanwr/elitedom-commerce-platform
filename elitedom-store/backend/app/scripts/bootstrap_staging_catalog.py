@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -180,12 +180,12 @@ async def bootstrap_staging_catalog() -> dict[str, Any]:
                 slug=STAGING_PRODUCT_SLUG,
                 short_description="Staging bootstrap product for launch gate.",
                 publication_status="published",
-                published_at=datetime.now(timezone.utc),
+                published_at=datetime.now(UTC),
             )
             session.add(content)
         elif content.publication_status != "published":
             content.publication_status = "published"
-            content.published_at = datetime.now(timezone.utc)
+            content.published_at = datetime.now(UTC)
 
         # Create product image (exactly one primary)
         image_result = await session.execute(

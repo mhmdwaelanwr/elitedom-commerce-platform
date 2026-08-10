@@ -170,7 +170,7 @@ def main() -> int:
 
     e2e_spec = LAUNCH_E2E_SPEC.read_text(encoding="utf-8")
     for marker, message in (
-        ("/catalog/products?locale=en&page=${pageNumber}&limit=100", "Browser gate must paginate the complete public catalogue."),
+        ("catalog/products?locale=en&page=${pageNumber}&limit=100", "Browser gate must paginate the complete public catalogue."),
         ("expectedTotal", "Browser gate must prove public catalogue pagination reaches total_count."),
         ("hasRealProductMedia", "Browser gate must validate real backend product media."),
         ("merchandisingFailures", "Browser gate must reject incomplete public product merchandising data."),
