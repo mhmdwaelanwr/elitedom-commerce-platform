@@ -4,6 +4,7 @@ status: current
 owner: operations
 document_type: release-reference
 verified_against: "P23 production-like UAT release-candidate gate"
+review_trigger: "P23 UAT scope, release-candidate evidence, staging promotion boundary, or launch prerequisites change."
 ---
 
 # P23 — Production-like UAT & Release Candidate Gate
