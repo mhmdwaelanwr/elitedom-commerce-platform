@@ -1,23 +1,45 @@
 #!/usr/bin/env bash
-# Deploy one immutable Elitedom release on the existing single-VPS Compose host.
-# Normal deployments are forward-only after the first successful P16 deployment.
-# This script never restores/downgrades databases automatically on failure.
+# Deploy one immutable Elitedom release on an existing hardened Compose host.
+# Normal deployments are forward-only after the first successful deployment.
+# This script never overwrites .env or restores/downgrades databases automatically.
 
 set -Eeuo pipefail
 
-RELEASE_REF="${1:?Usage: deploy_release.sh <40-char-sha> <repo-path> <site-origin> <api-origin>}"
+RELEASE_REF="${1:?Usage: deploy_release.sh <40-char-sha> <repo-path> <site-origin> <api-origin> <staging|production>}"
 REPO_PATH="${2:?Missing repo path}"
 SITE_URL="${3:?Missing site origin}"
 API_URL="${4:?Missing API origin}"
+EXPECTED_ENVIRONMENT="${5:?Missing expected environment}"
 
 fail() { echo "ERROR: $*" >&2; exit 1; }
+dotenv_value() {
+  local key="$1" value
+  value="$(awk -v key="$key" '
+    index($0, key "=") == 1 {
+      sub(/^[^=]*=/, "")
+      found = $0
+    }
+    END { print found }
+  ' "$ENV_FILE" | tr -d '\r')"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  case "$value" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "$value"
+}
+
 [[ "$RELEASE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || fail "release ref must be a full 40-character Git SHA"
 [[ "$REPO_PATH" = /* ]] || fail "deployment path must be absolute"
 [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || fail "site URL must be a credential-free HTTPS origin"
 [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || fail "API URL must be a credential-free HTTPS origin"
+[[ "$EXPECTED_ENVIRONMENT" == "staging" || "$EXPECTED_ENVIRONMENT" == "production" ]] \
+  || fail "expected environment must be staging or production"
 
 command -v git >/dev/null || fail "git is required"
 command -v docker >/dev/null || fail "docker is required"
+command -v awk >/dev/null || fail "awk is required"
 docker compose version >/dev/null 2>&1 || fail "Docker Compose v2 is required"
 docker compose wait --help >/dev/null 2>&1 || fail "Docker Compose must support the wait command"
 command -v gzip >/dev/null || fail "gzip is required"
@@ -42,6 +64,7 @@ if [[ -e "$STATE_FILE" ]]; then
   [[ "$previous_release_ref" =~ ^[0-9a-fA-F]{40}$ ]] || fail "deployment state contains an invalid release ref"
 fi
 
+echo "Target environment: $EXPECTED_ENVIRONMENT"
 echo "Checkout before deploy: $checkout_ref"
 if [[ -n "$previous_release_ref" ]]; then
   echo "Last successful deployed release: $previous_release_ref"
@@ -63,10 +86,15 @@ fi
 git checkout --detach "$RELEASE_REF"
 
 ENV_FILE="$REPO_PATH/elitedom-store/.env"
-[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "production .env is missing or is a symlink"
+[[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]] || fail "deployment .env is missing or is a symlink"
 permissions="$(stat -c '%a' "$ENV_FILE")"
-case "$permissions" in 600|640) ;; *) fail "production .env permissions must be 600 or 640 (found $permissions)" ;; esac
+case "$permissions" in 600|640) ;; *) fail "deployment .env permissions must be 600 or 640 (found $permissions)" ;; esac
 
+configured_environment="$(dotenv_value ENVIRONMENT)"
+[[ "$configured_environment" == "$EXPECTED_ENVIRONMENT" ]] \
+  || fail "host .env ENVIRONMENT must match the protected target '$EXPECTED_ENVIRONMENT' (found '${configured_environment:-unset}')"
+
+export ENVIRONMENT="$configured_environment"
 export RELEASE_REF
 export VITE_SITE_URL="${SITE_URL%/}"
 export VITE_API_URL="${API_URL%/}/api/v1"
@@ -135,6 +163,7 @@ chmod 600 "$state_tmp"
 mv -f "$state_tmp" "$STATE_FILE"
 
 echo "Deployment completed successfully."
+echo "Environment: $configured_environment"
 echo "Release: $actual_ref"
 echo "Recorded deployment state: $STATE_FILE"
 echo "Backup directory: $BACKUP_DIR"
