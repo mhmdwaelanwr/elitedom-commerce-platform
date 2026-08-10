@@ -115,6 +115,8 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = ""
     product_image_max_bytes: int = Field(default=5_242_880, ge=65_536, le=20_971_520)
 
+    allow_staging_fixtures: bool = False
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
