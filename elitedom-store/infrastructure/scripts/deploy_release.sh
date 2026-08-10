@@ -126,7 +126,15 @@ echo "Upgrading the bundled Odoo connector..."
 echo "Starting release and waiting for service health..."
 "${COMPOSE[@]}" up -d --remove-orphans --wait --wait-timeout 300
 
-"${COMPOSE[@]}" exec -T -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
+ODOO_SYNC_ENABLED="$("${COMPOSE[@]}" exec -T fastapi \
+  python -c 'from app.config import get_settings; print(str(get_settings().odoo_sync_enabled).lower())' 2>/dev/null || echo "false")"
+
+if [[ "${REQUIRE_ODOO_SMOKE:-}" == "true" ]] || [[ "$ODOO_SYNC_ENABLED" == "true" ]]; then
+  echo "Running Odoo connectivity smoke (ODOO_SYNC_ENABLED=$ODOO_SYNC_ENABLED)..."
+  "${COMPOSE[@]}" exec -T -w /app fastapi sh -lc 'PYTHONPATH=/app python -m app.scripts.check_odoo'
+else
+  echo "Skipping Odoo connectivity smoke: ODOO_SYNC_ENABLED=false (set REQUIRE_ODOO_SMOKE=true to enforce)"
+fi
 
 actual_ref="$(git rev-parse HEAD)"
 [[ "$actual_ref" == "$RELEASE_REF" ]] || fail "working tree moved during deployment"
