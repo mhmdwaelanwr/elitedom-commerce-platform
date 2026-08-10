@@ -78,8 +78,8 @@ COMPOSE=(docker compose --env-file "$ENV_FILE" -f "$INFRA/docker-compose.yml" -f
 "${COMPOSE[@]}" config --quiet
 
 echo "Ensuring PostgreSQL and the one-shot app DB initializer complete before backup..."
-"${COMPOSE[@]}" up -d postgres app-db-init
-"${COMPOSE[@]}" wait app-db-init
+"${COMPOSE[@]}" up -d --wait --wait-timeout 120 postgres
+"${COMPOSE[@]}" run --rm --no-deps app-db-init
 "${COMPOSE[@]}" exec -T postgres sh -ec 'pg_isready -U "$POSTGRES_USER" -d postgres'
 
 BACKUP_DIR="${DEPLOY_BACKUP_DIR:-$(dirname "$REPO_PATH")/elitedom-backups}"
