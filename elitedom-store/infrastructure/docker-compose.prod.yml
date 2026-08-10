@@ -1,6 +1,7 @@
 # =============================================================================
-# Elitedom Store — Docker Compose (Production Overrides)
-# Use together with docker-compose.yml.
+# Elitedom Store — Hardened Staging/Production Overrides
+# Use together with docker-compose.yml. ENVIRONMENT selects the runtime identity;
+# all non-development safety controls remain fail-closed in the application.
 # =============================================================================
 
 networks:
@@ -12,23 +13,23 @@ networks:
 services:
   fastapi:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
       APP_VERSION: "${RELEASE_REF:?Set RELEASE_REF to the deployed Git commit SHA}"
       STAFF_MFA_REQUIRED: "true"
       RATE_LIMIT_BACKEND: redis
-      # The production proxy gets the same stable internal address that the
+      # The hardened proxy gets the same stable internal address that the
       # application trusts for forwarded client identity.
       TRUSTED_PROXY_IPS: "${NGINX_PROXY_INTERNAL_IP:-172.28.0.10}"
 
   celery-worker:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
 
   celery-beat:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
 
   frontend:
