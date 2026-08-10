@@ -37,7 +37,7 @@ jobs:
       RELEASE_REF: ${{ inputs.release_ref }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
-      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       SITE_URL: ${{ vars.SITE_URL }}
       API_URL: ${{ vars.API_URL }}
@@ -60,7 +60,7 @@ jobs:
           git cat-file -e "${RELEASE_REF}^{commit}"
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_REF" origin/main || { echo "release_ref is not reachable from main" >&2; exit 2; }
-          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo "Deployment SSH secrets are incomplete" >&2; exit 2; }
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$EC2_INSTANCE_ID" ]] || { echo "Deployment secrets are incomplete" >&2; exit 2; }
           [[ "$DEPLOY_PATH" = /* ]] || { echo "DEPLOY_PATH must be an absolute environment variable" >&2; exit 2; }
           [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
           [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
@@ -94,92 +94,110 @@ jobs:
           set -euo pipefail
           RUNNER_IP="${{ steps.runner-ip.outputs.runner_ip }}"
           SG_ID="${EC2_SECURITY_GROUP_ID}"
+          EXISTING_RULE="$(aws ec2 describe-security-group-rules \
+            --region "$AWS_REGION" \
+            --filters "Name=group-id,Values=$SG_ID" "Name=tag:EphemeralRunner,Values=true" \
+            --query 'SecurityGroupRules[0].SecurityGroupRuleId' --output text 2>/dev/null || echo "None")"
+          if [[ -n "$EXISTING_RULE" && "$EXISTING_RULE" != "None" ]]; then
+            aws ec2 revoke-security-group-ingress \
+              --region "$AWS_REGION" \
+              --group-id "$SG_ID" \
+              --security-group-rule-id "$EXISTING_RULE" 2>/dev/null || true
+          fi
           RULE_ID="$(aws ec2 authorize-security-group-ingress \
+            --region "$AWS_REGION" \
             --group-id "$SG_ID" \
             --protocol tcp \
             --port 22 \
             --cidr "${RUNNER_IP}/32" \
+            --tag-specifications 'ResourceType=security-group-rule,Tags=[{Key=Name,Value=elitedom-ci-runner},{Key=EphemeralRunner,Value=true}]' \
             --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
             --output text 2>/dev/null || true)"
           if [[ -z "$RULE_ID" || "$RULE_ID" == "None" ]]; then
             echo "sg_rule_id=" >> "$GITHUB_OUTPUT"
-            echo "WARNING: Could not capture SecurityGroupRuleId — cleanup may require manual intervention" >&2
+            echo "WARNING: Could not capture SecurityGroupRuleId" >&2
           else
             echo "sg_rule_id=$RULE_ID" >> "$GITHUB_OUTPUT"
             echo "Authorized SSH ingress: $RULE_ID"
           fi
 
-      - name: Configure pinned SSH host identity
+      - name: Generate ephemeral SSH key pair
+        id: ssh-keygen
         shell: bash
         run: |
           set -euo pipefail
+          SSH_DIR="$HOME/.ssh"
+          install -m 700 -d "$SSH_DIR"
+          KEY_PATH="$SSH_DIR/id_deploy_ephemeral"
+          ssh-keygen -t ed25519 -f "$KEY_PATH" -N "" -C "github-actions-ephemeral" -q
+          chmod 600 "$KEY_PATH"
+          echo "key_path=$KEY_PATH" >> "$GITHUB_OUTPUT"
+          echo "pub_key=$(cat "${KEY_PATH}.pub")" >> "$GITHUB_OUTPUT"
+
+      - name: Push public key via EC2 Instance Connect
+        shell: bash
+        run: |
+          set -euo pipefail
+          PUB_KEY="${{ steps.ssh-keygen.outputs.pub_key }}"
+          aws ec2-instance-connect send-ssh-public-key \
+            --region "$AWS_REGION" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --instance-os-user "$DEPLOY_USER" \
+            --ssh-public-key "$PUB_KEY"
+          echo "Public key pushed via EC2 Instance Connect (valid for 60s)"
+
+      - name: Configure SSH client
+        shell: bash
+        run: |
+          set -euo pipefail
+          KEY_PATH="${{ steps.ssh-keygen.outputs.key_path }}"
           install -m 700 -d "$HOME/.ssh"
-          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/known_hosts"
-
-      - name: Generate temporary SSH key pair
-        id: ssh-key
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh-keygen -t ed25519 -f "$HOME/.ssh/id_deploy_temp" -N "" -q
-          chmod 600 "$HOME/.ssh/id_deploy_temp"
-          echo "private_key_file=$HOME/.ssh/id_deploy_temp" >> "$GITHUB_OUTPUT"
-          echo "public_key_file=$HOME/.ssh/id_deploy_temp.pub" >> "$GITHUB_OUTPUT"
-
-      - name: Install temporary public key on server
-        shell: bash
-        run: |
-          set -euo pipefail
-          PUB_KEY="$(cat "$HOME/.ssh/id_deploy_temp.pub")"
-          ssh -o StrictHostKeyChecking=yes \
-            "${DEPLOY_USER}@${DEPLOY_HOST}" \
-            "echo '${PUB_KEY}' >> ~/.ssh/authorized_keys && sort -u -o ~/.ssh/authorized_keys ~/.ssh/authorized_keys"
-
-      - name: Remove temporary public key from server
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          PUB_KEY="$(cat "$HOME/.ssh/id_deploy_temp.pub" 2>/dev/null || true)"
-          if [[ -n "$PUB_KEY" ]]; then
-            ssh -o StrictHostKeyChecking=yes \
-              "${DEPLOY_USER}@${DEPLOY_HOST}" \
-              "sed -i '\\|${PUB_KEY}|d' ~/.ssh/authorized_keys" 2>/dev/null || true
-          fi
+          cat > "$HOME/.ssh/config" << CONF
+          Host deploy-target
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            IdentityFile $KEY_PATH
+            IdentitiesOnly yes
+            StrictHostKeyChecking accept-new
+            ConnectTimeout 15
+          CONF
+          chmod 600 "$HOME/.ssh/config"
 
       - name: Verify remote deployment host
         shell: bash
         run: |
           set -euo pipefail
-          ssh -i "$HOME/.ssh/id_deploy_temp" \
-            -o BatchMode=yes \
-            -o IdentitiesOnly=yes \
-            -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" \
-            'docker compose version >/dev/null && git --version >/dev/null'
+          PUB_KEY="${{ steps.ssh-keygen.outputs.pub_key }}"
+          aws ec2-instance-connect send-ssh-public-key \
+            --region "$AWS_REGION" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --instance-os-user "$DEPLOY_USER" \
+            --ssh-public-key "$PUB_KEY"
+          ssh deploy-target \
+            'docker compose version && git --version'
 
       - name: Execute guarded release deployment
         shell: bash
         run: |
           set -euo pipefail
+          PUB_KEY="${{ steps.ssh-keygen.outputs.pub_key }}"
+          aws ec2-instance-connect send-ssh-public-key \
+            --region "$AWS_REGION" \
+            --instance-id "$EC2_INSTANCE_ID" \
+            --instance-os-user "$DEPLOY_USER" \
+            --ssh-public-key "$PUB_KEY"
           remote_script="/tmp/elitedom-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           cleanup_remote() {
-            printf -v cleanup_cmd 'rm -f %q' "$remote_script"
-            ssh -i "$HOME/.ssh/id_deploy_temp" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-              "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
+            ssh deploy-target "rm -f '$remote_script'" 2>/dev/null || true
           }
           trap cleanup_remote EXIT
-          scp -i "$HOME/.ssh/id_deploy_temp" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            elitedom-store/infrastructure/scripts/deploy_release.sh \
-            "$DEPLOY_USER@$DEPLOY_HOST:$remote_script"
+          scp elitedom-store/infrastructure/scripts/deploy_release.sh \
+            "deploy-target:$remote_script"
           printf -v remote_cmd 'bash %q %q %q %q %q' \
             "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL"
-          ssh -i "$HOME/.ssh/id_deploy_temp" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            "$DEPLOY_USER@$DEPLOY_HOST" "$remote_cmd" \
-            | tee deployment.log
+          ssh deploy-target "$remote_cmd" | tee deployment.log
 
-      - name: Revoke temporary SSH rule
+      - name: Revoke temporary SSH ingress
         if: always()
         shell: bash
         run: |
@@ -188,6 +206,7 @@ jobs:
           SG_ID="${EC2_SECURITY_GROUP_ID}"
           if [[ -n "$SG_RULE_ID" && "$SG_RULE_ID" != "None" ]]; then
             aws ec2 revoke-security-group-ingress \
+              --region "$AWS_REGION" \
               --group-id "$SG_ID" \
               --security-group-rule-id "$SG_RULE_ID" 2>/dev/null || true
             echo "Revoked SSH rule: $SG_RULE_ID"
