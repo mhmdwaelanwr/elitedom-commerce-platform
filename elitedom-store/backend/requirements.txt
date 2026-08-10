@@ -5,7 +5,7 @@
 # ── Core Framework ───────────────────────────────────────────────────────────
 fastapi==0.141.1
 uvicorn[standard]==0.30.0
-pydantic==2.9.0
+pydantic==2.13.4
 pydantic-settings==2.5.0
 python-multipart==0.0.9
 
