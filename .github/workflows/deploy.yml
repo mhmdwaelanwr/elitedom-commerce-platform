@@ -1,6 +1,16 @@
 name: Deploy Release
 
 on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Protected GitHub Environment to deploy
+        required: true
+        type: string
+      release_ref:
+        description: Full 40-character Git commit SHA reachable from main
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       environment:
@@ -33,6 +43,7 @@ jobs:
       site_url: ${{ steps.target.outputs.site_url }}
       api_url: ${{ steps.target.outputs.api_url }}
     env:
+      TARGET_ENVIRONMENT: ${{ inputs.environment }}
       RELEASE_REF: ${{ inputs.release_ref }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -43,9 +54,10 @@ jobs:
       API_URL: ${{ vars.API_URL }}
 
     steps:
-      - name: Check out deployment tooling
+      - name: Check out exact release deployment tooling
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.release_ref }}
           fetch-depth: 0
 
       - name: Validate release and environment contract
@@ -53,7 +65,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$TARGET_ENVIRONMENT" == "staging" || "$TARGET_ENVIRONMENT" == "production" ]] || { echo "environment must be staging or production" >&2; exit 2; }
           [[ "$RELEASE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "release_ref must be a full Git SHA" >&2; exit 2; }
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_REF" ]] || { echo "deployment tooling checkout does not match release_ref" >&2; exit 2; }
           git cat-file -e "${RELEASE_REF}^{commit}"
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_REF" origin/main || { echo "release_ref is not reachable from main" >&2; exit 2; }
@@ -61,6 +75,7 @@ jobs:
           [[ "$DEPLOY_PATH" = /* ]] || { echo "DEPLOY_PATH must be an absolute environment variable" >&2; exit 2; }
           [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
           [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
+          bash -n elitedom-store/infrastructure/scripts/preflight_host.sh
           bash -n elitedom-store/infrastructure/scripts/deploy_release.sh
           printf 'site_url=%s\n' "${SITE_URL%/}" >> "$GITHUB_OUTPUT"
           printf 'api_url=%s\n' "${API_URL%/}" >> "$GITHUB_OUTPUT"
@@ -86,6 +101,26 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST" \
             'docker compose version >/dev/null && git --version >/dev/null'
 
+      - name: Run non-mutating host preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote_preflight="/tmp/elitedom-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
+          cleanup() {
+            printf -v cleanup_cmd 'rm -f %q' "$remote_preflight"
+            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            elitedom-store/infrastructure/scripts/preflight_host.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$remote_preflight"
+          printf -v preflight_cmd 'bash %q %q %q %q %q' \
+            "$remote_preflight" "$DEPLOY_PATH" "$TARGET_ENVIRONMENT" "$SITE_URL" "$API_URL"
+          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$DEPLOY_HOST" "$preflight_cmd" \
+            | tee preflight.log
+
       - name: Execute guarded release deployment
         shell: bash
         run: |
@@ -100,8 +135,8 @@ jobs:
           scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             elitedom-store/infrastructure/scripts/deploy_release.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$remote_script"
-          printf -v remote_cmd 'bash %q %q %q %q %q' \
-            "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL"
+          printf -v remote_cmd 'bash %q %q %q %q %q %q' \
+            "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL" "$TARGET_ENVIRONMENT"
           ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" "$remote_cmd" \
             | tee deployment.log
@@ -111,7 +146,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: deployment-${{ inputs.environment }}-${{ github.run_id }}
-          path: deployment.log
+          path: |
+            preflight.log
+            deployment.log
           if-no-files-found: warn
           retention-days: 30
 
