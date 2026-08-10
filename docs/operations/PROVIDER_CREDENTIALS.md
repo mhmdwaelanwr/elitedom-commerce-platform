@@ -1,3 +1,12 @@
+---
+document_type: operations
+owner: platform-team
+review_trigger: provider-credential-rotation
+status: active
+title: Provider Credentials Setup Guide
+verified_against: staging-environment
+---
+
 # Provider Credentials Setup Guide
 
 ## Overview
