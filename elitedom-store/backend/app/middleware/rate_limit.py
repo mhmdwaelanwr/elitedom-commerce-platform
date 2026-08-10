@@ -123,7 +123,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """Rate-limit requests by trusted client IP using Redis in production."""
 
     async def dispatch(self, request: Request, call_next: Callable):
-        if request.url.path in EXCLUDED_PATHS:
+        # A CORS preflight authorizes the browser to send the real request but
+        # does not execute the protected operation itself. Counting OPTIONS in
+        # the same bucket can exhaust an auth quota before the corresponding
+        # POST is even sent, so preflights must pass through to CORSMiddleware
+        # without consuming or being blocked by an application request budget.
+        if request.method == "OPTIONS" or request.url.path in EXCLUDED_PATHS:
             return await call_next(request)
 
         limit, window, policy_name = _policy(request.url.path)
