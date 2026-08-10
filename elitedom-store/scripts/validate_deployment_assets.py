@@ -45,12 +45,24 @@ def main() -> int:
     for marker, message in (
         ("workflow_dispatch:", "Deployment must remain manually dispatchable."),
         ("workflow_call:", "Deployment must remain reusable by the qualified staging promoter."),
+        ("id-token: write", "Deployment must be able to request a short-lived OIDC token."),
         ("environment:", "Deployment must use protected GitHub Environments."),
         ("cancel-in-progress: false", "A running deployment must not be cancelled by a newer promotion."),
         ("ref: ${{ inputs.release_ref }}", "Deployment tooling must be checked out from the exact release SHA."),
         ("DEPLOY_KNOWN_HOSTS", "SSH host identity must be pinned."),
         ("StrictHostKeyChecking=yes", "SSH strict host checking must remain enabled."),
         ("git merge-base --is-ancestor", "Release must be verified as reachable from main."),
+        ("aws-actions/configure-aws-credentials@v6", "Temporary SSH ingress must use short-lived AWS OIDC credentials."),
+        ("MANAGE_SSH_INGRESS", "Temporary SSH ingress must be explicitly environment-controlled."),
+        ("AWS_DEPLOY_ROLE_ARN", "Deployment must receive the least-privilege AWS role ARN from environment variables."),
+        ("DEPLOY_SECURITY_GROUP_ID", "Deployment must scope temporary SSH access to an explicit security group."),
+        ("https://checkip.amazonaws.com", "Deployment must determine the current runner address for an exact /32 rule."),
+        ("${runner_ip}/32", "Temporary runner SSH access must be restricted to one IPv4 /32."),
+        ("authorize-security-group-ingress", "Deployment must explicitly authorize the temporary SSH rule."),
+        ("SecurityGroupRules[0].SecurityGroupRuleId", "Deployment must capture the exact AWS security-group rule ID it creates."),
+        ("revoke-security-group-ingress", "Deployment must revoke temporary runner SSH access."),
+        ("--security-group-rule-ids", "Temporary SSH cleanup must revoke by exact rule ID."),
+        ("if: always() && env.MANAGE_SSH_INGRESS == 'true'", "Temporary SSH cleanup must run even after deployment failure."),
         ("preflight_host.sh", "Deployment must run the non-mutating host preflight."),
         ("deploy_release.sh", "Workflow must execute the guarded remote deployer."),
         ("TARGET_ENVIRONMENT", "Protected environment identity must reach the remote deployer."),
@@ -61,11 +73,22 @@ def main() -> int:
         require(marker in workflow, message, errors)
     require("ssh-keyscan" not in workflow, "Do not trust runtime ssh-keyscan output as host identity.", errors)
     require("StrictHostKeyChecking=no" not in workflow, "Deployment must never disable SSH host verification.", errors)
+    require("0.0.0.0/0" not in workflow, "Deployment must never open SSH to the whole IPv4 internet.", errors)
+    require("::/0" not in workflow, "Deployment must never open SSH to the whole IPv6 internet.", errors)
+    authorize_index = workflow.find("authorize-security-group-ingress")
+    ssh_verify_index = workflow.find("Verify remote deployment host")
+    revoke_index = workflow.find("revoke-security-group-ingress")
+    require(
+        authorize_index >= 0 and ssh_verify_index > authorize_index and revoke_index > ssh_verify_index,
+        "Temporary SSH access must be authorized before SSH and revoked after SSH work.",
+        errors,
+    )
 
     auto_workflow = AUTO_STAGING_WORKFLOW.read_text(encoding="utf-8")
     for marker, message in (
         ("workflow_run:", "Automatic staging promotion must be driven by a completed qualification workflow."),
         ("Real Stack E2E", "Automatic staging promotion must depend on Real Stack E2E."),
+        ("id-token: write", "Automatic staging promotion must permit OIDC in the reusable deployment workflow."),
         ("github.event.workflow_run.conclusion == 'success'", "Automatic staging promotion must require a successful qualification."),
         ("github.event.workflow_run.event == 'push'", "Automatic staging promotion must reject PR-originated qualification runs."),
         ("github.event.workflow_run.head_branch == 'main'", "Automatic staging promotion must be limited to main."),
@@ -179,6 +202,9 @@ def main() -> int:
         ("STAGING_AUTO_DEPLOY_ENABLED", "Deployment guide must document the staging auto-deploy enable switch."),
         ("preflight_host.sh", "Deployment guide must document host preflight."),
         ("restore_drill.sh", "Deployment guide must document the isolated restore drill."),
+        ("AWS_DEPLOY_ROLE_ARN", "Deployment guide must document the OIDC deployment role contract."),
+        ("DEPLOY_SECURITY_GROUP_ID", "Deployment guide must document the security group used for temporary runner access."),
+        ("/32", "Deployment guide must document exact-runner temporary SSH ingress."),
     ):
         require(marker in guide, message, errors)
 
