@@ -27,6 +27,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 concurrency:
   group: deploy-${{ inputs.environment }}
@@ -52,6 +53,10 @@ jobs:
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       SITE_URL: ${{ vars.SITE_URL }}
       API_URL: ${{ vars.API_URL }}
+      MANAGE_SSH_INGRESS: ${{ vars.MANAGE_SSH_INGRESS || 'false' }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      DEPLOY_SECURITY_GROUP_ID: ${{ vars.DEPLOY_SECURITY_GROUP_ID }}
 
     steps:
       - name: Check out exact release deployment tooling
@@ -75,10 +80,54 @@ jobs:
           [[ "$DEPLOY_PATH" = /* ]] || { echo "DEPLOY_PATH must be an absolute environment variable" >&2; exit 2; }
           [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
           [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
+          case "$MANAGE_SSH_INGRESS" in
+            true)
+              [[ "$AWS_DEPLOY_ROLE_ARN" =~ ^arn:aws:iam::[0-9]{12}:role/.+ ]] || { echo "AWS_DEPLOY_ROLE_ARN is invalid" >&2; exit 2; }
+              [[ "$AWS_REGION" =~ ^[a-z]{2}-[a-z]+-[0-9]+$ ]] || { echo "AWS_REGION is invalid" >&2; exit 2; }
+              [[ "$DEPLOY_SECURITY_GROUP_ID" =~ ^sg-[0-9a-fA-F]+$ ]] || { echo "DEPLOY_SECURITY_GROUP_ID is invalid" >&2; exit 2; }
+              ;;
+            false) ;;
+            *) echo "MANAGE_SSH_INGRESS must be true or false" >&2; exit 2 ;;
+          esac
           bash -n elitedom-store/infrastructure/scripts/preflight_host.sh
           bash -n elitedom-store/infrastructure/scripts/deploy_release.sh
           printf 'site_url=%s\n' "${SITE_URL%/}" >> "$GITHUB_OUTPUT"
           printf 'api_url=%s\n' "${API_URL%/}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure short-lived AWS credentials
+        if: env.MANAGE_SSH_INGRESS == 'true'
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          mask-aws-account-id: true
+
+      - name: Temporarily authorize this runner for SSH
+        id: ssh_ingress
+        if: env.MANAGE_SSH_INGRESS == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          runner_ip="$(curl --fail --silent --show-error --retry 3 https://checkip.amazonaws.com | tr -d '\r\n')"
+          python - "$runner_ip" <<'PY'
+          import ipaddress
+          import sys
+
+          address = ipaddress.ip_address(sys.argv[1])
+          if address.version != 4:
+              raise SystemExit("GitHub runner did not return an IPv4 address")
+          PY
+          runner_cidr="${runner_ip}/32"
+          rule_id="$(
+            aws ec2 authorize-security-group-ingress \
+              --group-id "$DEPLOY_SECURITY_GROUP_ID" \
+              --ip-permissions "IpProtocol=tcp,FromPort=22,ToPort=22,IpRanges=[{CidrIp=${runner_cidr},Description=elitedom-github-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}}]" \
+              --query 'SecurityGroupRules[0].SecurityGroupRuleId' \
+              --output text
+          )"
+          [[ "$rule_id" =~ ^sgr-[0-9a-fA-F]+$ ]] || { echo "AWS did not return the created SSH rule ID" >&2; exit 1; }
+          printf 'rule_id=%s\n' "$rule_id" >> "$GITHUB_OUTPUT"
+          echo "Authorized one temporary TCP/22 rule for the current runner /32."
 
       - name: Configure pinned SSH host identity
         shell: bash
@@ -96,6 +145,7 @@ jobs:
           set -euo pipefail
           ssh -i "$HOME/.ssh/id_deploy" \
             -o BatchMode=yes \
+            -o ConnectTimeout=20 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" \
@@ -108,16 +158,16 @@ jobs:
           remote_preflight="/tmp/elitedom-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           cleanup() {
             printf -v cleanup_cmd 'rm -f %q' "$remote_preflight"
-            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             elitedom-store/infrastructure/scripts/preflight_host.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$remote_preflight"
           printf -v preflight_cmd 'bash %q %q %q %q %q' \
             "$remote_preflight" "$DEPLOY_PATH" "$TARGET_ENVIRONMENT" "$SITE_URL" "$API_URL"
-          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" "$preflight_cmd" \
             | tee preflight.log
 
@@ -128,18 +178,31 @@ jobs:
           remote_script="/tmp/elitedom-deploy-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}.sh"
           cleanup() {
             printf -v cleanup_cmd 'rm -f %q' "$remote_script"
-            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
               "$DEPLOY_USER@$DEPLOY_HOST" "$cleanup_cmd" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
-          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             elitedom-store/infrastructure/scripts/deploy_release.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$remote_script"
           printf -v remote_cmd 'bash %q %q %q %q %q %q' \
             "$remote_script" "$RELEASE_REF" "$DEPLOY_PATH" "$SITE_URL" "$API_URL" "$TARGET_ENVIRONMENT"
-          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          ssh -i "$HOME/.ssh/id_deploy" -o BatchMode=yes -o ConnectTimeout=20 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$DEPLOY_USER@$DEPLOY_HOST" "$remote_cmd" \
             | tee deployment.log
+
+      - name: Revoke temporary runner SSH access
+        if: always() && env.MANAGE_SSH_INGRESS == 'true' && steps.ssh_ingress.outputs.rule_id != ''
+        shell: bash
+        env:
+          SSH_SECURITY_GROUP_RULE_ID: ${{ steps.ssh_ingress.outputs.rule_id }}
+        run: |
+          set -euo pipefail
+          aws ec2 revoke-security-group-ingress \
+            --group-id "$DEPLOY_SECURITY_GROUP_ID" \
+            --security-group-rule-ids "$SSH_SECURITY_GROUP_RULE_ID" \
+            >/dev/null
+          echo "Revoked the exact temporary SSH rule created for this workflow run."
 
       - name: Preserve deployment evidence
         if: always()
