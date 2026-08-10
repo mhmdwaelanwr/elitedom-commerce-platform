@@ -63,9 +63,25 @@ fi
 echo ""
 
 # ============================================
-# Step 3: Environment file
+# Step 3: Required directories
 # ============================================
-echo "--- Step 3: Environment File ---"
+echo "--- Step 3: Required Directories ---"
+
+BACKUP_DIR="/opt/elitedom-backups"
+STATE_DIR="/opt/.elitedom-deployment-state"
+
+sudo mkdir -p "$BACKUP_DIR" "$STATE_DIR"
+sudo chmod 700 "$BACKUP_DIR"
+sudo chmod 700 "$STATE_DIR"
+sudo chown "$(id -u):$(id -g)" "$BACKUP_DIR" "$STATE_DIR"
+echo "  ✓ $BACKUP_DIR (permissions 700)"
+echo "  ✓ $STATE_DIR (permissions 700)"
+echo ""
+
+# ============================================
+# Step 4: Environment file
+# ============================================
+echo "--- Step 4: Environment File ---"
 
 ENV_FILE="$REPO_PATH/elitedom-store/.env"
 if [[ -f "$ENV_FILE" && ! -L "$ENV_FILE" ]]; then
@@ -83,9 +99,9 @@ fi
 echo ""
 
 # ============================================
-# Step 4: Create deployment user (optional)
+# Step 5: Create deployment user (optional)
 # ============================================
-echo "--- Step 4: Deployment User ---"
+echo "--- Step 5: Deployment User ---"
 
 DEPLOY_USER="ubuntu"
 if id "$DEPLOY_USER" >/dev/null 2>&1; then
@@ -108,9 +124,9 @@ echo "  ✓ SSH directory prepared for $DEPLOY_USER"
 echo ""
 
 # ============================================
-# Step 5: Generate SSH host keys for known_hosts
+# Step 6: Generate SSH host keys for known_hosts
 # ============================================
-echo "--- Step 5: SSH Host Keys ---"
+echo "--- Step 6: SSH Host Keys ---"
 
 echo "SSH host keys (for DEPLOY_KNOWN_HOSTS):"
 ssh-keyscan -t ed25519,ecdsa,rsa localhost 2>/dev/null || echo "  (ssh-keyscan failed — get keys after Elastic IP is assigned)"
@@ -121,9 +137,9 @@ echo "    Use that output as DEPLOY_KNOWN_HOSTS in GitHub Environment"
 echo ""
 
 # ============================================
-# Step 6: Verify Docker
+# Step 7: Verify Docker
 # ============================================
-echo "--- Step 6: Docker Verification ---"
+echo "--- Step 7: Docker Verification ---"
 
 if docker ps >/dev/null 2>&1; then
     echo "  ✓ Docker daemon is running"
@@ -135,9 +151,9 @@ fi
 echo ""
 
 # ============================================
-# Step 7: System resources
+# Step 8: System resources
 # ============================================
-echo "--- Step 7: System Resources ---"
+echo "--- Step 8: System Resources ---"
 
 AVAIL_KB="$(df --output=avail / 2>/dev/null | tail -1 | tr -d ' ' || echo 0)"
 AVAIL_GB=$(( AVAIL_KB / 1048576 ))
