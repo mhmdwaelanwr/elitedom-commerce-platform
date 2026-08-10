@@ -44,6 +44,7 @@ jobs:
       AWS_REGION: ${{ vars.AWS_REGION }}
       AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
       EC2_SECURITY_GROUP_ID: ${{ vars.EC2_SECURITY_GROUP_ID }}
+      REQUIRE_ODOO_SMOKE: ${{ vars.REQUIRE_ODOO_SMOKE }}
 
     steps:
       - name: Check out deployment tooling
