@@ -97,7 +97,10 @@ ODOO_DB="$("${COMPOSE[@]}" run --rm --no-deps --entrypoint /bin/sh odoo -ec 'pri
 [[ "$APP_DB" != "$ODOO_DB" ]] || fail "application and Odoo databases must be distinct"
 
 backup_db() {
-  local db="$1" kind="$2" out="$BACKUP_DIR/elitedom_${timestamp}_${kind}.sql.gz" tmp="${out}.partial"
+  local db="$1"
+  local kind="$2"
+  local out="$BACKUP_DIR/elitedom_${timestamp}_${kind}.sql.gz"
+  local tmp="${out}.partial"
   if ! "${COMPOSE[@]}" exec -T postgres sh -ec 'psql -At -U "$POSTGRES_USER" -d postgres -c "SELECT datname FROM pg_database WHERE datistemplate = false"' | grep -Fxq "$db"; then
     echo "No pre-existing $kind database '$db'; recording first-deploy state."
     return 0
