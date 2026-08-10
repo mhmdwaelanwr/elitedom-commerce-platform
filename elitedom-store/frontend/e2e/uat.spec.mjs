@@ -53,8 +53,14 @@ function totp(secret, at = Date.now()) {
 
 async function primePresentation(page, locale, theme) {
   await page.addInitScript(({ locale: selectedLocale, theme: selectedTheme }) => {
-    window.localStorage.setItem("elitedom-locale", selectedLocale);
-    window.localStorage.setItem("elitedom-theme", selectedTheme);
+    // Seed a fresh browser context without overwriting a real user choice on
+    // subsequent navigations or reloads. Persistence is part of the P23 gate.
+    if (window.localStorage.getItem("elitedom-locale") === null) {
+      window.localStorage.setItem("elitedom-locale", selectedLocale);
+    }
+    if (window.localStorage.getItem("elitedom-theme") === null) {
+      window.localStorage.setItem("elitedom-theme", selectedTheme);
+    }
   }, { locale, theme });
 }
 
