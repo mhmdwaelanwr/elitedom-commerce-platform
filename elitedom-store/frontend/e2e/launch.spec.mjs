@@ -70,7 +70,7 @@ test.describe.serial("Elitedom deployed launch gate", () => {
 
       do {
         const response = await api.get(
-          `/catalog/products?locale=en&page=${pageNumber}&limit=100`,
+          `catalog/products?locale=en&page=${pageNumber}&limit=100`,
         );
         expect(
           response.ok(),
