@@ -8,7 +8,7 @@ function requiredOrigin(name) {
 
 const siteOrigin = requiredOrigin("ELITEDOM_SITE_URL");
 const apiOrigin = requiredOrigin("ELITEDOM_API_URL");
-const apiV1 = `${apiOrigin}/api/v1`;
+const apiV1 = `${apiOrigin}/api/v1/`;
 let purchasableProduct;
 
 function hasRealProductMedia(product) {
