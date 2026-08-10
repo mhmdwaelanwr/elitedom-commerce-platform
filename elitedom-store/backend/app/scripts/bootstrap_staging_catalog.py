@@ -235,7 +235,6 @@ async def bootstrap_staging_catalog() -> dict[str, Any]:
 
 async def verify_staging_catalog() -> dict[str, Any]:
     """Verify the staging catalog is launch-ready. Returns verification results."""
-    settings = get_settings()
     results: dict[str, Any] = {"launch_ready": False, "checks": {}}
 
     async with async_session_factory() as session:
