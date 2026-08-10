@@ -7,21 +7,35 @@ on:
       - main
     paths:
       - ".github/workflows/deploy.yml"
+      - ".github/workflows/staging-auto-deploy.yml"
       - ".github/workflows/launch-smoke.yml"
       - ".github/workflows/deployment-contract.yml"
+      - "elitedom-store/infrastructure/docker-compose.prod.yml"
       - "elitedom-store/infrastructure/scripts/deploy_release.sh"
+      - "elitedom-store/infrastructure/scripts/preflight_host.sh"
+      - "elitedom-store/infrastructure/scripts/restore_drill.sh"
       - "elitedom-store/scripts/validate_deployment_assets.py"
       - "docs/operations/infrastructure/DEPLOYMENT_GUIDE.md"
+      - "docs/operations/infrastructure/ENVIRONMENTS.md"
+      - "docs/operations/disaster-recovery/RESTORE_PROCEDURES.md"
+      - "docs/operations/disaster-recovery/DR_TESTING.md"
       - "elitedom-store/docs/GO_LIVE_RUNBOOK.md"
       - "elitedom-store/infrastructure/README.md"
   pull_request:
     paths:
       - ".github/workflows/deploy.yml"
+      - ".github/workflows/staging-auto-deploy.yml"
       - ".github/workflows/launch-smoke.yml"
       - ".github/workflows/deployment-contract.yml"
+      - "elitedom-store/infrastructure/docker-compose.prod.yml"
       - "elitedom-store/infrastructure/scripts/deploy_release.sh"
+      - "elitedom-store/infrastructure/scripts/preflight_host.sh"
+      - "elitedom-store/infrastructure/scripts/restore_drill.sh"
       - "elitedom-store/scripts/validate_deployment_assets.py"
       - "docs/operations/infrastructure/DEPLOYMENT_GUIDE.md"
+      - "docs/operations/infrastructure/ENVIRONMENTS.md"
+      - "docs/operations/disaster-recovery/RESTORE_PROCEDURES.md"
+      - "docs/operations/disaster-recovery/DR_TESTING.md"
       - "elitedom-store/docs/GO_LIVE_RUNBOOK.md"
       - "elitedom-store/infrastructure/README.md"
 
@@ -46,5 +60,7 @@ jobs:
         run: |
           set -euxo pipefail
           bash -n elitedom-store/infrastructure/scripts/deploy_release.sh
+          bash -n elitedom-store/infrastructure/scripts/preflight_host.sh
+          bash -n elitedom-store/infrastructure/scripts/restore_drill.sh
           python -m py_compile elitedom-store/scripts/validate_deployment_assets.py
           python elitedom-store/scripts/validate_deployment_assets.py
