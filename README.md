@@ -2,7 +2,7 @@
 
 Elitedom is an enterprise-grade commerce platform for Egyptian technology retail, combining a bilingual customer storefront, staff administration, payments, fulfillment, ERP synchronization, security controls, observability, and governed release operations in one production-oriented monorepo.
 
-> **Release posture:** code quality and launch-control automation are implemented, but public production launch still requires environment-specific credentials, provider acceptance, deployment evidence, backup/restore proof, monitoring validation, and UAT approval for the exact release candidate.
+> **Release posture:** the repository is qualified through P23 isolated full-stack UAT/release-candidate gating. Public staging/production launch still requires a real target environment, provider acceptance, deployment/public-HTTPS evidence, backup/restore proof, monitoring validation, and environment-specific sign-off for the exact release candidate.
 
 ## Repository map
 
@@ -69,35 +69,37 @@ Key entry points:
 - [`docs/operations/README.md`](docs/operations/README.md) — deployment, runbooks, observability, recovery, compliance readiness.
 - [`docs/delivery/README.md`](docs/delivery/README.md) — roadmap, risks, release records.
 - [`docs/governance/README.md`](docs/governance/README.md) — documentation ownership, status model, and source-of-truth rules.
+- [`docs/delivery/releases/P23_RELEASE_CANDIDATE_GATE.md`](docs/delivery/releases/P23_RELEASE_CANDIDATE_GATE.md) — automated release-candidate qualification boundary and remaining staging work.
 - [`elitedom-store/docs/GO_LIVE_RUNBOOK.md`](elitedom-store/docs/GO_LIVE_RUNBOOK.md) — executable go-live procedure.
 
 ## Local development
 
 ```bash
-git clone https://github.com/mhmdwaelanwr/elitedom-erp-architecture-main.git
-cd elitedom-erp-architecture-main/elitedom-store
+git clone https://github.com/mhmdwaelanwr/elitedom-erp-architecture.git
+cd elitedom-erp-architecture/elitedom-store
 cp .env.example .env
 make verify-repo
 make dev
-make migrate
 make seed
 ```
 
-Local defaults expose the React/Vite storefront on `http://localhost:3000`, FastAPI on `http://localhost:8000`, and Odoo on `http://localhost:8069`.
+`make dev` is migration-safe: it prepares PostgreSQL/Redis, initializes the application database and applies Alembic migrations before starting the application services. Local defaults expose the React/Vite storefront on `http://localhost:3000`, FastAPI on `http://localhost:8000`, and Odoo on `http://localhost:8069`.
 
 ## Quality gates
 
 Every change must preserve the repository's green baseline:
 
 1. Backend Ruff and pytest.
-2. Frontend ESLint, TypeScript, design-system checks, and Vite production build.
+2. Frontend ESLint, TypeScript, design-system/Figma parity and Vite production build.
 3. PostgreSQL fresh upgrade, latest downgrade/replay, and full downgrade/replay.
 4. Odoo 17 clean addon install and native tests.
 5. Development and production Docker Compose validation.
 6. Launch acceptance asset validation.
 7. Repository and documentation hygiene validation.
+8. Real-stack Chromium integration with React/Vite + FastAPI + PostgreSQL + Redis/Celery + Odoo 17.
+9. P23 release-candidate UAT covering 360/390/430/1024, AR/EN, RTL/LTR, light/dark and customer/B2B/admin role surfaces with exact-SHA provenance.
 
-`make verify-repo` runs the repository/documentation/launch/Odoo static contracts locally. GitHub Actions remains authoritative for the complete CI gate set.
+`make verify-repo` runs the repository/documentation/launch/Odoo static contracts locally. GitHub Actions remains authoritative for the complete CI and release-candidate gate set.
 
 ## Repository governance
 
@@ -129,4 +131,4 @@ Work on focused branches, keep migrations reversible, preserve webhook idempoten
 
 ---
 
-Documentation truth, canonical repository paths, licensing boundaries, and launch-control assets are continuously validated in CI. Production readiness remains release- and environment-specific.
+Documentation truth, canonical repository paths, licensing boundaries, launch-control assets, real-stack integration and release-candidate qualification are continuously validated in CI. Production readiness remains release- and environment-specific.
