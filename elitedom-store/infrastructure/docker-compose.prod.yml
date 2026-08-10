@@ -12,7 +12,7 @@ networks:
 services:
   fastapi:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
       APP_VERSION: "${RELEASE_REF:?Set RELEASE_REF to the deployed Git commit SHA}"
       STAFF_MFA_REQUIRED: "true"
@@ -23,12 +23,12 @@ services:
 
   celery-worker:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
 
   celery-beat:
     environment:
-      ENVIRONMENT: production
+      ENVIRONMENT: "${ENVIRONMENT:-production}"
       DEBUG: "false"
 
   frontend:
