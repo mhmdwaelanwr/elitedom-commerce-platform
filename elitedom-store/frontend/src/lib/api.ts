@@ -452,7 +452,7 @@ export async function submitCheckout(
   const paymentMethod =
     details.paymentMethod === "cash_on_delivery"
       ? "cod"
-      : details.paymentMethod === "instapay"
+      : details.paymentMethod === "mobile_wallet"
         ? "mobile_wallet"
         : "credit_card";
   const result = await request<{ order: { name: string }; payment_gateway_url?: string | null }>(
