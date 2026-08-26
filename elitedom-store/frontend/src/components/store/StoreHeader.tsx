@@ -37,7 +37,7 @@ const copy = {
       ["Business", "/business"],
     ],
     utility: [
-      ["delivery", "Nationwide delivery"],
+      ["delivery", "Shipping confirmed at checkout"],
       ["warranty", "Local warranty"],
       ["shield", "Secure checkout"],
     ],
@@ -65,7 +65,7 @@ const copy = {
       ["الشركات", "/business"],
     ],
     utility: [
-      ["delivery", "توصيل لكل المحافظات"],
+      ["delivery", "الشحن يتأكد عند إتمام الطلب"],
       ["warranty", "ضمان محلي"],
       ["shield", "دفع آمن"],
     ],
