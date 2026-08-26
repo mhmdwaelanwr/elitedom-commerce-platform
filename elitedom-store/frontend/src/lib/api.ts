@@ -175,7 +175,7 @@ function apiProductToStoreProduct(apiProduct: ApiProduct): Product {
     id: String(apiProduct.id),
     sku: apiProduct.sku,
     name: apiProduct.name,
-    description: apiProduct.description ?? "Verified technology product from Elitedom.",
+    description: apiProduct.description ?? "Product details are available in the technical specifications.",
     brand: apiProduct.brand ?? "Elitedom",
     category,
     categoryName: apiProduct.category?.name ?? "Technology",
@@ -184,7 +184,7 @@ function apiProductToStoreProduct(apiProduct: ApiProduct): Product {
     dropshipEnabled: apiProduct.is_dropship_enabled,
     image,
     gallery: gallery.length > 0 ? gallery : [image],
-    warrantyMonths: apiProduct.warranty_months ?? 12,
+    warrantyMonths: apiProduct.warranty_months ?? 0,
     specs,
     rating: 0,
   };
@@ -245,7 +245,7 @@ function cartItemToStoreItem(item: ApiCart["items"][number]): CartItem {
     image: PRODUCT_PLACEHOLDER,
     gallery: [PRODUCT_PLACEHOLDER],
     specs: [],
-    warrantyMonths: 12,
+    warrantyMonths: 0,
     rating: 0,
   };
   return {
