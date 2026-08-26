@@ -10,6 +10,7 @@ import "@/styles/theme-hardening.css";
 import "@/styles/p19-fixes.css";
 import "@/styles/p20-completeness.css";
 import "@/styles/storefront-commerce-hardening.css";
+import "@/styles/premium-store-shell.css";
 
 const root = document.getElementById("root");
 
