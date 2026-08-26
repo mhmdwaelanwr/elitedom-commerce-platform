@@ -26,6 +26,8 @@ type StoreHeaderProps = {
 
 const copy = {
   en: {
+    utility: "Egypt-wide delivery",
+    utilityDetail: "Curated hardware · Local warranty",
     search: "Search hardware",
     hardware: "Hardware",
     navigation: [
@@ -48,6 +50,8 @@ const copy = {
     cartErrorMessage: "We could not load your cart. Your progress is safe.",
   },
   ar: {
+    utility: "توصيل لكل محافظات مصر",
+    utilityDetail: "هاردوير مختار · ضمان محلي",
     search: "ابحث في الهاردوير",
     hardware: "الهاردوير",
     navigation: [
@@ -192,6 +196,10 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   return (
     <>
       <header className="el-store-header" data-testid="store-header">
+        <div className="el-store-header__utility" aria-label={labels.utility}>
+          <span><i />{labels.utility}</span>
+          <span>{labels.utilityDetail}</span>
+        </div>
         <div className="el-store-header__left">
           <Link aria-label={labels.home} className="el-store-header__brand" to="/">
             <span className="el-store-header__desktop-brand"><ElitedomBrand /></span>
