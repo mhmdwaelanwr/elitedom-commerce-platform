@@ -11,7 +11,7 @@ import { submitRoutedCheckout } from "@/lib/checkout-api";
 import type { CheckoutDetails, CheckoutResult } from "@/types/store";
 import "@/styles/checkout.css";
 
-type PaymentChoice = "card" | "wallet" | "instapay" | "cod";
+type PaymentChoice = "card" | "wallet" | "cod";
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
@@ -27,7 +27,7 @@ const copy = {
     email: "Email address", emailPlaceholder: "name@example.com", phone: "Phone", phonePlaceholder: "01X XXX XXXX", governorate: "Governorate",
     governoratePlaceholder: "Cairo", street: "Street address", streetPlaceholder: "Building, street, district", choosePayment: "Choose how you’d like to pay.",
     card: "Credit / debit card", cardMeta: "Visa · Mastercard · Meeza", wallet: "Mobile wallet", walletMeta: "Pay with a supported mobile wallet",
-    instapay: "InstaPay", instapayMeta: "Pay using your InstaPay account", cod: "Cash on delivery", codMeta: "Available for eligible orders",
+    cod: "Cash on delivery", codMeta: "Available for eligible orders",
     reviewMeta: "Delivery address · payment method · products · final total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
     qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Total",
     encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
@@ -42,7 +42,7 @@ const copy = {
     email: "البريد الإلكتروني", emailPlaceholder: "name@example.com", phone: "رقم الموبايل", phonePlaceholder: "01X XXX XXXX", governorate: "المحافظة",
     governoratePlaceholder: "القاهرة", street: "العنوان بالتفصيل", streetPlaceholder: "المبنى، الشارع، المنطقة", choosePayment: "اختار طريقة الدفع المناسبة.",
     card: "بطاقة ائتمان أو خصم", cardMeta: "Visa · Mastercard · Meeza", wallet: "محفظة موبايل", walletMeta: "ادفع باستخدام محفظة مدعومة",
-    instapay: "InstaPay", instapayMeta: "ادفع من حساب InstaPay", cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
+    cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
     reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي النهائي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
     qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي",
     encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
@@ -110,7 +110,7 @@ export function CheckoutPage() {
       phone: String(form.get("phone") ?? "").trim(),
       governorate: String(form.get("governorate") ?? "").trim(),
       shippingAddress: String(form.get("street") ?? "").trim(),
-      paymentMethod: payment === "cod" ? "cash_on_delivery" : payment === "card" ? "credit_card" : "instapay",
+      paymentMethod: payment === "cod" ? "cash_on_delivery" : payment === "card" ? "credit_card" : "mobile_wallet",
       useLoyaltyPoints: false,
     };
 
@@ -175,7 +175,6 @@ export function CheckoutPage() {
                   <div className="el-payment-methods">
                     <PaymentMethod active={payment === "card"} icon="payment" meta={text.cardMeta} onSelect={() => setPayment("card")} title={text.card} />
                     <PaymentMethod active={payment === "wallet"} icon="wallet" meta={text.walletMeta} onSelect={() => setPayment("wallet")} title={text.wallet} />
-                    <PaymentMethod active={payment === "instapay"} icon="bank" meta={text.instapayMeta} onSelect={() => setPayment("instapay")} title={text.instapay} />
                     <PaymentMethod active={payment === "cod"} icon="cash" meta={text.codMeta} onSelect={() => setPayment("cod")} title={text.cod} />
                   </div>
                 </section>
