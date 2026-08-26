@@ -74,7 +74,7 @@ export function CartPage() {
   }, [locale]);
 
   async function updateQuantity(itemId: number | undefined, quantity: number) {
-    if (!snapshot || !itemId || quantity < 1) return;
+    if (!snapshot || !itemId || quantity < 1 || quantity > 100) return;
     setPendingItemId(itemId);
     setMutationError(null);
     try {
@@ -122,6 +122,7 @@ export function CartPage() {
                 {mutationError ? <p aria-live="assertive" className="el-cart-mutation-error" role="alert">{mutationError}</p> : null}
                 {items.map((item) => {
                   const itemPending = pendingItemId === item.serverItemId;
+                  const canIncrease = item.product.dropshipEnabled || item.quantity < item.product.stockQty;
                   return (
                     <article className="el-cart-item" key={item.serverItemId ?? item.product.id}>
                       <div className="el-cart-item__media"><img alt={item.product.name} onError={(event) => { event.currentTarget.hidden = true; }} src={item.product.image} /></div>
@@ -134,7 +135,7 @@ export function CartPage() {
                       <div className="el-cart-quantity">
                         <button aria-label={text.decrease} disabled={itemPending || item.quantity <= 1} onClick={() => void updateQuantity(item.serverItemId, item.quantity - 1)} type="button"><StoreIcon name="minus" size={16} /></button>
                         <span>{item.quantity}</span>
-                        <button aria-label={text.increase} disabled={itemPending} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
+                        <button aria-label={text.increase} disabled={itemPending || !canIncrease || item.quantity >= 100} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
                       </div>
                     </article>
                   );
