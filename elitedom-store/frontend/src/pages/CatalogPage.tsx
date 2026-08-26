@@ -127,7 +127,6 @@ export function CatalogPage() {
 
   useEffect(() => {
     let active = true;
-    setState((current) => ({ status: "loading", products: current.products }));
     fetchRichCatalog({
       locale,
       query: query || undefined,
