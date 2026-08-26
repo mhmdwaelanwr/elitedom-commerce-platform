@@ -21,6 +21,7 @@ const content = {
     trust: ["Local warranty", "Secure payments", "Nationwide delivery"],
     heroStock: "Local stock",
     heroWarranty: "Local warranty",
+    heroProof: [["EGP", "Clear local pricing"], ["24–48h", "Cairo dispatch"], ["1:1", "Build guidance"]],
     categories: [
       ["GPUs", "/catalog?q=GPU"],
       ["CPUs", "/catalog?q=CPU"],
@@ -68,6 +69,7 @@ const content = {
     trust: ["ضمان محلي", "دفع آمن", "توصيل لكل المحافظات"],
     heroStock: "مخزون محلي",
     heroWarranty: "ضمان محلي",
+    heroProof: [["EGP", "تسعير محلي واضح"], ["24–48h", "شحن القاهرة"], ["1:1", "مساعدة في التجميع"]],
     categories: [
       ["كروت الشاشة", "/catalog?q=GPU"],
       ["المعالجات", "/catalog?q=CPU"],
@@ -182,6 +184,11 @@ export function HomePage() {
                 <span><StoreIcon name="warranty" size={14} />{copy.trust[0]}</span>
                 <span><StoreIcon name="payment" size={14} />{copy.trust[1]}</span>
                 <span><StoreIcon name="delivery" size={14} />{copy.trust[2]}</span>
+              </div>
+              <div aria-label={locale === "ar" ? "مميزات Elitedom" : "Why Elitedom"} className="el-hero__proof el-hero__proof--desktop">
+                {copy.heroProof.map(([value, label]) => (
+                  <span key={label}><strong>{value}</strong><small>{label}</small></span>
+                ))}
               </div>
             </div>
 
