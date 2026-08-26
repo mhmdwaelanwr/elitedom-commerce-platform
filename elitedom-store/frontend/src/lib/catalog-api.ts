@@ -136,7 +136,7 @@ function mapProduct(product: ApiProduct): Product {
     description:
       product.short_description ??
       product.description ??
-      "Verified technology product from Elitedom.",
+      "Product details are available in the technical specifications.",
     longDescription: product.description ?? undefined,
     brand: product.brand ?? "Elitedom",
     category: product.category?.slug ?? "uncategorized",
