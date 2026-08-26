@@ -194,6 +194,7 @@ export function HomePage() {
 
             <div className="el-hero__stage">
               <div className="el-hero__ambient" />
+              <span className="el-hero__index" aria-hidden="true">EL / 01</span>
               {heroProduct ? (
                 <img
                   alt={heroProduct.name}
@@ -214,6 +215,7 @@ export function HomePage() {
                 <span><i />{copy.heroStock}</span>
                 <span><i />{heroProduct ? `${heroProduct.warrantyMonths}m ${copy.heroWarranty}` : copy.heroWarranty}</span>
               </div>
+              <span className="el-hero__quality" aria-hidden="true"><b /> PERFORMANCE VERIFIED</span>
             </div>
 
             <div className="el-hero__actions el-hero__actions--mobile">{heroActions}</div>
