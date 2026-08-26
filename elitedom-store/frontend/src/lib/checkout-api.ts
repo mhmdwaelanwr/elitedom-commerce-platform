@@ -26,7 +26,7 @@ export async function submitRoutedCheckout(
   const paymentMethod =
     details.paymentMethod === "cash_on_delivery"
       ? "cod"
-      : details.paymentMethod === "instapay"
+      : details.paymentMethod === "mobile_wallet"
         ? "mobile_wallet"
         : "credit_card";
 
