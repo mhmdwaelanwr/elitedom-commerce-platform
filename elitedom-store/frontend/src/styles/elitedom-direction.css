@@ -8,11 +8,30 @@
 .el-store-header {
   position: sticky;
   top: 14px;
-  min-height: 72px;
-  padding: 9px 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 94px;
+  padding: 0 12px 9px;
   border-radius: 18px;
   box-shadow: 0 16px 45px rgba(0, 0, 0, 0.2), inset 0 1px rgba(255, 255, 255, 0.035);
 }
+
+.el-store-header__utility {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 27px;
+  padding-inline: 5px;
+  border-bottom: 1px solid color-mix(in srgb, var(--el-glass-border) 70%, transparent);
+  color: var(--el-text-muted);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+.el-store-header__utility span { display: inline-flex; align-items: center; gap: 7px; }
+.el-store-header__utility i { width: 5px; height: 5px; border-radius: 50%; background: var(--el-success); box-shadow: 0 0 0 3px color-mix(in srgb, var(--el-success) 12%, transparent); }
 
 .el-store-header__nav { gap: clamp(12px, 1.4vw, 22px); }
 .el-store-header__nav a,
@@ -73,8 +92,34 @@
   border-radius: 19px;
   pointer-events: none;
 }
+.el-hero__index {
+  position: absolute;
+  z-index: 2;
+  top: 34px;
+  inset-inline-end: 34px;
+  color: var(--el-text-muted);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .12em;
+}
 .el-hero__product { inset: 66px 48px; width: calc(100% - 96px); height: calc(100% - 132px); filter: drop-shadow(0 28px 36px rgba(0,0,0,.32)); transition: transform 280ms ease; }
 .el-hero__stage:hover .el-hero__product { transform: translateY(-5px) scale(1.012); }
+.el-hero__quality {
+  position: absolute;
+  z-index: 2;
+  inset-inline-end: 34px;
+  bottom: 38px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--el-text-muted);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: .1em;
+}
+.el-hero__quality b { width: 14px; height: 1px; background: var(--el-accent-primary); }
 
 .el-hero__proof {
   display: grid;
@@ -94,9 +139,19 @@
 .el-category-rail a.is-active,
 .el-category-rail a:hover { border-color: var(--el-border-subtle); }
 
-.el-product-card { border-radius: 20px; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.el-product-card { position: relative; border-radius: 20px; transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease; }
+.el-product-card::after { content: ""; position: absolute; inset-inline: 16px; top: 0; height: 1px; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--el-accent-primary) 45%, transparent), transparent); opacity: 0; transition: opacity 180ms ease; }
 .el-product-card:hover { transform: translateY(-4px); border-color: color-mix(in srgb, var(--el-accent-primary) 34%, var(--el-border-subtle)); box-shadow: 0 22px 55px rgba(0,0,0,.16); }
+.el-product-card:hover::after { opacity: 1; }
 .el-product-card__media { border-radius: 14px; }
+.el-product-card h3 { letter-spacing: -.025em; }
+.el-product-card__price-row { width: 100%; justify-content: space-between; padding-top: 13px; border-top: 1px solid var(--el-border-subtle); }
+.el-product-card__cta { width: 100%; }
+
+.el-outcome-card { min-height: 270px; border-radius: 19px; }
+.el-outcome-card h3 { letter-spacing: -.035em; }
+.el-outcome-card strong { margin-top: auto; padding-top: 13px; border-top: 1px solid var(--el-border-subtle); width: 100%; }
+.el-b2b-editorial { border-radius: 25px; }
 
 @media (max-width: 1100px) {
   .el-hero { grid-template-columns: minmax(310px, .85fr) minmax(430px, 1.15fr); gap: 32px; }
@@ -105,13 +160,14 @@
 }
 
 @media (max-width: 900px) {
-  .el-store-header { top: 8px; }
+  .el-store-header { display: flex; top: 8px; min-height: 64px; padding: 9px; }
+  .el-store-header__utility { display: none; }
   .el-hero__proof--desktop { display: none; }
 }
 
 @media (max-width: 620px) {
   .el-storefront { background: var(--el-bg-canvas); }
-  .el-store-header { min-height: 58px; border-radius: 15px; }
+  .el-store-header { display: flex; min-height: 58px; padding: 9px; border-radius: 15px; }
   .el-hero__stage::after { inset: 8px; border-radius: 14px; }
   .el-hero__product { filter: drop-shadow(0 18px 24px rgba(0,0,0,.24)); }
   .el-product-card:hover { transform: none; box-shadow: none; }
