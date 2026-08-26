@@ -63,7 +63,7 @@ export type CheckoutDetails = {
   phone: string;
   shippingAddress: string;
   governorate: string;
-  paymentMethod: "credit_card" | "cash_on_delivery" | "instapay";
+  paymentMethod: "credit_card" | "cash_on_delivery" | "mobile_wallet";
   notes?: string;
   useLoyaltyPoints: boolean;
 };
