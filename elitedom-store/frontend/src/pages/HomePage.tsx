@@ -16,13 +16,28 @@ const content = {
     mobileTitle: <>Build your PC,<br />your way.</>,
     intro: "Premium PC hardware with clear Egyptian pricing, real local availability, and the technical depth when you actually need it.",
     mobileIntro: "Original hardware, clear pricing, and technical detail exactly when you need it.",
-    build: "Build your PC",
+    build: "Shop all hardware",
     shop: "Shop GPUs",
     trust: ["Local warranty", "Secure payments", "Nationwide delivery"],
     heroStock: "Local stock",
     heroWarranty: "Local warranty",
-    categories: ["GPUs", "CPUs", "Motherboards", "RAM & SSD", "Displays", "PC builds", "Peripherals", "Networking"],
-    mobileCategories: ["GPU", "CPU", "PC builds", "SSD", "Displays"],
+    categories: [
+      ["GPUs", "/catalog?q=GPU"],
+      ["CPUs", "/catalog?q=CPU"],
+      ["Motherboards", "/catalog?q=Motherboard"],
+      ["RAM & SSD", "/catalog?q=RAM%20SSD"],
+      ["Displays", "/catalog?q=Monitor"],
+      ["PC builds", "/catalog?q=PC%20build"],
+      ["Peripherals", "/catalog?q=Peripheral"],
+      ["Networking", "/catalog?q=Networking"],
+    ],
+    mobileCategories: [
+      ["GPU", "/catalog?q=GPU"],
+      ["CPU", "/catalog?q=CPU"],
+      ["PC builds", "/catalog?q=PC%20build"],
+      ["SSD", "/catalog?q=SSD"],
+      ["Displays", "/catalog?q=Monitor"],
+    ],
     curatedEyebrow: "CURATED THIS WEEK",
     curatedTitle: "Hardware worth your attention.",
     mobileCuratedTitle: "Good places to start.",
@@ -38,7 +53,7 @@ const content = {
     b2bTitle: "Procure hardware without the spreadsheet chaos.",
     b2bText: "RFQ workflows, bulk pricing, workstations, networking, tracked fulfilment and one accountable partner.",
     b2bCta: "Request a business quote",
-    b2bMetric: "devices in one procurement flow",
+    b2bMetric: "for a complete procurement request",
     loading: "Loading live catalogue…",
     unavailable: "Live catalogue is temporarily unavailable. The storefront shell is ready and will reconnect automatically on refresh.",
   },
@@ -48,13 +63,28 @@ const content = {
     mobileTitle: <>ابني جهازك<br />على مزاجك.</>,
     intro: "هاردوير احترافي بأسعار واضحة بالجنيه المصري، توافر محلي حقيقي، والتفاصيل التقنية تظهر وقت ما تحتاجها.",
     mobileIntro: "قطع أصلية، أسعار واضحة، وتفاصيل تقنية تظهر وقت ما تحتاجها.",
-    build: "ابني PC",
+    build: "تسوق كل الهاردوير",
     shop: "تسوق كروت الشاشة",
     trust: ["ضمان محلي", "دفع آمن", "توصيل لكل المحافظات"],
     heroStock: "مخزون محلي",
     heroWarranty: "ضمان محلي",
-    categories: ["كروت الشاشة", "المعالجات", "اللوحات الأم", "RAM & SSD", "الشاشات", "تجميعات PC", "الإكسسوارات", "الشبكات"],
-    mobileCategories: ["GPU", "CPU", "تجميعات PC", "SSD", "شاشات"],
+    categories: [
+      ["كروت الشاشة", "/catalog?q=GPU"],
+      ["المعالجات", "/catalog?q=CPU"],
+      ["اللوحات الأم", "/catalog?q=Motherboard"],
+      ["RAM & SSD", "/catalog?q=RAM%20SSD"],
+      ["الشاشات", "/catalog?q=Monitor"],
+      ["تجميعات PC", "/catalog?q=PC%20build"],
+      ["الإكسسوارات", "/catalog?q=Peripheral"],
+      ["الشبكات", "/catalog?q=Networking"],
+    ],
+    mobileCategories: [
+      ["GPU", "/catalog?q=GPU"],
+      ["CPU", "/catalog?q=CPU"],
+      ["تجميعات PC", "/catalog?q=PC%20build"],
+      ["SSD", "/catalog?q=SSD"],
+      ["شاشات", "/catalog?q=Monitor"],
+    ],
     curatedEyebrow: "مختارات الأسبوع",
     curatedTitle: "قطع تستاهل اهتمامك.",
     mobileCuratedTitle: "اختيارات تستاهل تبدأ منها",
@@ -70,7 +100,7 @@ const content = {
     b2bTitle: "جهّز احتياجات شركتك من غير دوشة الجداول.",
     b2bText: "RFQ، تسعير كميات، Workstations وNetworking، مع متابعة توريد واضحة وشريك واحد مسؤول.",
     b2bCta: "اطلب عرض سعر للشركات",
-    b2bMetric: "جهاز في طلب شراء واحد",
+    b2bMetric: "لطلب توريد كامل في مكان واحد",
     loading: "بنحمّل الكتالوج المباشر…",
     unavailable: "الكتالوج المباشر غير متاح مؤقتًا. واجهة المتجر جاهزة وهتحاول الاتصال تاني مع تحديث الصفحة.",
   },
@@ -123,14 +153,14 @@ export function HomePage() {
 
   const heroActions = (
     <>
-      <a className="el-primary-button" href="#outcomes">
+      <Link className="el-primary-button" to="/catalog">
         <span>{copy.build}</span>
         <StoreIcon name="package" size={17} />
-      </a>
-      <a className="el-outline-button" href="#curated">
+      </Link>
+      <Link className="el-outline-button" to="/catalog?q=GPU">
         <span>{copy.shop}</span>
         <StoreIcon name="arrow" size={17} />
-      </a>
+      </Link>
     </>
   );
 
@@ -171,7 +201,7 @@ export function HomePage() {
                 <div className="el-hero__media-placeholder" aria-hidden="true" />
               )}
               <span className="el-hero__spec">
-                {heroProduct ? `${heroProduct.name} · ${heroProduct.specs[0]?.value ?? heroProduct.categoryName}` : "RTX / CURATED MEDIA"}
+                {heroProduct ? `${heroProduct.name} · ${heroProduct.specs[0]?.value ?? heroProduct.categoryName}` : "CURATED HARDWARE"}
               </span>
               <div className="el-hero__meta">
                 <span><i />{copy.heroStock}</span>
@@ -183,14 +213,14 @@ export function HomePage() {
           </section>
 
           <section aria-label={locale === "ar" ? "فئات المنتجات" : "Product categories"} className="el-category-rail el-category-rail--desktop" id="categories">
-            {copy.categories.map((category, index) => (
-              <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
+            {copy.categories.map(([category, href], index) => (
+              <Link className={index === 0 ? "is-active" : undefined} key={category} to={href}>{category}</Link>
             ))}
           </section>
 
           <section aria-label={locale === "ar" ? "فئات المنتجات على الموبايل" : "Mobile product categories"} className="el-category-rail el-category-rail--mobile">
-            {copy.mobileCategories.map((category, index) => (
-              <a className={index === 0 ? "is-active" : undefined} href="#curated" key={category}>{category}</a>
+            {copy.mobileCategories.map(([category, href], index) => (
+              <Link className={index === 0 ? "is-active" : undefined} key={category} to={href}>{category}</Link>
             ))}
           </section>
 
@@ -202,7 +232,7 @@ export function HomePage() {
                 <h2 className="el-curated__mobile-title">{copy.mobileCuratedTitle}</h2>
                 <p className="el-curated__mobile-intro">{copy.mobileCuratedIntro}</p>
               </div>
-              <a className="el-curated__desktop-only" href="#categories">{copy.viewAll} <StoreIcon name="arrow" size={15} /></a>
+              <Link className="el-curated__desktop-only" to="/catalog">{copy.viewAll} <StoreIcon name="arrow" size={15} /></Link>
             </div>
 
             {loading ? <div className="el-data-state">{copy.loading}</div> : null}
@@ -231,7 +261,7 @@ export function HomePage() {
 
           <section className="el-b2b-editorial">
             <div className="el-b2b-editorial__metric">
-              <strong>50×</strong>
+              <strong>1 RFQ</strong>
               <span>{copy.b2bMetric}</span>
             </div>
             <div className="el-b2b-editorial__copy">
