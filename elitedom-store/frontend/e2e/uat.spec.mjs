@@ -155,6 +155,8 @@ test.describe.serial("P23 production-like UAT and release-candidate gate", () =>
       await visit(page, testInfo, scenario, "/", "home");
       await visit(page, testInfo, scenario, "/catalog", "catalog");
       await visit(page, testInfo, scenario, `/products/${product.id}`, "pdp");
+      await visit(page, testInfo, scenario, "/cart", "cart");
+      await visit(page, testInfo, scenario, "/checkout", "checkout");
       await visit(page, testInfo, scenario, "/business", "business");
 
       assertNoRuntimeErrors();
