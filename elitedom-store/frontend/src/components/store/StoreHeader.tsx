@@ -283,6 +283,9 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
             </div>
             <div className="el-store-header__mobile-actions">
               <button aria-label={labels.search} className="el-icon-button" onClick={() => { setSearchOpen(true); setSearchLoading(true); setCartOpen(false); }} type="button"><StoreIcon name="search" size={20} /></button>
+              <button aria-label={locale === "en" ? "Switch to Arabic" : "Switch to English"} className="el-icon-button el-locale-button" onClick={() => changeLocale()} type="button">
+                {nextLocale === "ar" ? "AR" : "EN"}
+              </button>
               <ThemeToggle className="el-icon-button" locale={locale} />
               <Link aria-label={labels.account} className="el-icon-button" to="/account"><StoreIcon name="account" size={20} /></Link>
               <button aria-label={labels.cart} className="el-icon-button el-cart-button" onClick={() => void openCart()} type="button">
