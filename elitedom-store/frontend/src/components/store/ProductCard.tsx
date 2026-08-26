@@ -19,9 +19,12 @@ function formatEgp(value: number, locale: StoreLocale) {
 function decisionSpec(product: Product, locale: StoreLocale) {
   const values = product.specs.slice(0, 3).map((spec) => spec.value).filter(Boolean);
   if (values.length > 0) return values.join(" · ");
-  return locale === "ar"
-    ? `${product.categoryName} · ضمان ${product.warrantyMonths} شهر`
-    : `${product.categoryName} · ${product.warrantyMonths}-month warranty`;
+  if (product.warrantyMonths > 0) {
+    return locale === "ar"
+      ? `${product.categoryName} · ضمان ${product.warrantyMonths} شهر`
+      : `${product.categoryName} · ${product.warrantyMonths}-month warranty`;
+  }
+  return product.categoryName;
 }
 
 export function ProductCard({ product, locale, compareSelected = false, onCompareToggle }: ProductCardProps) {

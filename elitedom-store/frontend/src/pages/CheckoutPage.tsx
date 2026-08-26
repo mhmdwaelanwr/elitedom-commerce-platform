@@ -26,12 +26,12 @@ const copy = {
     delivery: "Delivery", payment: "Payment", review: "Review", fullName: "Full name", fullNamePlaceholder: "Mohamed Anwar",
     email: "Email address", emailPlaceholder: "name@example.com", phone: "Phone", phonePlaceholder: "01X XXX XXXX", governorate: "Governorate",
     governoratePlaceholder: "Cairo", street: "Street address", streetPlaceholder: "Building, street, district", choosePayment: "Choose how you’d like to pay.",
-    card: "Credit / debit card", cardMeta: "Visa · Mastercard · Meeza", wallet: "Mobile wallet", walletMeta: "Pay with a supported mobile wallet",
-    cod: "Cash on delivery", codMeta: "Available for eligible orders",
+    card: "Credit / debit card", cardMeta: "Continue through the secure payment provider", wallet: "Mobile wallet", walletMeta: "Continue with a supported mobile wallet",
+    cod: "Cash on delivery", codMeta: "Pay when the order is delivered",
     reviewMeta: "Delivery address · payment method · products · estimated total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
-    qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Estimated total",
+    qty: "Qty", subtotal: "Products", shipping: "Shipping", calculated: "Confirmed when the order is placed", total: "Estimated pre-shipping total",
     encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
-    retry: "Retry", redirecting: "Redirecting to secure payment", successTitle: "Order confirmed", successText: "Confirmation sent. Your order is ready to track.",
+    retry: "Retry", redirecting: "Redirecting to secure payment", successTitle: "Order confirmed", successText: "Your order was created successfully. Keep the order number for reference.",
     pendingTitle: "Payment confirmation pending", pendingText: "We are waiting for confirmation. Your order is reserved; do not place a duplicate order.",
     failedTitle: "Payment was not completed", failedText: "Your cart is safe. No duplicate charge was created.",
     trackOrder: "Track order", viewStatus: "View order status", continueShopping: "Continue shopping", tryAgain: "Try payment again", orderLabel: "Order", cartTotal: "Cart total",
@@ -41,12 +41,12 @@ const copy = {
     delivery: "التوصيل", payment: "الدفع", review: "المراجعة", fullName: "الاسم بالكامل", fullNamePlaceholder: "محمد أنور",
     email: "البريد الإلكتروني", emailPlaceholder: "name@example.com", phone: "رقم الموبايل", phonePlaceholder: "01X XXX XXXX", governorate: "المحافظة",
     governoratePlaceholder: "القاهرة", street: "العنوان بالتفصيل", streetPlaceholder: "المبنى، الشارع، المنطقة", choosePayment: "اختار طريقة الدفع المناسبة.",
-    card: "بطاقة ائتمان أو خصم", cardMeta: "Visa · Mastercard · Meeza", wallet: "محفظة موبايل", walletMeta: "ادفع باستخدام محفظة مدعومة",
-    cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
+    card: "بطاقة ائتمان أو خصم", cardMeta: "تكمل الدفع من خلال مزود الدفع الآمن", wallet: "محفظة موبايل", walletMeta: "تكمل باستخدام محفظة موبايل مدعومة",
+    cod: "الدفع عند الاستلام", codMeta: "ادفع عند استلام الطلب",
     reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي المبدئي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
-    qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي المبدئي",
+    qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يتم تأكيده عند إنشاء الطلب", total: "الإجمالي المبدئي قبل الشحن",
     encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
-    redirecting: "جاري التحويل للدفع الآمن", successTitle: "تم تأكيد الطلب", successText: "تم إرسال التأكيد وطلبك جاهز للمتابعة.",
+    redirecting: "جاري التحويل للدفع الآمن", successTitle: "تم تأكيد الطلب", successText: "تم إنشاء طلبك بنجاح. احتفظ برقم الطلب للرجوع إليه.",
     pendingTitle: "تأكيد الدفع قيد الانتظار", pendingText: "مستنيين تأكيد الدفع وطلبك محجوز. ما تعملش طلب مكرر.",
     failedTitle: "عملية الدفع ما اكتملتش", failedText: "سلتك محفوظة وما اتعملش خصم مكرر.",
     trackOrder: "تتبع الطلب", viewStatus: "عرض حالة الطلب", continueShopping: "كمّل تسوق", tryAgain: "حاول الدفع تاني", orderLabel: "طلب", cartTotal: "إجمالي السلة",
@@ -193,7 +193,7 @@ export function CheckoutPage() {
                 <div className="el-checkout-summary-items">
                   {items.map((item) => <div className="el-checkout-summary-item" key={item.serverItemId ?? item.product.id}><div><img alt="" onError={(event) => { event.currentTarget.hidden = true; }} src={item.product.image} /></div><span><strong>{item.product.name}</strong><small>{text.qty} {item.quantity}</small></span><b>{formatEgp(item.product.priceEgp * item.quantity, locale)} EGP</b></div>)}
                 </div>
-                <div className="el-summary-divider" /><SummaryRow label={text.subtotal} value={`${formatEgp(subtotal, locale)} EGP`} /><SummaryRow label={text.shipping} value={text.calculated} /><SummaryRow label={text.vat} value={text.included} /><SummaryRow emphasis label={text.total} value={`${formatEgp(subtotal, locale)} EGP`} /><p className="el-summary-security">{text.encrypted}</p>
+                <div className="el-summary-divider" /><SummaryRow label={text.subtotal} value={`${formatEgp(subtotal, locale)} EGP`} /><SummaryRow label={text.shipping} value={text.calculated} /><SummaryRow emphasis label={text.total} value={`${formatEgp(subtotal, locale)} EGP`} /><p className="el-summary-security">{text.encrypted}</p>
               </aside>
             </form>
           ) : null}
@@ -227,7 +227,7 @@ function CheckoutResultPanel({ authenticated, locale, state, total, onRetry }: {
   const success = state.status === "success";
   const pending = state.status === "pending" || state.status === "redirecting";
   const title = success ? text.successTitle : pending ? (state.status === "redirecting" ? text.redirecting : text.pendingTitle) : text.failedTitle;
-  const body = success ? text.successText : pending ? (state.status === "redirecting" ? text.encrypted : text.pendingText) : text.failedText;
+  const body = success ? text.successText : pending ? (state.status === "redirecting" ? text.encrypted : text.pendingText) : state.status === "error" ? state.message : text.failedText;
   const orderNumber = "orderNumber" in state ? state.orderNumber : undefined;
   const icon: StoreIconName = success ? "check" : pending ? "clock" : "returns";
   const action = state.status === "error"

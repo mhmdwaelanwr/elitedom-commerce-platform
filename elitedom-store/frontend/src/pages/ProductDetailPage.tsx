@@ -9,6 +9,7 @@ import { addRemoteCartItem } from "@/lib/api";
 import { restoreSession } from "@/lib/auth-session";
 import { fetchRichCatalog, fetchRichProduct } from "@/lib/catalog-api";
 import { getGuestCartSessionId } from "@/lib/guest-cart";
+import { purchasableQuantityLimit } from "@/lib/commerce-rules";
 import type { Product } from "@/types/store";
 import "@/styles/commerce.css";
 
@@ -28,15 +29,14 @@ const copy = {
     inStock: "In stock — local availability",
     onRequest: "Available on request",
     outOfStock: "Currently out of stock",
-    vat: "VAT included · Secure payments · Installment options may be available",
+    priceNote: "Shipping and final charges are confirmed during checkout.",
     add: "Add to cart",
     adding: "Adding…",
     added: "Added to cart",
     unavailable: "Currently unavailable",
     buy: "Buy now",
     warranty: "local warranty",
-    delivery: "Tracked nationwide delivery",
-    returns: "30-day return eligibility applies",
+    delivery: "Shipping is calculated during checkout",
     technical: "Technical details",
     overview: "Overview",
     specs: "Technical specifications",
@@ -60,15 +60,14 @@ const copy = {
     inStock: "متوفر في المخزن المحلي",
     onRequest: "متاح حسب الطلب",
     outOfStock: "غير متوفر حاليًا",
-    vat: "السعر شامل الضريبة · دفع آمن · قد تتوفر خيارات تقسيط",
+    priceNote: "يتم تأكيد الشحن والتكلفة النهائية أثناء إتمام الطلب.",
     add: "أضف للسلة",
     adding: "جارٍ الإضافة…",
     added: "تمت الإضافة للسلة",
     unavailable: "غير متوفر حاليًا",
     buy: "اشترِ الآن",
     warranty: "ضمان محلي",
-    delivery: "توصيل متتبع لكل المحافظات",
-    returns: "تطبق أهلية الإرجاع خلال 30 يومًا",
+    delivery: "يتم حساب الشحن أثناء إتمام الطلب",
     technical: "التفاصيل التقنية",
     overview: "نظرة عامة",
     specs: "المواصفات التقنية",
@@ -139,7 +138,7 @@ export function ProductDetailPage() {
   const keySpecs = useMemo(() => product?.specs.slice(0, 4) ?? [], [product]);
   const isInStock = Boolean(product && product.stockQty > 0);
   const canPurchase = Boolean(product && (isInStock || product.dropshipEnabled));
-  const maximumQuantity = product ? (isInStock ? product.stockQty : 10) : 1;
+  const maximumQuantity = product ? purchasableQuantityLimit(product.stockQty, product.dropshipEnabled) : 1;
 
   async function addToCart() {
     if (!product || !canPurchase || cartState === "adding") return false;
@@ -243,7 +242,7 @@ export function ProductDetailPage() {
                   {isInStock ? text.inStock : product.dropshipEnabled ? text.onRequest : text.outOfStock}
                 </p>
                 <strong className="el-pdp-price" dir="ltr">{formatEgp(product.priceEgp, locale)} EGP</strong>
-                <p className="el-pdp-vat">{text.vat}</p>
+                <p className="el-pdp-vat">{text.priceNote}</p>
 
                 <div className="el-purchase-actions">
                   <div className="el-quantity-control">
@@ -260,26 +259,20 @@ export function ProductDetailPage() {
                 {cartState === "error" ? <p aria-live="assertive" className="el-cart-error" role="alert">{text.cartError}</p> : null}
 
                 <div className="el-pdp-service-notes">
-                  <span><StoreIcon name="warranty" size={14} /> {product.warrantyMonths}m {text.warranty}</span>
+                  {product.warrantyMonths > 0 ? <span><StoreIcon name="warranty" size={14} /> {product.warrantyMonths}m {text.warranty}</span> : null}
                   <span><StoreIcon name="delivery" size={14} /> {text.delivery}</span>
-                  <span><StoreIcon name="returns" size={14} /> {text.returns}</span>
                 </div>
               </div>
             </section>
 
             <section className="el-pdp-technical">
               <h2>{text.technical}</h2>
-              <div className="el-pdp-tabs" aria-label="Product information sections">
-                <span>{text.overview}</span>
-                <span className="is-active">{text.specs}</span>
-                <span>{text.support}</span>
-                <span>{text.deliveryTab}</span>
-              </div>
+              <p className="el-pdp-technical__intro">{text.specs}</p>
               <div className="el-spec-table">
                 {product.specs.length ? product.specs.map((spec) => (
                   <div key={spec.code ?? spec.label}><span dir="auto">{spec.label}</span><strong dir="auto">{spec.value}</strong></div>
                 )) : <div><span>SKU</span><strong>{product.sku}</strong></div>}
-                <div><span>{locale === "ar" ? "الضمان" : "Warranty"}</span><strong>{product.warrantyMonths} months</strong></div>
+                {product.warrantyMonths > 0 ? <div><span>{locale === "ar" ? "الضمان" : "Warranty"}</span><strong dir="auto">{product.warrantyMonths} {locale === "ar" ? "شهر" : "months"}</strong></div> : null}
               </div>
               <div className="el-compatibility-strip"><span>{text.compatibility}</span><button onClick={() => navigate("/catalog")} type="button">{text.back} <StoreIcon name="arrow" size={14} /></button></div>
             </section>

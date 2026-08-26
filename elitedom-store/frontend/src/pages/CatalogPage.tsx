@@ -49,6 +49,9 @@ const copy = {
     quickSlot: "3-slot or less",
     resultsFor: "Results for",
     category: "Category",
+    showFilters: "Filters",
+    closeFilters: "Close filters",
+    clearFilters: "Clear filters",
   },
   ar: {
     crumb: "المتجر / الهاردوير",
@@ -80,6 +83,9 @@ const copy = {
     quickSlot: "3-slot أو أقل",
     resultsFor: "نتائج البحث عن",
     category: "فئة",
+    showFilters: "الفلاتر",
+    closeFilters: "إغلاق الفلاتر",
+    clearFilters: "مسح الفلاتر",
   },
 } as const;
 
@@ -115,9 +121,11 @@ export function CatalogPage() {
   const [requestVersion, setRequestVersion] = useState(0);
   const [compared, setCompared] = useState<Product[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const query = params.get("q")?.trim() ?? "";
   const category = params.get("category")?.trim() ?? "";
   const copyText = copy[locale];
+  const activeFilterCount = ["price", "brand", "series", "stock", "dropship", "vram16", "slots3"].filter((key) => params.has(key)).length;
   const gpuContext = /gpu|graphics|rtx|radeon/i.test(`${query} ${category}`);
   const heading = query
     ? `${copyText.resultsFor} “${query}”`
@@ -141,6 +149,18 @@ export function CatalogPage() {
       });
     return () => { active = false; };
   }, [category, locale, query, requestVersion]);
+
+  useEffect(() => {
+    if (!filtersOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setFiltersOpen(false); };
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [filtersOpen]);
 
   const brands = useMemo(
     () => [...new Set(state.products.map((product) => product.brand).filter(Boolean))].slice(0, 8),
@@ -257,6 +277,7 @@ export function CatalogPage() {
           <div className="el-catalog-toolbar">
             <span>{filtered.length} {copyText.products}</span>
             <div>
+              <button aria-expanded={filtersOpen} className="el-toolbar-pill el-mobile-filter-trigger" onClick={() => setFiltersOpen(true)} type="button"><StoreIcon name="filter" size={16} />{copyText.showFilters}{activeFilterCount ? ` · ${activeFilterCount}` : ""}</button>
               <button aria-pressed={compared.length > 0} className="el-toolbar-pill" onClick={openCompare} type="button"><StoreIcon name="compare" size={16} />{copyText.compare}{compared.length > 0 ? ` · ${compared.length}/4` : ""}</button>
               <label className="el-toolbar-pill">
                 <StoreIcon name="sort" size={16} />
@@ -270,8 +291,8 @@ export function CatalogPage() {
           </div>
 
           <div className="el-catalog-layout">
-            <aside className="el-filter-rail">
-              <h2><StoreIcon name="filter" size={15} />{copyText.filters}</h2>
+            <aside aria-label={copyText.filters} className={filtersOpen ? "el-filter-rail is-mobile-open" : "el-filter-rail"}>
+              <div className="el-filter-rail__heading"><h2><StoreIcon name="filter" size={15} />{copyText.filters}</h2><button aria-label={copyText.closeFilters} onClick={() => setFiltersOpen(false)} type="button">×</button></div>
               <FilterGroup title={copyText.availability}>
                 <FilterOption active={params.get("stock") === "1"} label={copyText.inStock} onChange={() => updateParam("stock", "1")} />
                 <FilterOption active={params.get("dropship") === "1"} label={copyText.dropship} onChange={() => updateParam("dropship", "1")} />
@@ -291,7 +312,9 @@ export function CatalogPage() {
                   <FilterOption active={params.get("series") === "rx9000"} label="Radeon RX 9000" onChange={() => updateParam("series", "rx9000")} />
                 </FilterGroup>
               ) : null}
+              {activeFilterCount > 0 ? <button className="el-filter-clear" onClick={resetFilters} type="button">{copyText.clearFilters}</button> : null}
             </aside>
+            {filtersOpen ? <button aria-label={copyText.closeFilters} className="el-filter-backdrop" onClick={() => setFiltersOpen(false)} type="button" /> : null}
 
             <section className="el-catalog-results">
               {state.status === "loading" ? <CommerceCollectionState locale={locale} state="loading" /> : null}

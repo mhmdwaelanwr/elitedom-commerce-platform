@@ -172,8 +172,8 @@
   grid-template-columns: 500px minmax(0, 1fr);
   gap: 52px;
   align-items: center;
-  min-height: 676px;
-  padding-block: 52px;
+  min-height: 586px;
+  padding-block: 38px;
   overflow: hidden;
 }
 
@@ -294,7 +294,7 @@
   position: relative;
   z-index: 1;
   min-width: 0;
-  height: 572px;
+  height: 510px;
   overflow: hidden;
   border: 1px solid var(--el-glass-border);
   border-radius: 34px;
@@ -316,11 +316,35 @@
 
 .el-hero__product {
   position: absolute;
-  inset: 40px;
+  inset: 54px 40px 108px;
   width: calc(100% - 80px);
-  height: calc(100% - 80px);
+  height: calc(100% - 162px);
   object-fit: contain;
 }
+
+.el-hero__commerce {
+  position: absolute;
+  z-index: 3;
+  inset-inline: 30px;
+  bottom: 26px;
+  display: flex;
+  min-width: 0;
+  min-height: 66px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 13px 16px;
+  border: 1px solid var(--el-glass-border);
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--el-surface-1) 90%, transparent);
+  box-shadow: var(--el-shadow-soft);
+  backdrop-filter: blur(14px);
+}
+
+.el-hero__commerce > span { display: grid; min-width: 0; gap: 4px; }
+.el-hero__commerce small { color: var(--el-text-muted); font-size: 9px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.el-hero__commerce strong { overflow: hidden; color: var(--el-text-primary); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.el-hero__commerce > b { flex: 0 0 auto; color: var(--el-text-primary); font-size: 15px; }
 
 .el-hero__media-placeholder {
   position: absolute;
@@ -353,7 +377,7 @@
 .el-hero__meta {
   position: absolute;
   inset-inline-start: 33px;
-  bottom: 33px;
+  bottom: 106px;
   gap: 8px;
 }
 
@@ -592,7 +616,7 @@
 .el-outcome-card {
   position: relative;
   display: flex;
-  min-height: 300px;
+  min-height: 238px;
   flex-direction: column;
   align-items: flex-start;
   gap: 16px;
@@ -1135,16 +1159,20 @@
   }
 
   .el-hero__product {
-    inset: 28px;
-    width: calc(100% - 56px);
-    height: calc(100% - 56px);
+    inset: 42px 24px 104px;
+    width: calc(100% - 48px);
+    height: calc(100% - 146px);
   }
 
   .el-hero__meta {
     inset-inline: 18px;
-    bottom: 18px;
+    bottom: 92px;
     overflow-x: auto;
   }
+
+  .el-hero__commerce { inset-inline: 14px; bottom: 14px; min-height: 62px; padding: 10px 12px; border-radius: 15px; }
+  .el-hero__commerce strong { max-width: 34vw; }
+  .el-hero__commerce > b { font-size: 13px; }
 
   .el-hero__spec {
     top: 18px;
