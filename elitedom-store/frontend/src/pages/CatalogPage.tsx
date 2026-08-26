@@ -20,10 +20,10 @@ type CatalogState =
 
 const copy = {
   en: {
-    crumb: "STORE / COMPONENTS / GPUS",
-    title: "Graphics cards",
-    intro: "Find the right GPU by workload first, then reveal the technical depth you need.",
-    search: "Search GPU, chipset, VRAM, brand…",
+    crumb: "STORE / HARDWARE",
+    title: "Hardware catalogue",
+    intro: "Browse local-stock and orderable technology by product, brand, price and the specifications that matter.",
+    search: "Search product, category, specification, brand…",
     filters: "FILTERS",
     availability: "Availability",
     inStock: "In stock",
@@ -34,7 +34,6 @@ const copy = {
     over50: "50,000+ EGP",
     brand: "Brand",
     series: "GPU series",
-    advanced: "Advanced specifications",
     products: "products",
     compare: "Compare",
     sort: "Sort products",
@@ -48,12 +47,14 @@ const copy = {
     quickStock: "In stock",
     quickPrice: "Under 50K",
     quickSlot: "3-slot or less",
+    resultsFor: "Results for",
+    category: "Category",
   },
   ar: {
-    crumb: "المتجر / المكونات / كروت الشاشة",
-    title: "كروت الشاشة",
-    intro: "اختار حسب استخدامك الأول، وبعدها افتح التفاصيل التقنية اللي تهمك بس.",
-    search: "ابحث عن GPU أو VRAM أو براند…",
+    crumb: "المتجر / الهاردوير",
+    title: "كتالوج الهاردوير",
+    intro: "تصفح المنتجات المتوفرة محليًا أو حسب الطلب حسب النوع والبراند والسعر والمواصفات المهمة.",
+    search: "ابحث عن منتج أو فئة أو مواصفات أو براند…",
     filters: "الفلاتر",
     availability: "التوافر",
     inStock: "متوفر",
@@ -63,8 +64,7 @@ const copy = {
     midPrice: "30,000–50,000 جنيه",
     over50: "أكثر من 50,000 جنيه",
     brand: "البراند",
-    series: "السلسلة",
-    advanced: "مواصفات متقدمة",
+    series: "سلسلة كارت الشاشة",
     products: "منتج",
     compare: "مقارنة",
     sort: "ترتيب المنتجات",
@@ -78,6 +78,8 @@ const copy = {
     quickStock: "متوفر",
     quickPrice: "أقل من 50K",
     quickSlot: "3-slot أو أقل",
+    resultsFor: "نتائج البحث عن",
+    category: "فئة",
   },
 } as const;
 
@@ -96,6 +98,16 @@ function isThreeSlotOrLess(product: Product) {
   return Number.isFinite(value) && value <= 3;
 }
 
+function humanizeCategory(value: string) {
+  return value.replace(/[-_]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function paginationWindow(page: number, pageCount: number) {
+  const length = Math.min(5, pageCount);
+  const start = Math.max(1, Math.min(page - 2, Math.max(1, pageCount - length + 1)));
+  return Array.from({ length }, (_, index) => start + index);
+}
+
 export function CatalogPage() {
   const [locale, setLocale] = useStoreLocale();
   const [params, setParams] = useSearchParams();
@@ -104,11 +116,24 @@ export function CatalogPage() {
   const [compared, setCompared] = useState<Product[]>([]);
   const [compareOpen, setCompareOpen] = useState(false);
   const query = params.get("q")?.trim() ?? "";
+  const category = params.get("category")?.trim() ?? "";
   const copyText = copy[locale];
+  const gpuContext = /gpu|graphics|rtx|radeon/i.test(`${query} ${category}`);
+  const heading = query
+    ? `${copyText.resultsFor} “${query}”`
+    : category
+      ? `${copyText.category}: ${humanizeCategory(category)}`
+      : copyText.title;
 
   useEffect(() => {
     let active = true;
-    fetchRichCatalog({ locale, query: query || undefined, limit: 100 })
+    setState((current) => ({ status: "loading", products: current.products }));
+    fetchRichCatalog({
+      locale,
+      query: query || undefined,
+      category: category || undefined,
+      limit: 100,
+    })
       .then((products) => {
         if (active) setState({ status: "ready", products });
       })
@@ -116,7 +141,7 @@ export function CatalogPage() {
         if (active) setState((current) => ({ status: "error", products: current.products }));
       });
     return () => { active = false; };
-  }, [locale, query, requestVersion]);
+  }, [category, locale, query, requestVersion]);
 
   const brands = useMemo(
     () => [...new Set(state.products.map((product) => product.brand).filter(Boolean))].slice(0, 8),
@@ -182,6 +207,7 @@ export function CatalogPage() {
   function resetFilters() {
     const next = new URLSearchParams();
     if (query) next.set("q", query);
+    if (category) next.set("category", category);
     setParams(next);
   }
 
@@ -198,6 +224,14 @@ export function CatalogPage() {
     });
   }
 
+  function openCompare() {
+    if (compared.length > 0) {
+      setCompareOpen(true);
+      return;
+    }
+    document.querySelector<HTMLButtonElement>(".el-product-card__compare")?.focus();
+  }
+
   return (
     <div className="el-commerce-page">
       <div className="el-storefront__shell">
@@ -206,25 +240,25 @@ export function CatalogPage() {
         <main>
           <section className="el-catalog-intro">
             <p className="el-commerce-crumb">{copyText.crumb}</p>
-            <h1>{copyText.title}</h1>
+            <h1 dir="auto">{heading}</h1>
             <p>{copyText.intro}</p>
             <form className="el-catalog-search" key={query} onSubmit={submitSearch} role="search">
               <StoreIcon name="search" size={18} />
               <input aria-label={copyText.search} defaultValue={query} name="q" placeholder={copyText.search} type="search" />
             </form>
             <div className="el-quick-filters">
-              <button className={params.get("series") === "rtx50" ? "is-active" : ""} onClick={() => updateParam("series", "rtx50")} type="button">{copyText.quickRtx}</button>
-              <button className={params.get("vram16") === "1" ? "is-active" : ""} onClick={() => updateParam("vram16", "1")} type="button">{copyText.quickVram}</button>
+              {gpuContext ? <button className={params.get("series") === "rtx50" ? "is-active" : ""} onClick={() => updateParam("series", "rtx50")} type="button">{copyText.quickRtx}</button> : null}
+              {gpuContext ? <button className={params.get("vram16") === "1" ? "is-active" : ""} onClick={() => updateParam("vram16", "1")} type="button">{copyText.quickVram}</button> : null}
               <button className={params.get("stock") === "1" ? "is-active" : ""} onClick={() => updateParam("stock", "1")} type="button">{copyText.quickStock}</button>
               <button className={params.get("price") === "under50" ? "is-active" : ""} onClick={() => updateParam("price", "under50")} type="button">{copyText.quickPrice}</button>
-              <button className={params.get("slots3") === "1" ? "is-active" : ""} onClick={() => updateParam("slots3", "1")} type="button">{copyText.quickSlot}</button>
+              {gpuContext ? <button className={params.get("slots3") === "1" ? "is-active" : ""} onClick={() => updateParam("slots3", "1")} type="button">{copyText.quickSlot}</button> : null}
             </div>
           </section>
 
           <div className="el-catalog-toolbar">
             <span>{filtered.length} {copyText.products}</span>
             <div>
-              <button aria-pressed={compared.length > 0} className="el-toolbar-pill" onClick={() => document.querySelector<HTMLButtonElement>(".el-product-card__compare")?.focus()} type="button"><StoreIcon name="compare" size={16} />{copyText.compare}{compared.length > 0 ? ` · ${compared.length}/4` : ""}</button>
+              <button aria-pressed={compared.length > 0} className="el-toolbar-pill" onClick={openCompare} type="button"><StoreIcon name="compare" size={16} />{copyText.compare}{compared.length > 0 ? ` · ${compared.length}/4` : ""}</button>
               <label className="el-toolbar-pill">
                 <StoreIcon name="sort" size={16} />
                 <select aria-label={copyText.sort} onChange={(event) => updateParam("sort", event.target.value)} value={params.get("sort") ?? "recommended"}>
@@ -251,12 +285,13 @@ export function CatalogPage() {
               <FilterGroup title={copyText.brand}>
                 {brands.map((brand) => <FilterOption active={params.get("brand") === brand} key={brand} label={brand} onChange={() => updateParam("brand", brand)} />)}
               </FilterGroup>
-              <FilterGroup title={copyText.series}>
-                <FilterOption active={params.get("series") === "rtx50"} label="RTX 50 Series" onChange={() => updateParam("series", "rtx50")} />
-                <FilterOption active={params.get("series") === "rtx40"} label="RTX 40 Series" onChange={() => updateParam("series", "rtx40")} />
-                <FilterOption active={params.get("series") === "rx9000"} label="Radeon RX 9000" onChange={() => updateParam("series", "rx9000")} />
-              </FilterGroup>
-              <button className="el-advanced-filter" type="button">+ {copyText.advanced}</button>
+              {gpuContext ? (
+                <FilterGroup title={copyText.series}>
+                  <FilterOption active={params.get("series") === "rtx50"} label="RTX 50 Series" onChange={() => updateParam("series", "rtx50")} />
+                  <FilterOption active={params.get("series") === "rtx40"} label="RTX 40 Series" onChange={() => updateParam("series", "rtx40")} />
+                  <FilterOption active={params.get("series") === "rx9000"} label="Radeon RX 9000" onChange={() => updateParam("series", "rx9000")} />
+                </FilterGroup>
+              ) : null}
             </aside>
 
             <section className="el-catalog-results">
@@ -270,10 +305,10 @@ export function CatalogPage() {
               ) : null}
 
               {state.status === "ready" && filtered.length > PAGE_SIZE ? (
-                <nav aria-label="Pagination" className="el-pagination">
+                <nav aria-label={locale === "ar" ? "صفحات المنتجات" : "Product pages"} className="el-pagination">
                   <button disabled={page === 1} onClick={() => updatePage(params, setParams, page - 1)} type="button">{copyText.previous}</button>
-                  {Array.from({ length: pageCount }, (_, index) => index + 1).slice(0, 5).map((number) => (
-                    <button className={number === page ? "is-active" : ""} key={number} onClick={() => updatePage(params, setParams, number)} type="button">{number}</button>
+                  {paginationWindow(page, pageCount).map((number) => (
+                    <button aria-current={number === page ? "page" : undefined} className={number === page ? "is-active" : ""} key={number} onClick={() => updatePage(params, setParams, number)} type="button">{number}</button>
                   ))}
                   <button disabled={page === pageCount} onClick={() => updatePage(params, setParams, page + 1)} type="button">{copyText.next} <StoreIcon name="arrow" size={14} /></button>
                 </nav>
