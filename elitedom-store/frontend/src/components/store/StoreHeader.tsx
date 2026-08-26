@@ -29,7 +29,7 @@ const copy = {
     search: "Search hardware",
     hardware: "Hardware",
     navigation: [
-      ["GPUs", "/catalog"],
+      ["GPUs", "/catalog?q=GPU"],
       ["CPUs", "/catalog?q=CPU"],
       ["PC builds", "/catalog?q=PC%20build"],
       ["Displays", "/catalog?q=Monitor"],
@@ -51,7 +51,7 @@ const copy = {
     search: "ابحث في الهاردوير",
     hardware: "الهاردوير",
     navigation: [
-      ["كروت الشاشة", "/catalog"],
+      ["كروت الشاشة", "/catalog?q=GPU"],
       ["المعالجات", "/catalog?q=CPU"],
       ["تجميعات PC", "/catalog?q=PC%20build"],
       ["الشاشات", "/catalog?q=Monitor"],

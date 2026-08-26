@@ -11,7 +11,7 @@ import { submitRoutedCheckout } from "@/lib/checkout-api";
 import type { CheckoutDetails, CheckoutResult } from "@/types/store";
 import "@/styles/checkout.css";
 
-type PaymentChoice = "card" | "wallet" | "instapay" | "cod";
+type PaymentChoice = "card" | "wallet" | "cod";
 type SubmitState =
   | { status: "idle" }
   | { status: "submitting" }
@@ -27,14 +27,14 @@ const copy = {
     email: "Email address", emailPlaceholder: "name@example.com", phone: "Phone", phonePlaceholder: "01X XXX XXXX", governorate: "Governorate",
     governoratePlaceholder: "Cairo", street: "Street address", streetPlaceholder: "Building, street, district", choosePayment: "Choose how you’d like to pay.",
     card: "Credit / debit card", cardMeta: "Visa · Mastercard · Meeza", wallet: "Mobile wallet", walletMeta: "Pay with a supported mobile wallet",
-    instapay: "InstaPay", instapayMeta: "Pay using your InstaPay account", cod: "Cash on delivery", codMeta: "Available for eligible orders",
-    reviewMeta: "Delivery address · payment method · products · final total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
-    qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Total",
+    cod: "Cash on delivery", codMeta: "Available for eligible orders",
+    reviewMeta: "Delivery address · payment method · products · estimated total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
+    qty: "Qty", subtotal: "Subtotal", shipping: "Shipping", calculated: "Calculated next", vat: "VAT", included: "Included", total: "Estimated total",
     encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
     retry: "Retry", redirecting: "Redirecting to secure payment", successTitle: "Order confirmed", successText: "Confirmation sent. Your order is ready to track.",
     pendingTitle: "Payment confirmation pending", pendingText: "We are waiting for confirmation. Your order is reserved; do not place a duplicate order.",
     failedTitle: "Payment was not completed", failedText: "Your cart is safe. No duplicate charge was created.",
-    trackOrder: "Track order", viewStatus: "View order status", tryAgain: "Try payment again", orderLabel: "Order", cartTotal: "Cart total",
+    trackOrder: "Track order", viewStatus: "View order status", continueShopping: "Continue shopping", tryAgain: "Try payment again", orderLabel: "Order", cartTotal: "Cart total",
   },
   ar: {
     secure: "إتمام طلب آمن · مشفر", title: "إتمام الطلب", intro: "تقدر تكمل كزائر. سجّل الدخول فقط لو عايز العناوين المحفوظة والنقاط وسجل الطلبات.",
@@ -42,14 +42,14 @@ const copy = {
     email: "البريد الإلكتروني", emailPlaceholder: "name@example.com", phone: "رقم الموبايل", phonePlaceholder: "01X XXX XXXX", governorate: "المحافظة",
     governoratePlaceholder: "القاهرة", street: "العنوان بالتفصيل", streetPlaceholder: "المبنى، الشارع، المنطقة", choosePayment: "اختار طريقة الدفع المناسبة.",
     card: "بطاقة ائتمان أو خصم", cardMeta: "Visa · Mastercard · Meeza", wallet: "محفظة موبايل", walletMeta: "ادفع باستخدام محفظة مدعومة",
-    instapay: "InstaPay", instapayMeta: "ادفع من حساب InstaPay", cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
-    reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي النهائي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
-    qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي",
+    cod: "الدفع عند الاستلام", codMeta: "متاح للطلبات المؤهلة",
+    reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي المبدئي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
+    qty: "الكمية", subtotal: "المنتجات", shipping: "الشحن", calculated: "يُحسب في الخطوة التالية", vat: "الضريبة", included: "مشمولة", total: "الإجمالي المبدئي",
     encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
     redirecting: "جاري التحويل للدفع الآمن", successTitle: "تم تأكيد الطلب", successText: "تم إرسال التأكيد وطلبك جاهز للمتابعة.",
     pendingTitle: "تأكيد الدفع قيد الانتظار", pendingText: "مستنيين تأكيد الدفع وطلبك محجوز. ما تعملش طلب مكرر.",
     failedTitle: "عملية الدفع ما اكتملتش", failedText: "سلتك محفوظة وما اتعملش خصم مكرر.",
-    trackOrder: "تتبع الطلب", viewStatus: "عرض حالة الطلب", tryAgain: "حاول الدفع تاني", orderLabel: "طلب", cartTotal: "إجمالي السلة",
+    trackOrder: "تتبع الطلب", viewStatus: "عرض حالة الطلب", continueShopping: "كمّل تسوق", tryAgain: "حاول الدفع تاني", orderLabel: "طلب", cartTotal: "إجمالي السلة",
   },
 } as const;
 
@@ -110,7 +110,7 @@ export function CheckoutPage() {
       phone: String(form.get("phone") ?? "").trim(),
       governorate: String(form.get("governorate") ?? "").trim(),
       shippingAddress: String(form.get("street") ?? "").trim(),
-      paymentMethod: payment === "cod" ? "cash_on_delivery" : payment === "card" ? "credit_card" : "instapay",
+      paymentMethod: payment === "cod" ? "cash_on_delivery" : payment === "card" ? "credit_card" : "mobile_wallet",
       useLoyaltyPoints: false,
     };
 
@@ -135,6 +135,7 @@ export function CheckoutPage() {
         <div className="el-checkout-result-shell">
           <ElitedomBrand />
           <CheckoutResultPanel
+            authenticated={Boolean(snapshot?.session)}
             locale={locale}
             onRetry={() => setSubmitState({ status: "idle" })}
             state={submitState as Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>}
@@ -175,7 +176,6 @@ export function CheckoutPage() {
                   <div className="el-payment-methods">
                     <PaymentMethod active={payment === "card"} icon="payment" meta={text.cardMeta} onSelect={() => setPayment("card")} title={text.card} />
                     <PaymentMethod active={payment === "wallet"} icon="wallet" meta={text.walletMeta} onSelect={() => setPayment("wallet")} title={text.wallet} />
-                    <PaymentMethod active={payment === "instapay"} icon="bank" meta={text.instapayMeta} onSelect={() => setPayment("instapay")} title={text.instapay} />
                     <PaymentMethod active={payment === "cod"} icon="cash" meta={text.codMeta} onSelect={() => setPayment("cod")} title={text.cod} />
                   </div>
                 </section>
@@ -184,7 +184,6 @@ export function CheckoutPage() {
                   <button className="el-place-order" disabled={submitState.status === "submitting"} type="submit">
                     <StoreIcon name="check" size={17} />
                     {submitState.status === "submitting" ? text.placing : text.placeOrder}
-                    {submitState.status !== "submitting" ? <span className="el-place-order__total"> — {formatEgp(subtotal, locale)} EGP</span> : null}
                   </button>
                 </section>
                 <p className="el-checkout-mobile-security">{text.encrypted}</p>
@@ -222,7 +221,7 @@ function SummaryRow({ label, value, emphasis = false }: { label: string; value: 
   return <div className={emphasis ? "el-summary-row is-emphasis" : "el-summary-row"}><span>{label}</span><strong>{value}</strong></div>;
 }
 
-function CheckoutResultPanel({ locale, state, total, onRetry }: { locale: "en" | "ar"; state: Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>; total: number; onRetry: () => void }) {
+function CheckoutResultPanel({ authenticated, locale, state, total, onRetry }: { authenticated: boolean; locale: "en" | "ar"; state: Exclude<SubmitState, { status: "idle" } | { status: "submitting" }>; total: number; onRetry: () => void }) {
   const text = copy[locale];
   const navigate = useNavigate();
   const success = state.status === "success";
@@ -231,11 +230,19 @@ function CheckoutResultPanel({ locale, state, total, onRetry }: { locale: "en" |
   const body = success ? text.successText : pending ? (state.status === "redirecting" ? text.encrypted : text.pendingText) : text.failedText;
   const orderNumber = "orderNumber" in state ? state.orderNumber : undefined;
   const icon: StoreIconName = success ? "check" : pending ? "clock" : "returns";
-  const action = success ? text.trackOrder : pending ? text.viewStatus : text.tryAgain;
+  const action = state.status === "error"
+    ? text.tryAgain
+    : authenticated
+      ? (success ? text.trackOrder : text.viewStatus)
+      : text.continueShopping;
 
   function act() {
     if (state.status === "error") {
       onRetry();
+      return;
+    }
+    if (!authenticated) {
+      navigate("/catalog");
       return;
     }
     navigate(`/account/orders/${state.orderId}`);
