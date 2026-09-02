@@ -75,7 +75,7 @@ export function CartPage() {
   }, [locale]);
 
   async function updateQuantity(itemId: number | undefined, quantity: number) {
-    if (!snapshot || !itemId || quantity < 1 || quantity > 100) return;
+    if (!snapshot || pendingItemId !== null || !itemId || quantity < 1 || quantity > 100) return;
     const previousSnapshot = snapshot;
     setPendingItemId(itemId);
     setMutationError(null);
@@ -95,7 +95,7 @@ export function CartPage() {
   }
 
   async function removeItem(itemId: number | undefined) {
-    if (!snapshot || !itemId) return;
+    if (!snapshot || pendingItemId !== null || !itemId) return;
     const previousSnapshot = snapshot;
     setPendingItemId(itemId);
     setMutationError(null);
@@ -114,6 +114,7 @@ export function CartPage() {
   const items = snapshot?.items ?? [];
   const count = cartItemCount(items);
   const subtotal = cartSubtotal(items);
+  const cartMutationPending = pendingItemId !== null;
 
   return (
     <div className="el-checkout-page">
@@ -129,7 +130,6 @@ export function CartPage() {
               <section className="el-cart-items" aria-label={text.title}>
                 {mutationError ? <p aria-live="assertive" className="el-cart-mutation-error" role="alert">{mutationError}</p> : null}
                 {items.map((item) => {
-                  const itemPending = pendingItemId === item.serverItemId;
                   const quantityLimit = purchasableQuantityLimit(item.product.stockQty, item.product.dropshipEnabled);
                   const canIncrease = item.quantity < quantityLimit;
                   return (
@@ -139,13 +139,13 @@ export function CartPage() {
                         <Link dir="auto" to={`/products/${encodeURIComponent(item.product.id)}`}>{item.product.name}</Link>
                         <p dir="auto">{item.product.specs.slice(0, 2).map((spec) => spec.value).join(" · ") || item.product.categoryName}</p>
                         <span className={item.product.dropshipEnabled && item.product.stockQty <= 0 ? "el-cart-item__availability is-on-request" : "el-cart-item__availability is-in-stock"}>{item.product.dropshipEnabled && item.product.stockQty <= 0 ? text.onRequest : text.local}{item.product.warrantyMonths > 0 ? ` · ${item.product.warrantyMonths}m ${text.warranty}` : ""}</span>
-                        <button disabled={itemPending} onClick={() => void removeItem(item.serverItemId)} type="button">{text.remove}</button>
+                        <button disabled={cartMutationPending} onClick={() => void removeItem(item.serverItemId)} type="button">{text.remove}</button>
                       </div>
                       <strong className="el-cart-item__price" dir="ltr">{formatEgp(item.product.priceEgp * item.quantity, locale)} EGP</strong>
                       <div className="el-cart-quantity">
-                        <button aria-label={text.decrease} disabled={itemPending || item.quantity <= 1} onClick={() => void updateQuantity(item.serverItemId, item.quantity - 1)} type="button"><StoreIcon name="minus" size={16} /></button>
+                        <button aria-label={text.decrease} disabled={cartMutationPending || item.quantity <= 1} onClick={() => void updateQuantity(item.serverItemId, item.quantity - 1)} type="button"><StoreIcon name="minus" size={16} /></button>
                         <span>{item.quantity}</span>
-                        <button aria-label={text.increase} disabled={itemPending || !canIncrease} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
+                        <button aria-label={text.increase} disabled={cartMutationPending || !canIncrease} onClick={() => void updateQuantity(item.serverItemId, item.quantity + 1)} type="button"><StoreIcon name="plus" size={16} /></button>
                       </div>
                     </article>
                   );
@@ -157,7 +157,7 @@ export function CartPage() {
                 <SummaryRow label={text.shipping} value={text.calculated} />
                 <div className="el-summary-divider" />
                 <SummaryRow emphasis label={text.total} value={`${formatEgp(subtotal, locale)} EGP`} />
-                <button className="el-summary-primary" onClick={() => navigate("/checkout")} type="button">{text.continue}</button>
+                <button className="el-summary-primary" disabled={cartMutationPending} onClick={() => navigate("/checkout")} type="button">{text.continue}</button>
                 <p className="el-summary-security">{text.secure}</p>
               </aside>
             </div>
