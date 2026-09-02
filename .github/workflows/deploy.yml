@@ -1,6 +1,16 @@
 name: Deploy Release
 
 on:
+  workflow_call:
+    inputs:
+      environment:
+        description: Protected GitHub Environment to deploy
+        required: true
+        type: string
+      release_ref:
+        description: Full 40-character Git commit SHA reachable from main
+        required: true
+        type: string
   workflow_dispatch:
     inputs:
       environment:
@@ -37,6 +47,7 @@ jobs:
       RELEASE_REF: ${{ inputs.release_ref }}
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
       EC2_INSTANCE_ID: ${{ secrets.EC2_INSTANCE_ID }}
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
       SITE_URL: ${{ vars.SITE_URL }}
@@ -47,9 +58,10 @@ jobs:
       REQUIRE_ODOO_SMOKE: ${{ vars.REQUIRE_ODOO_SMOKE }}
 
     steps:
-      - name: Check out deployment tooling
+      - name: Check out exact release deployment tooling
         uses: actions/checkout@v7
         with:
+          ref: ${{ inputs.release_ref }}
           fetch-depth: 0
 
       - name: Validate release and environment contract
@@ -58,10 +70,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$RELEASE_REF" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "release_ref must be a full Git SHA" >&2; exit 2; }
+          [[ "$(git rev-parse HEAD)" == "$RELEASE_REF" ]] || { echo "deployment tooling checkout does not match release_ref" >&2; exit 2; }
           git cat-file -e "${RELEASE_REF}^{commit}"
           git fetch origin main
           git merge-base --is-ancestor "$RELEASE_REF" origin/main || { echo "release_ref is not reachable from main" >&2; exit 2; }
-          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$EC2_INSTANCE_ID" ]] || { echo "Deployment secrets are incomplete" >&2; exit 2; }
+          [[ -n "$DEPLOY_HOST" && -n "$DEPLOY_USER" && -n "$DEPLOY_KNOWN_HOSTS" && -n "$EC2_INSTANCE_ID" ]] || { echo "Deployment secrets are incomplete" >&2; exit 2; }
           [[ "$DEPLOY_PATH" = /* ]] || { echo "DEPLOY_PATH must be an absolute environment variable" >&2; exit 2; }
           [[ "$SITE_URL" =~ ^https://[^/]+/?$ ]] || { echo "SITE_URL must be an HTTPS origin" >&2; exit 2; }
           [[ "$API_URL" =~ ^https://[^/]+/?$ ]] || { echo "API_URL must be an HTTPS origin" >&2; exit 2; }
@@ -147,22 +160,26 @@ jobs:
             --ssh-public-key "$PUB_KEY"
           echo "Public key pushed via EC2 Instance Connect (valid for 60s)"
 
-      - name: Configure SSH client
+      - name: Configure pinned SSH client
         shell: bash
         run: |
           set -euo pipefail
           KEY_PATH="${{ steps.ssh-keygen.outputs.key_path }}"
-          install -m 700 -d "$HOME/.ssh"
-          cat > "$HOME/.ssh/config" << CONF
+          SSH_DIR="$HOME/.ssh"
+          install -m 700 -d "$SSH_DIR"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$SSH_DIR/known_hosts"
+          chmod 600 "$SSH_DIR/known_hosts"
+          cat > "$SSH_DIR/config" << CONF
           Host deploy-target
             HostName $DEPLOY_HOST
             User $DEPLOY_USER
             IdentityFile $KEY_PATH
             IdentitiesOnly yes
-            StrictHostKeyChecking accept-new
+            UserKnownHostsFile $SSH_DIR/known_hosts
+            StrictHostKeyChecking yes
             ConnectTimeout 15
           CONF
-          chmod 600 "$HOME/.ssh/config"
+          chmod 600 "$SSH_DIR/config"
 
       - name: Verify remote deployment host
         shell: bash
