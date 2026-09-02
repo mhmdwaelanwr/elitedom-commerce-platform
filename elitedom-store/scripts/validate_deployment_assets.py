@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail CI if the protected single-VPS deployment contract is weakened."""
+"""Fail CI if the protected deployment and qualified staging contract is weakened."""
 
 from __future__ import annotations
 
@@ -8,9 +8,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy.yml"
+STAGING_AUTO_WORKFLOW = ROOT / ".github/workflows/staging-auto-deploy.yml"
 SMOKE_WORKFLOW = ROOT / ".github/workflows/launch-smoke.yml"
 DEPLOY_SCRIPT = ROOT / "elitedom-store/infrastructure/scripts/deploy_release.sh"
+PREFLIGHT_SCRIPT = ROOT / "elitedom-store/infrastructure/scripts/preflight_host.sh"
+RESTORE_DRILL_SCRIPT = ROOT / "elitedom-store/infrastructure/scripts/restore_drill.sh"
 DEPLOY_GUIDE = ROOT / "docs/operations/infrastructure/DEPLOYMENT_GUIDE.md"
+P24_RECORD = ROOT / "docs/delivery/releases/P24_STAGING_READINESS.md"
 
 
 def require(condition: bool, message: str, errors: list[str]) -> None:
@@ -20,7 +24,16 @@ def require(condition: bool, message: str, errors: list[str]) -> None:
 
 def main() -> int:
     errors: list[str] = []
-    for path in (DEPLOY_WORKFLOW, SMOKE_WORKFLOW, DEPLOY_SCRIPT, DEPLOY_GUIDE):
+    for path in (
+        DEPLOY_WORKFLOW,
+        STAGING_AUTO_WORKFLOW,
+        SMOKE_WORKFLOW,
+        DEPLOY_SCRIPT,
+        PREFLIGHT_SCRIPT,
+        RESTORE_DRILL_SCRIPT,
+        DEPLOY_GUIDE,
+        P24_RECORD,
+    ):
         require(path.is_file(), f"Missing deployment asset: {path.relative_to(ROOT)}", errors)
     if errors:
         for error in errors:
@@ -29,12 +42,18 @@ def main() -> int:
 
     workflow = DEPLOY_WORKFLOW.read_text(encoding="utf-8")
     for marker, message in (
-        ("workflow_dispatch:", "Deployment must remain explicitly dispatched."),
+        ("workflow_call:", "Deployment must remain reusable for qualified staging promotion."),
+        ("workflow_dispatch:", "Deployment must remain explicitly dispatchable."),
         ("environment:", "Deployment must use protected GitHub Environments."),
-        ("cancel-in-progress: false", "A running deployment must not be cancelled by a newer dispatch."),
+        ("cancel-in-progress: false", "A running deployment must not be cancelled by a newer deployment."),
+        ("ref: ${{ inputs.release_ref }}", "Deployment tooling must be checked out from the exact release SHA."),
+        ("deployment tooling checkout does not match release_ref", "Deployment must verify its tooling checkout matches release_ref."),
         ("DEPLOY_KNOWN_HOSTS", "SSH host identity must be pinned."),
-        ("StrictHostKeyChecking=yes", "SSH strict host checking must remain enabled."),
+        ("UserKnownHostsFile", "SSH must use the pinned known-hosts file."),
+        ("StrictHostKeyChecking yes", "SSH strict host checking must remain enabled."),
         ("git merge-base --is-ancestor", "Release must be verified as reachable from main."),
+        ("ec2-instance-connect send-ssh-public-key", "Deployment must keep short-lived EC2 Instance Connect access."),
+        ("EphemeralRunner", "Deployment must scope and tag temporary runner SSH ingress."),
         ("deploy_release.sh", "Workflow must execute the guarded remote deployer."),
         ("uses: ./.github/workflows/launch-smoke.yml", "Successful deployment must call the launch smoke gate."),
         ("deployment.log", "Deployment evidence must be retained."),
@@ -42,6 +61,22 @@ def main() -> int:
         require(marker in workflow, message, errors)
     require("ssh-keyscan" not in workflow, "Do not trust runtime ssh-keyscan output as host identity.", errors)
     require("StrictHostKeyChecking=no" not in workflow, "Deployment must never disable SSH host verification.", errors)
+    require("StrictHostKeyChecking accept-new" not in workflow, "Deployment must not learn a new SSH host key during a release run.", errors)
+
+    staging_auto = STAGING_AUTO_WORKFLOW.read_text(encoding="utf-8")
+    for marker, message in (
+        ("workflow_run:", "Qualified staging promotion must be triggered from an upstream workflow result."),
+        ("Real Stack E2E", "Automatic staging promotion must depend on Real Stack E2E."),
+        ("github.event.workflow_run.conclusion == 'success'", "Automatic staging promotion must require a successful qualification run."),
+        ("github.event.workflow_run.event == 'push'", "Automatic staging promotion must only accept main push qualification runs."),
+        ("github.event.workflow_run.head_branch == 'main'", "Automatic staging promotion must only accept main."),
+        ("vars.STAGING_AUTO_DEPLOY_ENABLED == 'true'", "Automatic staging promotion must remain explicitly opt-in."),
+        ("environment: staging", "Automatic promotion must target staging only."),
+        ("release_ref: ${{ github.event.workflow_run.head_sha }}", "Automatic staging must deploy the exact qualified SHA."),
+        ("uses: ./.github/workflows/deploy.yml", "Automatic staging must reuse the guarded deployment workflow."),
+    ):
+        require(marker in staging_auto, message, errors)
+    require("environment: production" not in staging_auto, "Production must never be an automatic promotion target.", errors)
 
     smoke = SMOKE_WORKFLOW.read_text(encoding="utf-8")
     require("workflow_call:" in smoke, "Launch smoke must remain reusable by deployment.", errors)
@@ -80,6 +115,16 @@ def main() -> int:
         errors,
     )
 
+    preflight = PREFLIGHT_SCRIPT.read_text(encoding="utf-8")
+    require("set -Eeuo pipefail" in preflight, "Host preflight must fail safely on shell errors.", errors)
+    require("docker compose" in preflight, "Host preflight must validate the Docker Compose execution boundary.", errors)
+    require("git" in preflight, "Host preflight must validate the Git deployment checkout.", errors)
+
+    restore_drill = RESTORE_DRILL_SCRIPT.read_text(encoding="utf-8")
+    require("gzip -t" in restore_drill, "Restore drill must validate backup gzip integrity.", errors)
+    require("docker" in restore_drill, "Restore drill must use an isolated disposable database runtime.", errors)
+    require("down -v" not in restore_drill, "Restore drill must not tear down the live Compose project.", errors)
+
     guide = DEPLOY_GUIDE.read_text(encoding="utf-8")
     require("GitHub Environment" in guide, "Deployment guide must document the protected environment contract.", errors)
     require("DEPLOY_KNOWN_HOSTS" in guide, "Deployment guide must document pinned SSH host identity.", errors)
@@ -87,11 +132,16 @@ def main() -> int:
     require("forward-only" in guide, "Deployment guide must document the forward-only normal deployment boundary.", errors)
     require(".elitedom-deployment-state" in guide, "Deployment guide must document persisted last-successful release state.", errors)
 
+    p24 = P24_RECORD.read_text(encoding="utf-8")
+    require("STAGING_AUTO_DEPLOY_ENABLED" in p24, "P24 record must document the staging auto-promotion opt-in switch.", errors)
+    require("Real Stack E2E" in p24, "P24 record must document the staging qualification gate.", errors)
+    require("DEPLOY_KNOWN_HOSTS" in p24, "P24 record must document pinned SSH host identity.", errors)
+
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
         return 1
-    print("P16 deployment execution assets validated successfully.")
+    print("P24 deployment and qualified staging assets validated successfully.")
     return 0
 
 
