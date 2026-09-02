@@ -125,7 +125,7 @@ test.describe.serial("P22 real full-stack browser integration", () => {
     await page.getByLabel("Full name").fill("P22 Browser Customer");
     await page.getByLabel("Email address").fill(accounts.customer);
     await page.getByLabel("Phone").fill("01000001001");
-    await page.getByLabel("Governorate").fill("Cairo");
+    await page.getByLabel("Governorate").selectOption("Cairo");
     await page.getByLabel("Street address").fill("P22 Integration Street, Cairo");
     await page.getByRole("button", { name: /Cash on delivery/ }).click();
 
