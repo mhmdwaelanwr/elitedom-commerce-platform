@@ -13,6 +13,14 @@ verified_against: staging-environment
 
 This document lists all external provider credentials needed for staging/production.
 
+## Source of truth
+
+Provider names, environment keys, runtime validation, and launch acceptance must stay aligned with:
+
+- `elitedom-store/.env.example`
+- `elitedom-store/backend/app/config.py`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
+
 ## Priority Order
 
 ### 1. Paymob (Payment Gateway) — HIGH
