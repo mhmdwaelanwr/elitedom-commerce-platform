@@ -59,7 +59,7 @@ Required GitHub Environment variables:
 - `EC2_SECURITY_GROUP_ID`
 - `REQUIRE_ODOO_SMOKE`
 
-The workflow uses GitHub OIDC for AWS credentials. It temporarily authorizes the current GitHub runner public IPv4 as a `/32` SSH ingress rule, uses EC2 Instance Connect to push the ephemeral public key, and revokes the temporary rule after deployment. A persistent SSH private key is not part of the current deployment contract.
+The workflow uses GitHub OIDC for AWS credentials. It temporarily authorizes the current GitHub runner public IPv4 as a `/32` SSH ingress rule and uses EC2 Instance Connect to push the ephemeral public key. Final cleanup always attempts to revoke the captured rule and also performs a tag-based fallback lookup for `Name=elitedom-ci-runner` plus `EphemeralRunner=true`; the next deployment removes any matching stale rule before authorizing a new one. A persistent SSH private key is not part of the current deployment contract.
 
 ## Deployment safety boundaries
 
@@ -67,7 +67,7 @@ The workflow uses GitHub OIDC for AWS credentials. It temporarily authorizes the
 - Tracked local modifications on the VPS block deployment; the deployer never uses `git reset --hard` or `git clean`.
 - SSH host identity is pinned through `DEPLOY_KNOWN_HOSTS`; runtime host-key learning is not trusted.
 - GitHub Actions uses an ephemeral SSH key plus EC2 Instance Connect instead of a stored deployment private key.
-- Temporary SSH ingress is runner-IP `/32` scoped and revoked after the run.
+- Temporary SSH ingress is runner-IP `/32` scoped; cleanup attempts direct revocation plus a workflow-tagged fallback, and the next run removes any matching stale rule before opening new ingress.
 - Production Compose is validated before durable-state changes.
 - The application and Odoo databases are backed up and gzip-verified before Alembic/Odoo upgrade steps.
 - The deployer does not automatically downgrade or restore databases on failure.
