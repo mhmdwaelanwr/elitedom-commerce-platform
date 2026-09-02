@@ -83,7 +83,7 @@ jobs:
           printf 'api_url=%s\n' "${API_URL%/}" >> "$GITHUB_OUTPUT"
 
       - name: Configure AWS credentials via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@v5
         with:
           role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
