@@ -9,6 +9,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_WORKFLOW = ROOT / ".github/workflows/deploy.yml"
 STAGING_AUTO_WORKFLOW = ROOT / ".github/workflows/staging-auto-deploy.yml"
+LEGACY_STAGING_WORKFLOW = ROOT / ".github/workflows/auto-deploy-staging.yml"
 SMOKE_WORKFLOW = ROOT / ".github/workflows/launch-smoke.yml"
 DEPLOY_SCRIPT = ROOT / "elitedom-store/infrastructure/scripts/deploy_release.sh"
 PREFLIGHT_SCRIPT = ROOT / "elitedom-store/infrastructure/scripts/preflight_host.sh"
@@ -35,6 +36,11 @@ def main() -> int:
         P24_RECORD,
     ):
         require(path.is_file(), f"Missing deployment asset: {path.relative_to(ROOT)}", errors)
+    require(
+        not LEGACY_STAGING_WORKFLOW.exists(),
+        "Legacy auto-deploy-staging.yml must remain retired; staging promotion has one guarded entry point.",
+        errors,
+    )
     if errors:
         for error in errors:
             print(f"ERROR: {error}")
