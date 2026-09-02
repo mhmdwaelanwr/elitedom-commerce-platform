@@ -46,7 +46,7 @@ Production approval/reviewer rules belong on the GitHub `production` Environment
 
 The deployment user must be able to run Git and Docker Compose v2, access the configured repository, and operate the Elitedom Compose project. The deployment checkout must be a full Git repository rather than a shallow clone because release ancestry is a safety boundary. `elitedom-store/.env` stays on the host, must not be a symlink, and must have mode `600` or `640`. The workflow never copies production provider credentials into GitHub artifacts.
 
-GitHub Actions obtains AWS credentials through OIDC using `AWS_ROLE_TO_ASSUME`. The role must allow the narrowly required EC2 Instance Connect and security-group operations for the configured staging/production target. The workflow determines the runner public IPv4, opens SSH only for that `/32`, generates an ephemeral SSH key, pushes the public key through EC2 Instance Connect, and revokes the temporary security-group rule after execution. SSH still requires the pinned host identity in `DEPLOY_KNOWN_HOSTS` with strict host checking enabled.
+GitHub Actions obtains AWS credentials through OIDC using `AWS_ROLE_TO_ASSUME`. The role must allow the narrowly required EC2 Instance Connect and security-group operations for the configured staging/production target. The workflow determines the runner public IPv4, opens SSH only for that `/32`, generates an ephemeral SSH key, pushes the public key through EC2 Instance Connect, and enforces the pinned host identity in `DEPLOY_KNOWN_HOSTS` with strict host checking enabled. Final cleanup always attempts to revoke the captured rule and also performs a workflow-tagged fallback lookup; a later deployment removes any matching stale `Name=elitedom-ci-runner` plus `EphemeralRunner=true` rule before authorizing new ingress.
 
 The deployer rejects tracked local modifications before changing the checkout. It fetches `origin/main`, verifies the requested commit again on the VPS, then checks out the exact commit in detached-HEAD mode. Untracked production configuration is not deleted.
 
@@ -74,7 +74,7 @@ On the first protected deployment, no last-successful state exists and the run i
 14. upgrade the bundled `elitedom_connector` in Odoo;
 15. start the production topology with Compose `--wait` and a bounded timeout;
 16. run the repository Odoo integration smoke, verify the checkout still equals the requested SHA, then atomically record the new last-successful release and capture `docker compose ps` evidence;
-17. revoke the temporary SSH ingress rule and preserve deployment evidence;
+17. always attempt to revoke temporary SSH ingress using the captured rule ID and a workflow-tagged fallback lookup, then preserve deployment evidence;
 18. only after remote deployment succeeds, run the reusable Launch Smoke against the same exact release.
 
 The script does **not** run `alembic downgrade`, `restore.sh`, `git reset --hard`, or `git clean`. A failed deployment therefore stops for operator assessment instead of automatically rewriting durable state. A failed run also does not advance `.elitedom-deployment-state/release_ref`, so the next promotion still compares against the last release that completed runtime verification.
@@ -85,7 +85,7 @@ Keep `STAGING_AUTO_DEPLOY_ENABLED` disabled for the first staging deployment. Co
 
 - the Environment secrets and AWS/OIDC variables resolve correctly;
 - EC2 Instance Connect reaches the intended instance and the pinned SSH host key matches;
-- temporary SSH ingress is runner-IP `/32` scoped and revoked after the run;
+- temporary SSH ingress is runner-IP `/32` scoped, cleanup is attempted after the run, and no workflow-tagged stale rule remains before automatic promotion is enabled;
 - the remote checkout, `.env`, Compose topology, database backups, migrations, Odoo upgrade, and health checks succeed;
 - public `SITE_URL` and `API_URL` resolve over HTTPS and Launch Smoke passes for the same release SHA;
 - monitoring and recovery ownership for staging are known.
