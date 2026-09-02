@@ -20,12 +20,42 @@ type SubmitState =
   | { status: "pending"; orderId: number; orderNumber: string }
   | { status: "error"; message: string };
 
+const EGYPT_GOVERNORATES = [
+  ["Cairo", "Cairo", "القاهرة"],
+  ["Giza", "Giza", "الجيزة"],
+  ["Alexandria", "Alexandria", "الإسكندرية"],
+  ["Qalyubia", "Qalyubia", "القليوبية"],
+  ["Sharqia", "Sharqia", "الشرقية"],
+  ["Dakahlia", "Dakahlia", "الدقهلية"],
+  ["Beheira", "Beheira", "البحيرة"],
+  ["Gharbia", "Gharbia", "الغربية"],
+  ["Monufia", "Monufia", "المنوفية"],
+  ["Kafr El Sheikh", "Kafr El Sheikh", "كفر الشيخ"],
+  ["Damietta", "Damietta", "دمياط"],
+  ["Port Said", "Port Said", "بورسعيد"],
+  ["Ismailia", "Ismailia", "الإسماعيلية"],
+  ["Suez", "Suez", "السويس"],
+  ["Fayoum", "Fayoum", "الفيوم"],
+  ["Beni Suef", "Beni Suef", "بني سويف"],
+  ["Minya", "Minya", "المنيا"],
+  ["Assiut", "Assiut", "أسيوط"],
+  ["Sohag", "Sohag", "سوهاج"],
+  ["Qena", "Qena", "قنا"],
+  ["Luxor", "Luxor", "الأقصر"],
+  ["Aswan", "Aswan", "أسوان"],
+  ["Red Sea", "Red Sea", "البحر الأحمر"],
+  ["New Valley", "New Valley", "الوادي الجديد"],
+  ["Matrouh", "Matrouh", "مطروح"],
+  ["North Sinai", "North Sinai", "شمال سيناء"],
+  ["South Sinai", "South Sinai", "جنوب سيناء"],
+] as const;
+
 const copy = {
   en: {
     secure: "Secure checkout · Encrypted", title: "Checkout", intro: "Guest checkout is available. Sign in only if you want saved addresses, loyalty and order history.",
     delivery: "Delivery", payment: "Payment", review: "Review", fullName: "Full name", fullNamePlaceholder: "Mohamed Anwar",
     email: "Email address", emailPlaceholder: "name@example.com", phone: "Phone", phonePlaceholder: "01X XXX XXXX", governorate: "Governorate",
-    governoratePlaceholder: "Cairo", street: "Street address", streetPlaceholder: "Building, street, district", choosePayment: "Choose how you’d like to pay.",
+    governoratePlaceholder: "Choose governorate", street: "Street address", streetPlaceholder: "Building, street, district", choosePayment: "Choose how you’d like to pay.",
     card: "Credit / debit card", cardMeta: "Continue through the secure payment provider", wallet: "Mobile wallet", walletMeta: "Continue with a supported mobile wallet",
     cod: "Cash on delivery", codMeta: "Pay when the order is delivered",
     reviewMeta: "Delivery address · payment method · products · estimated total", placeOrder: "Place order", placing: "Placing order…", yourOrder: "Your order",
@@ -33,14 +63,14 @@ const copy = {
     encrypted: "Encrypted checkout · Protected over HTTPS · Full card details are never displayed", empty: "Your cart is empty.", back: "Back to catalogue", loadError: "We could not load your checkout session.",
     retry: "Retry", redirecting: "Redirecting to secure payment", successTitle: "Order confirmed", successText: "Your order was created successfully. Keep the order number for reference.",
     pendingTitle: "Payment confirmation pending", pendingText: "We are waiting for confirmation. Your order is reserved; do not place a duplicate order.",
-    failedTitle: "Payment was not completed", failedText: "Your cart is safe. No duplicate charge was created.",
+    failedTitle: "Payment was not completed", failedText: "Your cart is safe. No duplicate charge was created.", submitError: "We could not place the order. Check your delivery and payment details, then try again.",
     trackOrder: "Track order", viewStatus: "View order status", continueShopping: "Continue shopping", tryAgain: "Try payment again", orderLabel: "Order", cartTotal: "Cart total",
   },
   ar: {
     secure: "إتمام طلب آمن · مشفر", title: "إتمام الطلب", intro: "تقدر تكمل كزائر. سجّل الدخول فقط لو عايز العناوين المحفوظة والنقاط وسجل الطلبات.",
     delivery: "التوصيل", payment: "الدفع", review: "المراجعة", fullName: "الاسم بالكامل", fullNamePlaceholder: "محمد أنور",
     email: "البريد الإلكتروني", emailPlaceholder: "name@example.com", phone: "رقم الموبايل", phonePlaceholder: "01X XXX XXXX", governorate: "المحافظة",
-    governoratePlaceholder: "القاهرة", street: "العنوان بالتفصيل", streetPlaceholder: "المبنى، الشارع، المنطقة", choosePayment: "اختار طريقة الدفع المناسبة.",
+    governoratePlaceholder: "اختار المحافظة", street: "العنوان بالتفصيل", streetPlaceholder: "المبنى، الشارع، المنطقة", choosePayment: "اختار طريقة الدفع المناسبة.",
     card: "بطاقة ائتمان أو خصم", cardMeta: "تكمل الدفع من خلال مزود الدفع الآمن", wallet: "محفظة موبايل", walletMeta: "تكمل باستخدام محفظة موبايل مدعومة",
     cod: "الدفع عند الاستلام", codMeta: "ادفع عند استلام الطلب",
     reviewMeta: "عنوان التوصيل · طريقة الدفع · المنتجات · الإجمالي المبدئي", placeOrder: "تأكيد الطلب", placing: "جارٍ تأكيد الطلب…", yourOrder: "ملخص الطلب",
@@ -48,7 +78,7 @@ const copy = {
     encrypted: "دفع مشفر · اتصال HTTPS آمن · لن نعرض بيانات البطاقة كاملة", empty: "السلة فاضية.", back: "ارجع للكتالوج", loadError: "تعذر تحميل جلسة إتمام الطلب.", retry: "حاول تاني",
     redirecting: "جاري التحويل للدفع الآمن", successTitle: "تم تأكيد الطلب", successText: "تم إنشاء طلبك بنجاح. احتفظ برقم الطلب للرجوع إليه.",
     pendingTitle: "تأكيد الدفع قيد الانتظار", pendingText: "مستنيين تأكيد الدفع وطلبك محجوز. ما تعملش طلب مكرر.",
-    failedTitle: "عملية الدفع ما اكتملتش", failedText: "سلتك محفوظة وما اتعملش خصم مكرر.",
+    failedTitle: "عملية الدفع ما اكتملتش", failedText: "سلتك محفوظة وما اتعملش خصم مكرر.", submitError: "مقدرناش نأكد الطلب. راجع بيانات التوصيل وطريقة الدفع وحاول تاني.",
     trackOrder: "تتبع الطلب", viewStatus: "عرض حالة الطلب", continueShopping: "كمّل تسوق", tryAgain: "حاول الدفع تاني", orderLabel: "طلب", cartTotal: "إجمالي السلة",
   },
 } as const;
@@ -124,8 +154,8 @@ export function CheckoutPage() {
       }
       if (payment === "cod") setSubmitState({ status: "success", orderId: result.orderId, orderNumber: result.orderNumber });
       else setSubmitState({ status: "pending", orderId: result.orderId, orderNumber: result.orderNumber });
-    } catch (error) {
-      setSubmitState({ status: "error", message: error instanceof Error ? error.message : text.failedTitle });
+    } catch {
+      setSubmitState({ status: "error", message: text.submitError });
     }
   }
 
@@ -152,7 +182,7 @@ export function CheckoutPage() {
         <div className="el-checkout-store-header"><StoreHeader locale={locale} onLocaleChange={setLocale} /></div>
         <header className="el-checkout-header"><Link to="/"><ElitedomBrand /></Link><span><StoreIcon name="warranty" size={16} />{text.secure}</span></header>
         <main>
-          <section className="el-checkout-intro"><h1>{text.title}</h1><p>{text.intro}</p><div className="el-checkout-steps"><span className="is-active">01 · {text.delivery}</span><span className="is-active">02 · {text.payment}</span><span>03 · {text.review}</span></div></section>
+          <section className="el-checkout-intro"><h1>{text.title}</h1><p>{text.intro}</p><div className="el-checkout-steps"><span className="is-active">01 · {text.delivery}</span><span className="is-active">02 · {text.payment}</span><span className="is-active">03 · {text.review}</span></div></section>
           {loading ? <div className="el-checkout-loading"><div /><div /></div> : null}
           {!loading && loadError ? <div className="el-cart-empty"><StoreIcon name="returns" size={30} /><h2>{text.loadError}</h2><button onClick={() => void reload()} type="button">{text.retry}</button></div> : null}
           {!loading && !loadError && items.length === 0 ? <div className="el-cart-empty"><StoreIcon name="cart" size={34} /><h2>{text.empty}</h2><Link to="/catalog">{text.back} <StoreIcon name="arrow" size={15} /></Link></div> : null}
@@ -166,7 +196,7 @@ export function CheckoutPage() {
                     <CheckoutField autoComplete="email" icon="mail" inputMode="email" label={text.email} name="email" placeholder={text.emailPlaceholder} required type="email" />
                     <div className="el-checkout-fields__two">
                       <CheckoutField autoComplete="tel" icon="phone" inputMode="tel" label={text.phone} name="phone" pattern="^(?:\+20|0)1[0125][0-9]{8}$" placeholder={text.phonePlaceholder} required type="tel" />
-                      <CheckoutField autoComplete="address-level1" icon="location" label={text.governorate} name="governorate" placeholder={text.governoratePlaceholder} required />
+                      <GovernorateField label={text.governorate} locale={locale} placeholder={text.governoratePlaceholder} />
                     </div>
                     <CheckoutField autoComplete="street-address" icon="location" label={text.street} minLength={5} name="street" placeholder={text.streetPlaceholder} required />
                   </div>
@@ -211,6 +241,28 @@ function PanelHeading({ number, title }: { number: string; title: string }) {
 function CheckoutField({ icon, label, ...inputProps }: { icon: StoreIconName; label: string } & InputHTMLAttributes<HTMLInputElement>) {
   const technicalInput = inputProps.type === "email" || inputProps.type === "tel";
   return <label className="el-checkout-field"><span>{label}</span><div><StoreIcon name={icon} size={18} /><input dir={technicalInput ? "ltr" : "auto"} {...inputProps} /></div></label>;
+}
+
+function GovernorateField({ label, locale, placeholder }: { label: string; locale: "en" | "ar"; placeholder: string }) {
+  return (
+    <label className="el-checkout-field">
+      <span>{label}</span>
+      <div>
+        <StoreIcon name="location" size={18} />
+        <select
+          aria-label={label}
+          autoComplete="address-level1"
+          defaultValue=""
+          name="governorate"
+          required
+          style={{ minWidth: 0, flex: 1, border: 0, outline: 0, color: "var(--el-text-primary)", background: "transparent", fontSize: 13 }}
+        >
+          <option disabled value="">{placeholder}</option>
+          {EGYPT_GOVERNORATES.map(([value, en, ar]) => <option key={value} value={value}>{locale === "ar" ? ar : en}</option>)}
+        </select>
+      </div>
+    </label>
+  );
 }
 
 function PaymentMethod({ active, icon, title, meta, onSelect }: { active: boolean; icon: StoreIconName; title: string; meta: string; onSelect: () => void }) {
