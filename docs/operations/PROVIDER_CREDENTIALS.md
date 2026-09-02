@@ -1,8 +1,8 @@
 ---
 document_type: operations
-owner: platform-team
+owner: operations
 review_trigger: provider-credential-rotation
-status: active
+status: operational
 title: Provider Credentials Setup Guide
 verified_against: staging-environment
 ---
