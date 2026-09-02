@@ -41,6 +41,16 @@ from app.shared.security import (
 router = APIRouter()
 
 
+async def _commit_order_transition(db: AsyncSession) -> None:
+    """Make customer-visible order state durable before the response is reusable.
+
+    FastAPI yield-dependency cleanup can finish after response streaming starts.
+    Cart and order mutation responses are commonly followed immediately by reads,
+    so committing only in ``get_db`` cleanup can expose stale state to the client.
+    """
+    await db.commit()
+
+
 async def _has_order_permission(
     db: AsyncSession,
     current_user: dict,
@@ -129,7 +139,9 @@ async def sync_cart(
 
     guest_cart.is_active = False
     await db.flush()
-    return await service.get_cart(partner_id=partner_id)
+    result = await service.get_cart(partner_id=partner_id)
+    await _commit_order_transition(db)
+    return result
 
 
 @router.get("/cart")
@@ -150,11 +162,13 @@ async def add_to_cart(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).add_to_cart(
+    result = await OrderService(db).add_to_cart(
         request,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
+    await _commit_order_transition(db)
+    return result
 
 
 @router.put("/cart/items/{item_id}")
@@ -166,12 +180,14 @@ async def update_cart_item(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).update_cart_item(
+    result = await OrderService(db).update_cart_item(
         item_id,
         request,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
+    await _commit_order_transition(db)
+    return result
 
 
 @router.delete("/cart/items/{item_id}")
@@ -182,11 +198,13 @@ async def remove_from_cart(
     current_user: Optional[dict] = Depends(_get_optional_current_user),
 ):
     partner_id, guest_session_id = _cart_owner(current_user, session_id)
-    return await OrderService(db).remove_from_cart(
+    result = await OrderService(db).remove_from_cart(
         item_id,
         partner_id=partner_id,
         session_id=guest_session_id,
     )
+    await _commit_order_transition(db)
+    return result
 
 
 @router.post("/checkout", status_code=201)
@@ -209,6 +227,7 @@ async def checkout(
     await lifecycle_service.get(response.order.id)
     if request.payment_method == PaymentMethod.COD:
         await lifecycle_service.transition(response.order.id, CONFIRMED)
+    await _commit_order_transition(db)
     return response
 
 
@@ -291,6 +310,7 @@ async def update_order_status(
         after={"state": target_state.value},
         request=request,
     )
+    await _commit_order_transition(db)
     return result
 
 
@@ -326,4 +346,5 @@ async def cancel_order(
             after={"reason": reason, "result": result},
             request=request,
         )
+    await _commit_order_transition(db)
     return result
