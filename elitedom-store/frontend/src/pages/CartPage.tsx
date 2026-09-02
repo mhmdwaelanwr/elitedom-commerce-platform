@@ -76,13 +76,18 @@ export function CartPage() {
 
   async function updateQuantity(itemId: number | undefined, quantity: number) {
     if (!snapshot || !itemId || quantity < 1 || quantity > 100) return;
+    const previousSnapshot = snapshot;
     setPendingItemId(itemId);
     setMutationError(null);
+    setSnapshot({
+      ...snapshot,
+      items: snapshot.items.map((item) => item.serverItemId === itemId ? { ...item, quantity } : item),
+    });
     try {
       await updateRemoteCartItem(itemId, quantity, snapshot.sessionId, snapshot.session);
-      await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
     } catch {
+      setSnapshot(previousSnapshot);
       setMutationError(text.mutationError);
     } finally {
       setPendingItemId(null);
@@ -91,13 +96,15 @@ export function CartPage() {
 
   async function removeItem(itemId: number | undefined) {
     if (!snapshot || !itemId) return;
+    const previousSnapshot = snapshot;
     setPendingItemId(itemId);
     setMutationError(null);
+    setSnapshot({ ...snapshot, items: snapshot.items.filter((item) => item.serverItemId !== itemId) });
     try {
       await removeRemoteCartItem(itemId, snapshot.sessionId, snapshot.session);
-      await reload();
       window.dispatchEvent(new CustomEvent("elitedom:cart-updated"));
     } catch {
+      setSnapshot(previousSnapshot);
       setMutationError(text.mutationError);
     } finally {
       setPendingItemId(null);
