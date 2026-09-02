@@ -136,7 +136,10 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   }, [refreshCartSnapshot]);
 
   useEffect(() => {
-    void refreshCartSnapshot();
+    const timer = window.setTimeout(() => {
+      void refreshCartSnapshot();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [refreshCartSnapshot]);
 
   useEffect(() => {
