@@ -113,7 +113,6 @@ export function HomePage() {
 
   useEffect(() => {
     let active = true;
-    setLoading(true);
     fetchRichCatalog({ locale, limit: 100 })
       .then((catalog) => {
         if (!active) return;
