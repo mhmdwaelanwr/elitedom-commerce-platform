@@ -33,7 +33,7 @@ const copy = {
       ["CPUs", "/catalog?q=CPU"],
       ["PC builds", "/catalog?q=PC%20build"],
       ["Displays", "/catalog?q=Monitor"],
-      ["Deals", "/catalog?sort=price-asc"],
+      ["Budget picks", "/catalog?sort=price-asc"],
       ["Business", "/business"],
     ],
     utility: [
@@ -61,7 +61,7 @@ const copy = {
       ["المعالجات", "/catalog?q=CPU"],
       ["تجميعات PC", "/catalog?q=PC%20build"],
       ["الشاشات", "/catalog?q=Monitor"],
-      ["العروض", "/catalog?sort=price-asc"],
+      ["اختيارات اقتصادية", "/catalog?sort=price-asc"],
       ["الشركات", "/business"],
     ],
     utility: [
@@ -112,21 +112,32 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   const cartCount = cartSnapshot?.items.reduce((count, item) => count + item.quantity, 0) ?? 0;
   const catalogueActive = location.pathname.startsWith("/catalog") || location.pathname.startsWith("/products/");
 
+  const refreshCartSnapshot = useCallback(async (reportError = false) => {
+    try {
+      const session = await restoreSession();
+      setCartSnapshot(await loadGuestCart(locale, session));
+    } catch {
+      if (!reportError) return;
+      setCartSnapshot({ items: [] });
+      setToast({ tone: "error", title: labels.cartErrorTitle, message: labels.cartErrorMessage });
+    }
+  }, [labels.cartErrorMessage, labels.cartErrorTitle, locale]);
+
   const openCart = useCallback(async () => {
     setCartOpen(true);
     setSearchOpen(false);
     setMegaOpen(false);
     setCartLoading(true);
     try {
-      const session = await restoreSession();
-      setCartSnapshot(await loadGuestCart(locale, session));
-    } catch {
-      setCartSnapshot({ items: [] });
-      setToast({ tone: "error", title: labels.cartErrorTitle, message: labels.cartErrorMessage });
+      await refreshCartSnapshot(true);
     } finally {
       setCartLoading(false);
     }
-  }, [labels.cartErrorMessage, labels.cartErrorTitle, locale]);
+  }, [refreshCartSnapshot]);
+
+  useEffect(() => {
+    void refreshCartSnapshot();
+  }, [refreshCartSnapshot]);
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -164,11 +175,11 @@ export function StoreHeader({ locale, onLocaleChange }: StoreHeaderProps) {
   useEffect(() => {
     function cartUpdated() {
       setToast({ tone: "success", title: labels.addedTitle, message: labels.addedMessage });
-      if (cartOpen) void openCart();
+      void refreshCartSnapshot();
     }
     window.addEventListener("elitedom:cart-updated", cartUpdated);
     return () => window.removeEventListener("elitedom:cart-updated", cartUpdated);
-  }, [cartOpen, labels.addedMessage, labels.addedTitle, openCart]);
+  }, [labels.addedMessage, labels.addedTitle, refreshCartSnapshot]);
 
   useEffect(() => {
     if (!toast) return;
