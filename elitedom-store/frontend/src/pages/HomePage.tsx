@@ -5,7 +5,7 @@ import { SocialDock } from "@/components/store/SocialDock";
 import { StoreFooter } from "@/components/store/StoreFooter";
 import { StoreHeader, type StoreLocale } from "@/components/store/StoreHeader";
 import { StoreIcon } from "@/components/store/StoreIcon";
-import { fetchCatalog } from "@/lib/api";
+import { fetchRichCatalog } from "@/lib/catalog-api";
 import type { Product } from "@/types/store";
 import "@/styles/storefront.css";
 
@@ -30,13 +30,6 @@ const content = {
       ["PC builds", "/catalog?q=PC%20build"],
       ["Peripherals", "/catalog?q=Peripheral"],
       ["Networking", "/catalog?q=Networking"],
-    ],
-    mobileCategories: [
-      ["GPU", "/catalog?q=GPU"],
-      ["CPU", "/catalog?q=CPU"],
-      ["PC builds", "/catalog?q=PC%20build"],
-      ["SSD", "/catalog?q=SSD"],
-      ["Displays", "/catalog?q=Monitor"],
     ],
     curatedEyebrow: "CURATED THIS WEEK",
     curatedTitle: "Hardware worth your attention.",
@@ -77,13 +70,6 @@ const content = {
       ["تجميعات PC", "/catalog?q=PC%20build"],
       ["الإكسسوارات", "/catalog?q=Peripheral"],
       ["الشبكات", "/catalog?q=Networking"],
-    ],
-    mobileCategories: [
-      ["GPU", "/catalog?q=GPU"],
-      ["CPU", "/catalog?q=CPU"],
-      ["تجميعات PC", "/catalog?q=PC%20build"],
-      ["SSD", "/catalog?q=SSD"],
-      ["شاشات", "/catalog?q=Monitor"],
     ],
     curatedEyebrow: "مختارات الأسبوع",
     curatedTitle: "قطع تستاهل اهتمامك.",
@@ -127,7 +113,8 @@ export function HomePage() {
 
   useEffect(() => {
     let active = true;
-    fetchCatalog()
+    setLoading(true);
+    fetchRichCatalog({ locale, limit: 100 })
       .then((catalog) => {
         if (!active) return;
         setProducts(catalog);
@@ -142,18 +129,22 @@ export function HomePage() {
         if (active) setLoading(false);
       });
     return () => { active = false; };
-  }, []);
+  }, [locale]);
 
   const copy = content[locale];
-  const heroProduct = useMemo(
-    () => products.find((product) => /5080/i.test(product.name)) ?? products[0],
-    [products],
-  );
-  const curatedProducts = useMemo(() => {
-    if (products.length <= 3) return products;
-    const preferred = products.filter((product) => /5080|5070|9070/i.test(product.name));
-    return (preferred.length >= 3 ? preferred : products).slice(0, 3);
+  const heroProduct = useMemo(() => {
+    const featured = products.filter((product) => product.featured);
+    return featured.find((product) => product.stockQty > 0)
+      ?? featured.find((product) => product.dropshipEnabled)
+      ?? featured[0]
+      ?? products.find((product) => product.stockQty > 0)
+      ?? products[0];
   }, [products]);
+  const curatedProducts = useMemo(() => {
+    const featured = products.filter((product) => product.featured && product.id !== heroProduct?.id);
+    const fallback = products.filter((product) => product.id !== heroProduct?.id);
+    return [...featured, ...fallback.filter((product) => !featured.some((item) => item.id === product.id))].slice(0, 3);
+  }, [heroProduct?.id, products]);
   const liveCategories = useMemo(() => {
     const unique = new Map<string, string>();
     products.forEach((product) => {
@@ -163,6 +154,7 @@ export function HomePage() {
       ? [...unique.entries()].slice(0, 8).map(([slug, label]) => [label, `/catalog?category=${encodeURIComponent(slug)}`] as const)
       : copy.categories;
   }, [copy.categories, products]);
+  const mobileCategories = liveCategories.slice(0, 5);
 
   const heroActions = (
     <>
@@ -233,7 +225,7 @@ export function HomePage() {
           </section>
 
           <section aria-label={locale === "ar" ? "فئات المنتجات على الموبايل" : "Mobile product categories"} className="el-category-rail el-category-rail--mobile">
-            {copy.mobileCategories.map(([category, href], index) => (
+            {mobileCategories.map(([category, href], index) => (
               <Link className={index === 0 ? "is-active" : undefined} key={category} to={href}>{category}</Link>
             ))}
           </section>
