@@ -1,8 +1,8 @@
 ---
 document_type: operations
-owner: platform-team
+owner: operations
 review_trigger: provider-credential-rotation
-status: active
+status: operational
 title: Provider Credentials Setup Guide
 verified_against: staging-environment
 ---
@@ -12,6 +12,14 @@ verified_against: staging-environment
 ## Overview
 
 This document lists all external provider credentials needed for staging/production.
+
+## Source of truth
+
+Provider names, environment keys, runtime validation, and launch acceptance must stay aligned with:
+
+- `elitedom-store/.env.example`
+- `elitedom-store/backend/app/config.py`
+- `elitedom-store/docs/GO_LIVE_RUNBOOK.md`
 
 ## Priority Order
 

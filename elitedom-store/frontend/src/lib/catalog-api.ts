@@ -16,6 +16,13 @@ const CATEGORY_PLACEHOLDER = "/template/images/categories/categories-02.png";
 
 export type CatalogLocale = "en" | "ar";
 
+export type CatalogPageResult = {
+  products: Product[];
+  totalCount: number;
+  page: number;
+  limit: number;
+};
+
 type ApiCategory = {
   id: number;
   slug: string;
@@ -179,29 +186,38 @@ function resolveCategoryImage(url?: string | null): string {
   return CATEGORY_PLACEHOLDER;
 }
 
-export async function fetchRichCatalog(input: {
+export async function fetchRichCatalogPage(input: {
   locale: CatalogLocale;
   query?: string;
   category?: string;
   featured?: boolean;
+  page?: number;
   limit?: number;
-}): Promise<Product[]> {
+}): Promise<CatalogPageResult> {
+  const page = Math.max(1, input.page ?? 1);
+  const limit = Math.max(1, Math.min(100, input.limit ?? 20));
   const parameters = new URLSearchParams({
     locale: input.locale,
-    limit: String(input.limit ?? 100),
+    page: String(page),
+    limit: String(limit),
   });
   if (input.query?.trim()) parameters.set("q", input.query.trim());
   if (input.category) parameters.set("category", input.category);
   if (input.featured !== undefined) parameters.set("featured", String(input.featured));
   try {
     const payload = await request<ApiProductList>(`/catalog/products?${parameters}`);
-    return payload.products.map(mapProduct);
+    return {
+      products: payload.products.map(mapProduct),
+      totalCount: payload.total_count,
+      page: payload.page,
+      limit: payload.limit,
+    };
   } catch (error) {
     if (!DEMO_FALLBACK || (error instanceof CatalogApiError && error.status !== 0)) throw error;
     const normalizedQuery = input.query?.trim().toLowerCase();
-    return CATALOG.filter((product) =>
+    const filtered = CATALOG.filter((product) =>
       (!input.category || product.category === input.category) &&
-      (!input.featured || product.featured) &&
+      (input.featured === undefined || product.featured === input.featured) &&
       (!normalizedQuery ||
         [product.name, product.brand, product.sku, product.categoryName]
           .concat(product.specs.flatMap((specification) => [specification.label, specification.value]))
@@ -209,7 +225,24 @@ export async function fetchRichCatalog(input: {
           .toLowerCase()
           .includes(normalizedQuery)),
     );
+    const start = (page - 1) * limit;
+    return {
+      products: filtered.slice(start, start + limit),
+      totalCount: filtered.length,
+      page,
+      limit,
+    };
   }
+}
+
+export async function fetchRichCatalog(input: {
+  locale: CatalogLocale;
+  query?: string;
+  category?: string;
+  featured?: boolean;
+  limit?: number;
+}): Promise<Product[]> {
+  return (await fetchRichCatalogPage({ ...input, page: 1, limit: input.limit ?? 100 })).products;
 }
 
 export async function fetchRichProduct(

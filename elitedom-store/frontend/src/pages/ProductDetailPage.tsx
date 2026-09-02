@@ -92,6 +92,18 @@ function formatEgp(value: number, locale: "en" | "ar") {
   }).format(value);
 }
 
+function relatedScore(candidate: Product, source: Product) {
+  let score = 0;
+  if (candidate.brand && candidate.brand === source.brand) score += 4;
+  if (candidate.stockQty > 0) score += 3;
+  else if (candidate.dropshipEnabled) score += 1;
+  if (candidate.featured) score += 1;
+
+  const sourceSpecs = new Set(source.specs.map((spec) => `${spec.label}:${spec.value}`.toLowerCase()));
+  const sharedSpecs = candidate.specs.filter((spec) => sourceSpecs.has(`${spec.label}:${spec.value}`.toLowerCase())).length;
+  return score + Math.min(sharedSpecs, 3);
+}
+
 export function ProductDetailPage() {
   const { productId = "" } = useParams();
   const navigate = useNavigate();
@@ -122,7 +134,18 @@ export function ProductDetailPage() {
             category: product.category !== "uncategorized" ? product.category : undefined,
             limit: 12,
           });
-          if (active) setRelated(products.filter((item) => item.id !== product.id).slice(0, 3));
+          if (active) {
+            setRelated(
+              products
+                .filter((item) => item.id !== product.id)
+                .sort((first, second) => {
+                  const scoreDifference = relatedScore(second, product) - relatedScore(first, product);
+                  if (scoreDifference !== 0) return scoreDifference;
+                  return Math.abs(first.priceEgp - product.priceEgp) - Math.abs(second.priceEgp - product.priceEgp);
+                })
+                .slice(0, 3),
+            );
+          }
         } catch {
           if (active) setRelated([]);
         }
@@ -161,7 +184,7 @@ export function ProductDetailPage() {
 
   async function buyNow() {
     const added = await addToCart();
-    if (added) navigate("/cart");
+    if (added) navigate("/checkout");
   }
 
   return (

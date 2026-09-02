@@ -63,6 +63,7 @@ jobs:
           METRICS_ENABLED=false
           STAFF_MFA_REQUIRED=true
           RATE_LIMIT_BACKEND=memory
+          RATE_LIMIT_DEFAULT_PER_MINUTE=1000
           VITE_API_URL=http://127.0.0.1:8000/api/v1
           VITE_SITE_URL=http://127.0.0.1:3000
           VITE_DEMO_CATALOG_FALLBACK=false
