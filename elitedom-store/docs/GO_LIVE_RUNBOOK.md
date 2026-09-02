@@ -65,7 +65,7 @@ The protected remote deployer creates pre-migration application/Odoo dumps for a
 
 ## Deployment and migration
 
-The implemented single-VPS execution entry point is `.github/workflows/deploy.yml`. Dispatch it with the protected target Environment and a full 40-character `release_ref` reachable from `main`. The workflow checks out deployment tooling at that exact release SHA, obtains AWS credentials through GitHub OIDC, temporarily opens SSH only for the current GitHub runner IPv4 `/32`, generates an ephemeral SSH key, sends the public key through EC2 Instance Connect, pins SSH host identity from `DEPLOY_KNOWN_HOSTS`, and invokes `elitedom-store/infrastructure/scripts/deploy_release.sh` on the configured VPS. The temporary SSH ingress rule is revoked after execution.
+The implemented single-VPS execution entry point is `.github/workflows/deploy.yml`. Dispatch it with the protected target Environment and a full 40-character `release_ref` reachable from `main`. The workflow checks out deployment tooling at that exact release SHA, obtains AWS credentials through GitHub OIDC, temporarily opens SSH only for the current GitHub runner IPv4 `/32`, generates an ephemeral SSH key, sends the public key through EC2 Instance Connect, pins SSH host identity from `DEPLOY_KNOWN_HOSTS`, and invokes `elitedom-store/infrastructure/scripts/deploy_release.sh` on the configured VPS. Final cleanup always attempts direct revocation of the temporary rule and also performs a workflow-tagged fallback lookup; a later deployment removes any matching stale `Name=elitedom-ci-runner` plus `EphemeralRunner=true` rule before opening new ingress.
 
 Qualified `main` releases can trigger `.github/workflows/staging-auto-deploy.yml` after `Real Stack E2E` succeeds. That promoter remains disabled unless repository variable `STAGING_AUTO_DEPLOY_ENABLED` is exactly `true`, and it deploys the qualifying workflow `head_sha` rather than a moving branch ref. First staging commissioning should use manual `workflow_dispatch`; automatic promotion is appropriate only after the staging Environment, IAM/OIDC role, EC2 Instance Connect path, DNS/TLS, remote host, and Launch Smoke have been proven.
 
@@ -85,7 +85,7 @@ The guarded remote sequence is:
 10. upgrade the bundled Odoo connector;
 11. start the target Compose topology with bounded health waiting;
 12. run the repository Odoo integration smoke, verify the exact checked-out release, and atomically record it as the last successful deployment;
-13. revoke the temporary SSH rule and preserve deployment evidence;
+13. always attempt temporary SSH cleanup using the captured rule ID plus a workflow-tagged fallback, then preserve deployment evidence;
 14. only after remote deployment succeeds, call the reusable Launch Smoke for the same public URLs and exact `release_ref`.
 
 A remote failure stops execution for operator assessment. The deployer deliberately does not run database downgrade, automatic restore, destructive `git reset --hard`, or `git clean`.
