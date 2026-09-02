@@ -3,8 +3,8 @@ title: "Go-Live Runbook"
 status: operational
 owner: operations
 document_type: implementation-reference
-verified_against: "P16 protected deployment execution"
-review_trigger: "Release controls, deployment topology, provider acceptance, rollback, or launch evidence requirements change."
+verified_against: "P24 exact-SHA staging promotion and protected EC2 Instance Connect deployment"
+review_trigger: "Release controls, deployment topology, provider acceptance, rollback, staging promotion, or launch evidence requirements change."
 ---
 
 # Go-Live Runbook
@@ -46,8 +46,10 @@ The current manual gate set covers:
 6. Confirm public site/API URLs, DNS and TLS termination plan.
 7. Confirm production image references/build inputs are immutable or otherwise reproducible.
 8. Confirm rollback owner, communication owner, and provider contacts/merchant access.
-9. Confirm the target GitHub Environment contains the approved `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_PRIVATE_KEY`, pinned `DEPLOY_KNOWN_HOSTS`, `DEPLOY_PATH`, `SITE_URL`, and `API_URL` values. Production approval rules belong on the GitHub Environment and are not bypassed by the workflow.
-10. For an environment already deployed through P16, confirm the requested release is a forward promotion from the last successful deployed SHA. If an older release is required, stop the normal deployment path and use the rollback section instead.
+9. Confirm the target GitHub Environment contains approved secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, and `EC2_INSTANCE_ID`, plus variables `DEPLOY_PATH`, `SITE_URL`, `API_URL`, `AWS_REGION`, `AWS_ROLE_TO_ASSUME`, `EC2_SECURITY_GROUP_ID`, and `REQUIRE_ODOO_SMOKE`. Production approval rules belong on the GitHub Environment and are not bypassed by the workflow. A persistent deployment private key is not part of the current contract.
+10. Confirm the AWS role trusted through GitHub OIDC is scoped to the intended target and permits the required EC2 Instance Connect and temporary security-group operations.
+11. For an environment already deployed through the protected release path, confirm the requested release is a forward promotion from the last successful deployed SHA. If an older release is required, stop the normal deployment path and use the rollback section instead.
+12. For first staging commissioning, keep `STAGING_AUTO_DEPLOY_ENABLED` disabled. Enable automatic staging promotion only after a manual exact-SHA staging deployment and public Launch Smoke have passed with evidence.
 
 ## Database backup and restore
 
@@ -59,27 +61,32 @@ Before a migration or cutover that can change durable state:
 4. capture non-secret evidence including backup identifier, restore target, timestamps, operator, verification result, and recovery notes;
 5. never assume that successful backup creation proves recoverability without a restore exercise.
 
-The P16 remote deployer creates pre-migration application/Odoo dumps for any pre-existing databases and validates their gzip streams before Alembic or Odoo upgrade. These deployment-time backups do not replace the periodic restore drill required for launch acceptance.
+The protected remote deployer creates pre-migration application/Odoo dumps for any pre-existing databases and validates their gzip streams before Alembic or Odoo upgrade. These deployment-time backups do not replace the periodic restore drill required for launch acceptance.
 
 ## Deployment and migration
 
-The implemented single-VPS execution entry point is `.github/workflows/deploy.yml`. Dispatch it with the protected target Environment and a full 40-character `release_ref` reachable from `main`. The workflow pins SSH host identity and invokes `elitedom-store/infrastructure/scripts/deploy_release.sh` on the configured VPS.
+The implemented single-VPS execution entry point is `.github/workflows/deploy.yml`. Dispatch it with the protected target Environment and a full 40-character `release_ref` reachable from `main`. The workflow checks out deployment tooling at that exact release SHA, obtains AWS credentials through GitHub OIDC, temporarily opens SSH only for the current GitHub runner IPv4 `/32`, generates an ephemeral SSH key, sends the public key through EC2 Instance Connect, pins SSH host identity from `DEPLOY_KNOWN_HOSTS`, and invokes `elitedom-store/infrastructure/scripts/deploy_release.sh` on the configured VPS. Final cleanup always attempts direct revocation of the temporary rule and also performs a workflow-tagged fallback lookup; a later deployment removes any matching stale `Name=elitedom-ci-runner` plus `EphemeralRunner=true` rule before opening new ingress.
 
-The normal deployment path is forward-only after the first successful P16 bootstrap. The remote deployer records the last successful release in the sibling host path `.elitedom-deployment-state/release_ref`, validates that value as a full Git SHA, and requires that it be an ancestor of the newly requested release. The state file is advanced only after runtime health and the Odoo smoke succeed; a failed deployment cannot silently become the new baseline.
+Qualified `main` releases can trigger `.github/workflows/staging-auto-deploy.yml` after `Real Stack E2E` succeeds. That promoter remains disabled unless repository variable `STAGING_AUTO_DEPLOY_ENABLED` is exactly `true`, and it deploys the qualifying workflow `head_sha` rather than a moving branch ref. First staging commissioning should use manual `workflow_dispatch`; automatic promotion is appropriate only after the staging Environment, IAM/OIDC role, EC2 Instance Connect path, DNS/TLS, remote host, and Launch Smoke have been proven.
+
+The normal deployment path is forward-only after the first successful bootstrap. The remote deployer records the last successful release in the sibling host path `.elitedom-deployment-state/release_ref`, validates that value as a full Git SHA, and requires that it be an ancestor of the newly requested release. The state file is advanced only after runtime health and the Odoo smoke succeed; a failed deployment cannot silently become the new baseline.
 
 The guarded remote sequence is:
 
-1. reject a shallow deployment clone, unexpected Git origin, tracked local modifications, unsafe `.env` permissions, invalid target origins, invalid persisted release state, or a release that is not reachable from `origin/main`;
-2. when a last-successful release exists, reject a requested commit that moves backward or onto an incompatible Git line;
-3. check out exactly the requested commit without deleting untracked production configuration;
-4. validate the production Compose topology;
-5. wait for PostgreSQL/application DB initialization and take validated application/Odoo pre-migration backups;
-6. build the release containers;
-7. run `alembic upgrade head` against the application database;
-8. upgrade the bundled Odoo connector;
-9. start the target Compose topology with bounded health waiting;
-10. run the repository Odoo integration smoke, verify the exact checked-out release, and atomically record it as the last successful deployment;
-11. only after remote deployment succeeds, call the reusable Launch Smoke for the same public URLs and exact `release_ref`.
+1. validate the immutable release and protected Environment contract, then assume the configured AWS role through OIDC;
+2. authorize temporary runner-IP `/32` SSH ingress, create an ephemeral SSH key, publish it with EC2 Instance Connect, and enforce the pinned SSH host key;
+3. reject a shallow deployment clone, unexpected Git origin, tracked local modifications, unsafe `.env` permissions, invalid target origins, invalid persisted release state, or a release that is not reachable from `origin/main`;
+4. when a last-successful release exists, reject a requested commit that moves backward or onto an incompatible Git line;
+5. check out exactly the requested commit without deleting untracked production configuration;
+6. validate the production Compose topology;
+7. wait for PostgreSQL/application DB initialization and take validated application/Odoo pre-migration backups;
+8. build the release containers;
+9. run `alembic upgrade head` against the application database;
+10. upgrade the bundled Odoo connector;
+11. start the target Compose topology with bounded health waiting;
+12. run the repository Odoo integration smoke, verify the exact checked-out release, and atomically record it as the last successful deployment;
+13. always attempt temporary SSH cleanup using the captured rule ID plus a workflow-tagged fallback, then preserve deployment evidence;
+14. only after remote deployment succeeds, call the reusable Launch Smoke for the same public URLs and exact `release_ref`.
 
 A remote failure stops execution for operator assessment. The deployer deliberately does not run database downgrade, automatic restore, destructive `git reset --hard`, or `git clean`.
 
@@ -154,7 +161,7 @@ Confirm the release can be observed before opening traffic:
 
 ## Rollback
 
-Rollback must be designed before launch, not improvised after failure. The normal P16 deployment workflow is deliberately not a rollback mechanism: once `.elitedom-deployment-state/release_ref` exists, it refuses to deploy a commit older than the recorded last-successful release.
+Rollback must be designed before launch, not improvised after failure. The normal protected deployment workflow is deliberately not a rollback mechanism: once `.elitedom-deployment-state/release_ref` exists, it refuses to deploy a commit older than the recorded last-successful release.
 
 Record:
 
@@ -166,7 +173,7 @@ Record:
 - traffic reversal procedure;
 - owner and stop conditions.
 
-Do not edit `.elitedom-deployment-state/release_ref` backward to bypass the guard. Preserve it as evidence of the last successfully verified release. Do not execute destructive database downgrade/restore solely because application rollback is required. If a new release has written data incompatible with the previous schema or behavior, use the incident/recovery plan appropriate to that state. The P16 deployer intentionally creates pre-migration backups but does not decide or execute a destructive rollback automatically.
+Do not edit `.elitedom-deployment-state/release_ref` backward to bypass the guard. Preserve it as evidence of the last successfully verified release. Do not execute destructive database downgrade/restore solely because application rollback is required. If a new release has written data incompatible with the previous schema or behavior, use the incident/recovery plan appropriate to that state. The protected deployer intentionally creates pre-migration backups but does not decide or execute a destructive rollback automatically.
 
 ## Release sign-off
 
@@ -184,6 +191,7 @@ Launch evidence references should identify the external proof without copying se
 
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy.yml`
+- `.github/workflows/staging-auto-deploy.yml`
 - `.github/workflows/deployment-contract.yml`
 - `.github/workflows/launch-smoke.yml`
 - `elitedom-store/infrastructure/scripts/deploy_release.sh`
@@ -203,8 +211,8 @@ Launch evidence references should identify the external proof without copying se
 
 ## Verification
 
-Repository CI proves code/tests/migration/container/launch/deployment-asset contracts. The protected deployment workflow proves controlled release execution once real Environment credentials/variables are configured. The launch control plane and external smoke/UAT/provider/recovery evidence prove environment-specific readiness. None substitutes for the others.
+Repository CI proves code/tests/migration/container/launch/deployment-asset contracts. Real Stack E2E qualifies the exact repository release before staging promotion. The protected deployment workflow proves controlled release execution once real Environment credentials/variables are configured. The launch control plane and external smoke/UAT/provider/recovery evidence prove environment-specific readiness. None substitutes for the others.
 
 ## Change policy
 
-Update this runbook in the same pull request that changes launch gates, deployment topology/execution, backup/restore procedure, provider acceptance, public smoke behavior, release-state behavior, or rollback requirements. Preserve previous release evidence as historical audit information rather than rewriting it to match a new release.
+Update this runbook in the same pull request that changes launch gates, deployment topology/execution, AWS/OIDC access, staging promotion, backup/restore procedure, provider acceptance, public smoke behavior, release-state behavior, or rollback requirements. Preserve previous release evidence as historical audit information rather than rewriting it to match a new release.

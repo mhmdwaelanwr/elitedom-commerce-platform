@@ -108,15 +108,21 @@ jobs:
           set -euo pipefail
           RUNNER_IP="${{ steps.runner-ip.outputs.runner_ip }}"
           SG_ID="${EC2_SECURITY_GROUP_ID}"
-          EXISTING_RULE="$(aws ec2 describe-security-group-rules \
+          EXISTING_RULES="$(aws ec2 describe-security-group-rules \
             --region "$AWS_REGION" \
-            --filters "Name=group-id,Values=$SG_ID" "Name=tag:EphemeralRunner,Values=true" \
-            --query 'SecurityGroupRules[0].SecurityGroupRuleId' --output text 2>/dev/null || echo "None")"
-          if [[ -n "$EXISTING_RULE" && "$EXISTING_RULE" != "None" ]]; then
-            aws ec2 revoke-security-group-ingress \
-              --region "$AWS_REGION" \
-              --group-id "$SG_ID" \
-              --security-group-rule-id "$EXISTING_RULE" 2>/dev/null || true
+            --filters \
+              "Name=group-id,Values=$SG_ID" \
+              "Name=tag:Name,Values=elitedom-ci-runner" \
+              "Name=tag:EphemeralRunner,Values=true" \
+            --query 'SecurityGroupRules[].SecurityGroupRuleId' \
+            --output text 2>/dev/null || true)"
+          if [[ -n "$EXISTING_RULES" && "$EXISTING_RULES" != "None" ]]; then
+            for existing_rule in $EXISTING_RULES; do
+              aws ec2 revoke-security-group-ingress \
+                --region "$AWS_REGION" \
+                --group-id "$SG_ID" \
+                --security-group-rule-id "$existing_rule" 2>/dev/null || true
+            done
           fi
           RULE_ID="$(aws ec2 authorize-security-group-ingress \
             --region "$AWS_REGION" \
@@ -129,7 +135,7 @@ jobs:
             --output text 2>/dev/null || true)"
           if [[ -z "$RULE_ID" || "$RULE_ID" == "None" ]]; then
             echo "sg_rule_id=" >> "$GITHUB_OUTPUT"
-            echo "WARNING: Could not capture SecurityGroupRuleId" >&2
+            echo "WARNING: Could not capture SecurityGroupRuleId; final cleanup will fall back to the workflow tags." >&2
           else
             echo "sg_rule_id=$RULE_ID" >> "$GITHUB_OUTPUT"
             echo "Authorized SSH ingress: $RULE_ID"
@@ -219,17 +225,43 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set -euo pipefail
+          set -u
           SG_RULE_ID="${{ steps.sg-authorize.outputs.sg_rule_id }}"
           SG_ID="${EC2_SECURITY_GROUP_ID}"
-          if [[ -n "$SG_RULE_ID" && "$SG_RULE_ID" != "None" ]]; then
-            aws ec2 revoke-security-group-ingress \
+          if [[ -z "$SG_ID" ]]; then
+            echo "No security group ID is available for SSH cleanup" >&2
+            exit 0
+          fi
+
+          revoke_rule() {
+            local rule_id="$1"
+            if aws ec2 revoke-security-group-ingress \
               --region "$AWS_REGION" \
               --group-id "$SG_ID" \
-              --security-group-rule-id "$SG_RULE_ID" 2>/dev/null || true
-            echo "Revoked SSH rule: $SG_RULE_ID"
-          else
-            echo "No captured rule ID to revoke"
+              --security-group-rule-id "$rule_id" >/dev/null 2>&1; then
+              echo "Revoked SSH rule: $rule_id"
+            else
+              echo "WARNING: Could not revoke SSH rule: $rule_id" >&2
+            fi
+          }
+
+          if [[ -n "$SG_RULE_ID" && "$SG_RULE_ID" != "None" ]]; then
+            revoke_rule "$SG_RULE_ID"
+          fi
+
+          STALE_RULES="$(aws ec2 describe-security-group-rules \
+            --region "$AWS_REGION" \
+            --filters \
+              "Name=group-id,Values=$SG_ID" \
+              "Name=tag:Name,Values=elitedom-ci-runner" \
+              "Name=tag:EphemeralRunner,Values=true" \
+            --query 'SecurityGroupRules[].SecurityGroupRuleId' \
+            --output text 2>/dev/null || true)"
+          if [[ -n "$STALE_RULES" && "$STALE_RULES" != "None" ]]; then
+            for stale_rule in $STALE_RULES; do
+              [[ "$stale_rule" == "$SG_RULE_ID" ]] && continue
+              revoke_rule "$stale_rule"
+            done
           fi
 
       - name: Preserve deployment evidence
