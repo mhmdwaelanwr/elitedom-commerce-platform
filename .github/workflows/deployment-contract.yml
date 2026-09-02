@@ -8,6 +8,7 @@ on:
     paths:
       - ".github/workflows/deploy.yml"
       - ".github/workflows/staging-auto-deploy.yml"
+      - ".github/workflows/auto-deploy-staging.yml"
       - ".github/workflows/launch-smoke.yml"
       - ".github/workflows/deployment-contract.yml"
       - "elitedom-store/infrastructure/scripts/preflight_host.sh"
@@ -22,6 +23,7 @@ on:
     paths:
       - ".github/workflows/deploy.yml"
       - ".github/workflows/staging-auto-deploy.yml"
+      - ".github/workflows/auto-deploy-staging.yml"
       - ".github/workflows/launch-smoke.yml"
       - ".github/workflows/deployment-contract.yml"
       - "elitedom-store/infrastructure/scripts/preflight_host.sh"
