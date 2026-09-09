@@ -26,7 +26,7 @@ cd "$REPO_PATH"
 [[ -d .git ]] || fail "deployment path is not a Git repository"
 [[ "$(git rev-parse --is-shallow-repository)" == "false" ]] || fail "deployment repository must not be shallow"
 origin="$(git config --get remote.origin.url || true)"
-[[ "$origin" == *"mhmdwaelanwr/elitedom-erp-architecture"* ]] || fail "unexpected Git origin"
+[[ "$origin" == *"mhmdwaelanwr/elitedom-commerce-platform"* ]] || fail "unexpected Git origin"
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || fail "tracked deployment checkout has local changes"
 
 checkout_ref="$(git rev-parse HEAD)"

@@ -96,7 +96,7 @@ else
 fi
 
 ORIGIN="$(git -C "$REPO_PATH" config --get remote.origin.url 2>/dev/null || echo none)"
-if [[ "$ORIGIN" == *"mhmdwaelanwr/elitedom-erp-architecture"* ]]; then
+if [[ "$ORIGIN" == *"mhmdwaelanwr/elitedom-commerce-platform"* ]]; then
   pass "Git origin matches expected repository"
 else
   warn "Git origin does not match expected repository: $ORIGIN"
@@ -132,7 +132,6 @@ fi
 
 section "Environment Identity (names only, no values)"
 if [[ -f "$ENV_FILE" ]]; then
-  # Check required variable NAMES exist without exposing values
   for var_name in ENVIRONMENT SECRET_KEY JWT_SECRET_KEY POSTGRES_PASSWORD REDIS_PASSWORD; do
     if grep -q "^${var_name}=" "$ENV_FILE" 2>/dev/null; then
       pass "Required variable name present: $var_name"
@@ -141,7 +140,6 @@ if [[ -f "$ENV_FILE" ]]; then
     fi
   done
 
-  # Check environment identity without printing secrets
   ENV_VAL="$(grep '^ENVIRONMENT=' "$ENV_FILE" 2>/dev/null | head -1 | cut -d= -f2- || echo unset)"
   if [[ "$ENV_VAL" == "staging" || "$ENV_VAL" == "production" ]]; then
     pass "ENVIRONMENT identity: $ENV_VAL"
