@@ -56,7 +56,7 @@ else
     echo "Cloning repository to $REPO_PATH..."
     sudo mkdir -p /opt
     sudo chown "$(id -u):$(id -g)" /opt
-    git clone https://github.com/mhmdwaelanwr/elitedom-erp-architecture.git "$REPO_PATH"
+    git clone https://github.com/mhmdwaelanwr/elitedom-commerce-platform.git "$REPO_PATH"
     cd "$REPO_PATH"
     echo "Cloned. HEAD: $(git rev-parse --short HEAD)"
 fi
@@ -113,7 +113,6 @@ else
     echo "  ✓ User '$DEPLOY_USER' created and added to docker group"
 fi
 
-# Ensure SSH directory exists
 DEPLOY_HOME="$(eval echo ~$DEPLOY_USER)"
 sudo mkdir -p "$DEPLOY_HOME/.ssh"
 sudo chmod 700 "$DEPLOY_HOME/.ssh"
