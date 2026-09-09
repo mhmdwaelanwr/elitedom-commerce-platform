@@ -75,8 +75,8 @@ Key entry points:
 ## Local development
 
 ```bash
-git clone https://github.com/mhmdwaelanwr/elitedom-erp-architecture.git
-cd elitedom-erp-architecture/elitedom-store
+git clone https://github.com/mhmdwaelanwr/elitedom-commerce-platform.git
+cd elitedom-commerce-platform/elitedom-store
 cp .env.example .env
 make verify-repo
 make dev
