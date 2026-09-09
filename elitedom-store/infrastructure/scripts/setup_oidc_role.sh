@@ -11,7 +11,7 @@ echo "  AWS OIDC IAM Role Setup"
 echo "=========================================="
 
 # Configuration
-GITHUB_REPO="mhmdwaelanwr/elitedom-erp-architecture"
+GITHUB_REPO="mhmdwaelanwr/elitedom-commerce-platform"
 ROLE_NAME="elitedom-github-actions-staging"
 REGION="${AWS_DEFAULT_REGION:-eu-central-1}"
 
